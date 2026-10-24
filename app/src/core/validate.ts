@@ -592,16 +592,16 @@ export function checkIntentDraft(
   }
 }
 
-/** pr.md의 첫 줄은 `# <PR 제목>`이다 (D62) */
-export function checkPr(text: string): FormatIssue[] {
+/** pr.md의 첫 줄은 `# <PR 제목>`이다 (D62). 묶음 Work의 서브모듈 PR 초안(D476)도 같다 */
+export function checkPr(text: string, file = PR_FILE): FormatIssue[] {
   const first = normalizeText(text).split('\n')[0] ?? ''
   return /^# +\S/.test(first)
     ? []
     : [
         {
-          file: PR_FILE,
+          file,
           part: 'body',
-          message: `\`${PR_FILE}\` 첫 줄이 \`# <PR 제목>\`이 아님 (지금: ${first.trim() ? clip(first) : '빈 줄'})`,
+          message: `\`${file}\` 첫 줄이 \`# <PR 제목>\`이 아님 (지금: ${first.trim() ? clip(first) : '빈 줄'})`,
         },
       ]
 }
@@ -710,6 +710,11 @@ export interface TaskCheckInput {
   knowledgeWarnings?: readonly FormatIssue[]
   /** 커스텀 단계 task의 단계 id와 산출물의 절 (D453). 산출물 <id>.md와 그 절을 검사한다 */
   customStep?: { id: string; sections: readonly string[] }
+  /**
+   * 묶음 Work의 verify (D476): 커밋이 있는 서브모듈의 PR 초안(task 디렉터리 안의 경로와 내용, 없으면 null)과, 메인 레포의 PR
+   * 초안(pr.md)이 필요한지(메인을 고치지 않는 Work는 필요 없다). 묶음 Work가 아니면 없다
+   */
+  bundleDrafts?: { drafts: readonly { file: string; text: string | null }[]; main: boolean }
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -748,8 +753,20 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
 
   const errors: FormatIssue[] = [...(handoff?.errors ?? [])]
   const step = node === 'custom' ? input.customStep : undefined
-  const required = step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
+  const bundle = node === 'verify' ? input.bundleDrafts : undefined
+  const required = (step ? [`${step.id}.md`] : NODE_INFO[node].artifacts).filter(
+    (a) => !(bundle && !bundle.main && a === PR_FILE),
+  )
   if (handoff?.status === 'awaiting_approval') {
+    for (const d of bundle?.drafts ?? []) {
+      if (d.text === null) {
+        errors.push({
+          file: d.file,
+          part: 'file',
+          message: `\`${d.file}\` 없음: 커밋이 있는 서브모듈의 PR 초안 (D476)`,
+        })
+      }
+    }
     for (const artifact of required) {
       if (files[artifact] === undefined) {
         errors.push({
@@ -777,6 +794,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   }
   const prText = node === 'verify' ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
+  for (const d of bundle?.drafts ?? []) if (d.text !== null) errors.push(...checkPr(d.text, d.file))
   if (input.knowledgeIssues && node === 'verify' && handoff?.status === 'awaiting_approval') {
     errors.push(...input.knowledgeIssues)
   }

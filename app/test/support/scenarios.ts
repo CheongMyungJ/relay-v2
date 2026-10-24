@@ -7,9 +7,17 @@ export type Step =
   /** file은 task 디렉터리 기준이다. {draftsDir}(context.md의 Work 초안 폴더)처럼 채운 경로도 쓴다. text의 {projectId}도 채운다 */
   | { do: 'write'; file: string; text: string }
   | { do: 'remove'; file: string }
-  | { do: 'commit'; files: Record<string, string>; message: string }
+  | {
+      do: 'commit'
+      files: Record<string, string>
+      message: string
+      /** worktree 안의 폴더: 묶음 Work의 서브모듈 worktree (D474). 없으면 worktree다 */
+      dir?: string
+      /** 더하지 않을 경로: 묶음 Work의 메인에서 고른 서브모듈의 자리 (D474) */
+      exclude?: string[]
+    }
   /** 커밋하지 않고 worktree의 파일을 고친다 (커밋 안 된 변경, D116) */
-  | { do: 'edit'; files: Record<string, string> }
+  | { do: 'edit'; files: Record<string, string>; dir?: string }
   /** 질문 대기. fail이면 답한 뒤 PostToolUse 대신 PostToolUseFailure를 보낸다 */
   | { do: 'ask'; question?: string; fail?: boolean }
   /**

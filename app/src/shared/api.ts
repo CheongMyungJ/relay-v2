@@ -31,6 +31,8 @@ import type {
   RespondStartInput,
   ReviewView,
   SubmoduleView,
+  NewWorkRepo,
+  RepoChoiceView,
   TerminalBacklog,
   SessionView,
   TerminalChunk,
@@ -141,6 +143,19 @@ export interface RelayApi {
     projectId: string,
     path: string,
   ): Promise<CommandResult & { project?: ProjectView }>
+  /** 새 Work 대화상자의 레포 표: 메인 기준 브랜치의 커밋에 있는 서브모듈 (D472) */
+  bundleRepos(
+    projectId: string,
+    branch: string,
+    location: 'local' | 'remote',
+  ): Promise<SubmoduleView[]>
+  /** 레포 표에서 서브모듈을 고른다: 받지 않았으면 받고 기준 브랜치를 읽는다 (D472) */
+  repoChoice(
+    projectId: string,
+    path: string,
+  ): Promise<{ ok: true; view: RepoChoiceView } | { ok: false; error: string }>
+  /** [레포 추가] (D473) */
+  addRepo(workKey: string, repo: NewWorkRepo): Promise<CommandResult>
   createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult>
   /** 기준 브랜치의 지식 정리 후보 (D393) */
   knowledgeTidy(
@@ -301,6 +316,9 @@ export const IPC = {
   skillProcedure: 'types:skill-procedure',
   submodules: 'project:submodules',
   prepareSubmodule: 'project:prepare-submodule',
+  bundleRepos: 'project:bundle-repos',
+  repoChoice: 'project:repo-choice',
+  addRepo: 'work:add-repo',
   createWork: 'work:create',
   knowledgeTidy: 'work:knowledge-tidy',
   review: 'work:review',

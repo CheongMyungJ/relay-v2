@@ -41,6 +41,9 @@ import type {
   TaskStatus,
   UncommittedAction,
   WorkCustomType,
+  RepoCleanStep,
+  RepoDeliverStep,
+  WorkRepo,
   WorkState,
   WorkType,
 } from '../shared/work'
@@ -54,6 +57,7 @@ import {
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
+import { repoTarget } from './repos'
 import {
   NODE_INFO,
   RESPOND,
@@ -98,6 +102,8 @@ export interface SessionStarted extends TaskEvent {
   pid: number
   processStartedAt?: string
   startCommit: string
+  /** 묶음 Work의 서브모듈마다의 시작 커밋 (D475). 키는 서브모듈 경로다 */
+  repoStarts?: Record<string, string>
   skillHash: string
   engineVersion?: string
   /** 이전 호출자와의 호환. 새 실행 경로는 engineVersion을 쓴다. */
@@ -292,6 +298,15 @@ export interface SetTarget extends WorkEvent {
   branch: string
 }
 
+/**
+ * [레포 추가] (D473): main이 그 서브모듈의 worktree를 만들었다. 묶음 Work의 서브모듈에 더한다. 진행 중이거나 멈춘 메인
+ * 프로젝트의 Work에서만 받는다
+ */
+export interface RepoAdded extends WorkEvent {
+  type: 'repo.added'
+  repo: WorkRepo
+}
+
 /** 보관된 Work를 사이드바의 공통 아카이브로 옮긴다. 기록과 산출물은 그대로 둔다 */
 export interface ShelveWork extends WorkEvent {
   type: 'shelve'
@@ -346,6 +361,45 @@ export interface Deliver extends WorkEvent {
   choice: DeliveryChoice
   uncommitted: UncommittedAction | 'session' | null
   check: TaskCheck | null
+  /**
+   * 묶음 Work의 레포별 전달 (D477~D479). main이 core/repos bundlePlan으로 확인한 것이다. 있으면 choice는 기록에만 쓰고
+   * (메인을 보내면 메인의 것), uncommitted는 메인의 처리다
+   */
+  bundle?: BundleDeliver
+}
+
+/** 묶음 Work의 전달 계획 (D477~D479) */
+export interface BundleDeliver {
+  /** 메인의 전달. 보내지 않으면 null */
+  main: DeliveryChoice | null
+  /** 서브모듈마다 전달과 커밋 안 된 변경의 처리. 이 차례로 한다 */
+  repos: { path: string; choice: DeliveryChoice; uncommitted: UncommittedAction | null }[]
+  /** 메인이 새 커밋을 가리키게 할 서브모듈 (D478) */
+  link: string[]
+}
+
+/**
+ * 묶음 Work의 서브모듈 하나의 전달이 다음 단계로 넘어갔거나 끝났다 (D479). 커밋 안 된 변경을 처리했으면 만든 stash나
+ * 커밋을 알린다. done이면 결과를 그 레포의 전달 기록에 남긴다
+ */
+export interface DeliveryRepo extends WorkEvent {
+  type: 'delivery.repo'
+  path: string
+  stage: DeliveryStage | 'done'
+  stash?: string
+  commit?: string
+  /** stage가 done일 때의 결과 */
+  compareUrl?: string | null
+  prUrl?: string
+  prExisting?: boolean
+  draft?: boolean
+  pr?: { number: number; head: string; ghVersion: string | null }
+}
+
+/** 메인이 새 서브모듈 커밋을 가리키게 하는 앱의 커밋을 만들었다 (D478) */
+export interface DeliveryLinked extends WorkEvent {
+  type: 'delivery.linked'
+  commit: string
 }
 
 /**
@@ -378,6 +432,8 @@ export interface DeliverySucceeded extends WorkEvent {
 export interface DeliveryFailed extends WorkEvent {
   type: 'delivery.failed'
   error: string
+  /** 묶음 Work에서 실패한 서브모듈 (D479). 없으면 메인(이나 gitlink 커밋)이다 */
+  path?: string
 }
 
 /**
@@ -391,6 +447,8 @@ export interface Clean extends WorkEvent {
   /** 지울 origin의 브랜치. 머지로 완료한 Work에서 사람이 골랐을 때만 있다 (D178) */
   deleteRemote?: string
   head: string | null
+  /** 묶음 Work의 서브모듈마다 정리할 것 (D482). core/cleanup이 정한다 */
+  repos?: RepoCleanStep[]
 }
 
 /** 정리가 worktree를 지웠다 (D77) */
@@ -655,6 +713,7 @@ export type MachineEvent =
   | Resume
   | StopAfterStep
   | SetTarget
+  | RepoAdded
   | ShelveWork
   | ResumeWork
   | Abandon
@@ -663,6 +722,8 @@ export type MachineEvent =
   | AppRestarted
   | Deliver
   | DeliveryStaged
+  | DeliveryRepo
+  | DeliveryLinked
   | DeliverySucceeded
   | DeliveryFailed
   | Clean
@@ -750,6 +811,8 @@ export type Effect =
       message: string | null
       branch: string
       base: string
+      /** 묶음 Work다 (D479): 레포별 차례는 진행 중 작업 기록(DeliverOperation의 repos, skip_main, link)을 따른다 */
+      bundle?: true
     }
   /** [AI 세션 열기] (7-5): 기록하지 않는 정리 세션을 worktree에서 연다. 세션 상한(D18)을 따른다 */
   | { type: 'openCleanup'; choice: DeliveryChoice }
@@ -764,6 +827,8 @@ export type Effect =
       deleteBranches: string[]
       deleteRemote?: string
       resume?: CleanStage
+      /** 묶음 Work의 서브모듈마다 정리할 것 (D482). 서브모듈 worktree를 먼저 지운다 */
+      repos?: RepoCleanStep[]
     }
   /**
    * 머지 (D176, D177): gh pr merge --match-head-commit <head>. resume이면 끊긴 머지를 잇는다(D123): 먼저 PR을 읽어 머지됐으면
@@ -1144,6 +1209,10 @@ export interface NewWork {
   targetBranch?: string
   /** 서브모듈 Work의 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치와 고정한 커밋 */
   integration?: { base_branch: string; base_commit: string }
+  /** 묶음 Work의 서브모듈 (D470). main이 만든 worktree들이다. 없거나 비면 메인 레포만 고친다 */
+  repos?: readonly WorkRepo[]
+  /** 메인 레포를 고르지 않았다 (D470, D471). 메인 worktree는 기준 커밋에 고정되어 있다 */
+  mainFixed?: boolean
   settings?: WorkSettingsPatch
   /** 앱이 쓴 request.md의 해시 (D124) */
   requestHash?: string
@@ -1173,6 +1242,8 @@ export function createWork(input: NewWork): Transition {
     ...(input.branch ? { branch: input.branch } : {}),
     ...(target ? { target_branch: target } : {}),
     ...(input.integration ? { integration: { ...input.integration } } : {}),
+    ...(input.repos?.length ? { repos: input.repos.map((r) => ({ ...r })) } : {}),
+    ...(input.mainFixed ? { main_fixed: true as const } : {}),
     intent: null,
     // 빈 값은 앱 설정을 따른다는 뜻이라 두지 않는다 (D72)
     settings: mergeWorkSettings({}, input.settings ?? {}),
@@ -1201,6 +1272,17 @@ export function createWork(input: NewWork): Transition {
         ...(input.branch ? { branch: input.branch } : {}),
         ...(target ? { target_branch: target } : {}),
         ...(input.integration ? { integration: input.integration } : {}),
+        ...(input.repos?.length
+          ? {
+              repos: input.repos.map((r) => ({
+                path: r.path,
+                base_branch: r.base_branch,
+                base_commit: r.base_commit,
+                ...(r.target_branch ? { target_branch: r.target_branch } : {}),
+              })),
+            }
+          : {}),
+        ...(input.mainFixed ? { main_fixed: true } : {}),
         ...(input.fromWork ? { from_work: input.fromWork } : {}),
       }),
       { type: 'startTask', taskId: intake.id, node: intake.node, reason: intake.reason },
@@ -1232,6 +1314,7 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
   'resume',
   'stopAfter',
   'target.set',
+  'repo.added',
   'resumeWork',
   'abandon',
   'deliver',
@@ -1273,6 +1356,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return stopAfter(work, event)
     case 'target.set':
       return setTarget(work, event)
+    case 'repo.added':
+      return repoAdded(work, event)
     case 'shelve':
       return shelve(work, event)
     case 'resumeWork':
@@ -1289,6 +1374,10 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return deliver(work, event)
     case 'delivery.stage':
       return deliveryStaged(work, event)
+    case 'delivery.repo':
+      return deliveryRepo(work, event)
+    case 'delivery.linked':
+      return deliveryLinked(work, event)
     case 'delivery.succeeded':
       return deliverySucceeded(work, event)
     case 'delivery.failed':
@@ -1360,6 +1449,7 @@ type TaskMachineEvent = Exclude<
   MachineEvent,
   | StopAfterStep
   | SetTarget
+  | RepoAdded
   | ShelveWork
   | ResumeWork
   | Abandon
@@ -1368,6 +1458,8 @@ type TaskMachineEvent = Exclude<
   | AppRestarted
   | Deliver
   | DeliveryStaged
+  | DeliveryRepo
+  | DeliveryLinked
   | DeliverySucceeded
   | DeliveryFailed
   | Clean
@@ -1500,6 +1592,9 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
     status: 'working',
     // 같은 task를 새 세션으로 다시 시작하면(D423) 처음 시작 커밋을 둔다: [변경]의 범위가 앞 세션의 커밋을 잃지 않는다
     start_commit: task.start_commit ?? e.startCommit,
+    ...(task.repo_starts || e.repoStarts
+      ? { repo_starts: { ...e.repoStarts, ...task.repo_starts } }
+      : {}),
     skill_hash: e.skillHash,
     ...versionRecord(task, e),
     session: {
@@ -1984,6 +2079,28 @@ function setTarget(work: WorkState, e: SetTarget): Transition {
   }
 }
 
+/** [레포 추가] (D473): 서브모듈을 묶음 Work에 더한다. 이미 있으면 그대로다 */
+function repoAdded(work: WorkState, e: RepoAdded): Transition {
+  if (work.status !== 'active' && work.status !== 'stopped') {
+    return unchanged(work, '진행 중이거나 멈춘 Work에만 레포를 더함')
+  }
+  if (work.integration) return unchanged(work, '서브모듈 Work에는 레포를 더하지 않음')
+  if (work.repos?.some((r) => r.path === e.repo.path)) return unchanged(work, '이미 고른 레포임')
+  const repo: WorkRepo = { ...e.repo, added_at: e.at }
+  const next: WorkState = { ...work, repos: [...(work.repos ?? []), repo] }
+  return {
+    work: next,
+    effects: [
+      log(next, e.at, 'work.repo_added', {
+        path: repo.path,
+        base_branch: repo.base_branch,
+        base_commit: repo.base_commit,
+        ...(repo.target_branch ? { target_branch: repo.target_branch } : {}),
+      }),
+    ],
+  }
+}
+
 /** [이 단계 끝나면 멈춤] (시나리오 3-4). 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 */
 function stopAfter(work: WorkState, e: StopAfterStep): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
@@ -2113,20 +2230,37 @@ function deliver(work: WorkState, e: Deliver): Transition {
     return { work: next, effects }
   }
   const branch = workBranch(work)
+  const b = e.bundle
   const operation: DeliverOperation = {
     kind: 'deliver',
     stage: e.uncommitted ? 'prepare' : 'push',
     started_at: e.at,
-    choice: e.choice,
+    choice: b ? (b.main ?? b.repos[0]?.choice ?? e.choice) : e.choice,
     task_id: task.id,
     uncommitted: e.uncommitted,
     branch,
     base: targetBranch(work),
+    ...(b && b.main === null ? { skip_main: true as const } : {}),
+    ...(b
+      ? {
+          repos: b.repos.map((r) => {
+            const repo = work.repos?.find((x) => x.path === r.path)
+            return {
+              path: r.path,
+              choice: r.choice,
+              uncommitted: r.uncommitted,
+              base: repo ? repoTarget(repo) : '',
+              stage: r.uncommitted ? ('prepare' as const) : ('push' as const),
+            }
+          }),
+        }
+      : {}),
+    ...(b && b.main !== null && b.link.length ? { link: [...b.link] } : {}),
   }
   effects.push({
     type: 'deliver',
     taskId: task.id,
-    choice: e.choice,
+    choice: operation.choice,
     uncommitted: e.uncommitted,
     message:
       e.uncommitted === 'commit'
@@ -2136,8 +2270,89 @@ function deliver(work: WorkState, e: Deliver): Transition {
           : null,
     branch,
     base: targetBranch(work),
+    ...(b ? { bundle: true as const } : {}),
   })
   return { work: { ...next, operation }, effects }
+}
+
+/**
+ * 묶음 Work의 서브모듈 하나의 전달이 넘어갔거나 끝났다 (D479). 진행 중 작업 기록의 그 레포 단계를 옮기고, 끝났으면 그
+ * 레포의 전달 기록에 결과를 남긴다(뒤 레포나 메인이 실패해도 남는다). PR을 만들었으면 그 레포의 PR 기록도 둔다 (D480)
+ */
+function deliveryRepo(work: WorkState, e: DeliveryRepo): Transition {
+  const op = work.operation
+  if (op?.kind !== 'deliver' || !op.repos) return unchanged(work)
+  const step = op.repos.find((r) => r.path === e.path)
+  if (!step) return unchanged(work, `전달할 레포가 아님: ${e.path}`)
+  const moved: RepoDeliverStep = {
+    ...step,
+    stage: e.stage,
+    ...(e.stash === undefined ? {} : { stash: e.stash }),
+    ...(e.commit === undefined ? {} : { commit: e.commit }),
+  }
+  const operation: DeliverOperation = {
+    ...op,
+    repos: op.repos.map((r) => (r.path === e.path ? moved : r)),
+  }
+  if (e.stage !== 'done') return { work: { ...work, operation }, effects: [] }
+  const repo = work.repos?.find((r) => r.path === e.path)
+  const prior = repo?.delivery
+  const delivery: DeliveryRecord = {
+    choice: step.choice,
+    status: 'succeeded',
+    at: e.at,
+    branch: op.branch,
+    compare_url: e.compareUrl ?? null,
+    ...(e.prUrl === undefined ? {} : { pr_url: e.prUrl }),
+    ...(e.prExisting ? { pr_existing: true } : {}),
+    ...(e.draft === undefined ? {} : { draft: e.draft }),
+    ...repoBackups(prior, moved),
+  }
+  const repos = (work.repos ?? []).map((r) =>
+    r.path === e.path
+      ? {
+          ...r,
+          delivery,
+          ...(e.pr && e.prUrl
+            ? {
+                pr: {
+                  number: e.pr.number,
+                  url: e.prUrl,
+                  head: e.pr.head,
+                  gh_version: e.pr.ghVersion,
+                  started_at: e.at,
+                },
+              }
+            : {}),
+        }
+      : r,
+  )
+  const payload: Record<string, unknown> = { path: e.path, ...delivery }
+  delete payload['status']
+  delete payload['at']
+  const next: WorkState = { ...work, operation, repos }
+  return { work: next, effects: [log(next, e.at, 'delivery.succeeded', payload)] }
+}
+
+/** 서브모듈 하나의 전달 기록에 남길 stash와 커밋 (7-5, deliveryBackups와 같음) */
+function repoBackups(
+  prior: DeliveryRecord | undefined,
+  step: RepoDeliverStep,
+): Pick<DeliveryRecord, 'stashes' | 'commits'> {
+  const uniq = (xs: readonly string[]) => [...new Set(xs)]
+  const stashes = uniq([...(prior?.stashes ?? []), ...(step.stash ? [step.stash] : [])])
+  const commits = uniq([...(prior?.commits ?? []), ...(step.commit ? [step.commit] : [])])
+  return {
+    ...(stashes.length ? { stashes } : {}),
+    ...(commits.length ? { commits } : {}),
+  }
+}
+
+/** 메인이 새 서브모듈 커밋을 가리키게 하는 앱의 커밋을 진행 중 작업 기록에 적는다 (D478) */
+function deliveryLinked(work: WorkState, e: DeliveryLinked): Transition {
+  const op = work.operation
+  if (op?.kind !== 'deliver') return unchanged(work)
+  return { work: { ...work, operation: { ...op, link_commit: e.commit } }, effects: [] }
 }
 
 /**
@@ -2220,6 +2435,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
       decisions: e.check?.handoffHeader ? e.check.handoffHeader.decisions : null,
     })
   }
+  const main = op.skip_main !== true
   const delivery: DeliveryRecord = {
     choice: op.choice,
     status: 'succeeded',
@@ -2235,6 +2451,22 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   const payload: Record<string, unknown> = { ...delivery }
   delete payload['status']
   delete payload['at']
+  if (!main) {
+    // 묶음 Work에서 메인을 보내지 않았다 (D477): 메인의 전달 기록은 그대로 두고, 서브모듈 PR이 있으면 PR 진행이다 (D480)
+    const prs = (work.repos ?? []).some((r) => r.pr && op.repos?.some((s) => s.path === r.path))
+    const next: WorkState = prs
+      ? { ...rest, tasks, status: 'pr' }
+      : { ...rest, tasks, status: 'completed', completed_at: e.at }
+    if (!prs) effects.push(log(next, e.at, 'work.completed', { delivery: op.choice }))
+    return { work: next, effects }
+  }
+  const repoPr = (work.repos ?? []).some((r) => r.pr && op.repos?.some((s) => s.path === r.path))
+  if (repoPr && !(op.choice === 'pr' && e.pr && e.prUrl)) {
+    // 메인은 push만 했고 서브모듈 PR이 있다: PR 진행이다 (D480)
+    const next: WorkState = { ...rest, tasks, status: 'pr', delivery }
+    effects.push(log(next, e.at, 'delivery.succeeded', payload))
+    return { work: next, effects }
+  }
   if (op.choice === 'pr' && e.pr && e.prUrl) {
     // [PR 생성]이 성공하면 완료 대신 PR 진행이다 (D120, D152). 완료는 머지나 [머지 없이 끝내기]에서 남긴다
     const next: WorkState = {
@@ -2273,6 +2505,34 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
 function deliveryFailed(work: WorkState, e: DeliveryFailed): Transition {
   const op = work.operation
   if (op?.kind !== 'deliver') return unchanged(work)
+  const step = e.path === undefined ? undefined : op.repos?.find((r) => r.path === e.path)
+  if (step) {
+    // 묶음 Work의 서브모듈이 실패했다 (D479): 그 레포의 전달 기록에 남긴다. 앞에서 끝난 레포의 기록은 그대로다
+    const prior = work.repos?.find((r) => r.path === step.path)?.delivery
+    const failed: DeliveryRecord = {
+      choice: step.choice,
+      status: 'failed',
+      at: e.at,
+      stage: step.stage === 'done' ? 'push' : step.stage,
+      error: e.error,
+      branch: op.branch,
+      ...repoBackups(prior, step),
+    }
+    const repos = (work.repos ?? []).map((r) =>
+      r.path === step.path ? { ...r, delivery: failed } : r,
+    )
+    return {
+      work: { ...omit(work, 'operation'), repos },
+      effects: [
+        log(work, e.at, 'delivery.failed', {
+          path: step.path,
+          choice: step.choice,
+          stage: failed.stage,
+          error: e.error,
+        }),
+      ],
+    }
+  }
   const backups = deliveryBackups(work.delivery, op)
   const delivery: DeliveryRecord = {
     choice: op.choice,
@@ -2312,6 +2572,7 @@ function clean(work: WorkState, e: Clean): Transition {
     delete_branches: [...e.deleteBranches],
     ...(e.deleteRemote ? { delete_remote: e.deleteRemote } : {}),
     head: e.head,
+    ...(e.repos?.length ? { repos: e.repos.map((r) => ({ ...r })) } : {}),
   }
   return {
     work: { ...work, operation },
@@ -2321,6 +2582,7 @@ function clean(work: WorkState, e: Clean): Transition {
         force: e.force,
         deleteBranches: [...e.deleteBranches],
         ...(e.deleteRemote ? { deleteRemote: e.deleteRemote } : {}),
+        ...(e.repos?.length ? { repos: e.repos.map((r) => ({ ...r })) } : {}),
       },
     ],
   }
@@ -2336,7 +2598,9 @@ function cleanRemoved(work: WorkState): Transition {
 /** 정리가 로컬 브랜치를 지웠다. origin의 브랜치를 지울 것이 있으면 기록을 그 단계로 옮긴다 (D77, D178) */
 function cleanBranchesDeleted(work: WorkState): Transition {
   const op = work.operation
-  if (op?.kind !== 'clean' || op.stage !== 'branches' || !op.delete_remote) return unchanged(work)
+  const remote =
+    op?.kind === 'clean' && (op.delete_remote || op.repos?.some((r) => r.delete_remote))
+  if (op?.kind !== 'clean' || op.stage !== 'branches' || !remote) return unchanged(work)
   return { work: { ...work, operation: { ...op, stage: 'remote' } }, effects: [] }
 }
 
@@ -2353,6 +2617,20 @@ function cleanDone(work: WorkState, e: CleanDone): Transition {
       forced: op.force,
       deleted_branches: op.delete_branches,
       ...(op.delete_remote ? { deleted_remote_branch: op.delete_remote } : {}),
+      ...(op.repos?.length
+        ? {
+            repos: Object.fromEntries(
+              op.repos.map((r) => [
+                r.path,
+                {
+                  head: r.head,
+                  deleted_branches: r.delete_branches,
+                  ...(r.delete_remote ? { deleted_remote_branch: r.delete_remote } : {}),
+                },
+              ]),
+            ),
+          }
+        : {}),
     },
   }
   return {
@@ -2482,6 +2760,7 @@ function operationRetry(work: WorkState, e: OperationRetry): Transition {
         force: live.force,
         deleteBranches: [...live.delete_branches],
         ...(live.delete_remote ? { deleteRemote: live.delete_remote } : {}),
+        ...(live.repos?.length ? { repos: live.repos.map((r) => ({ ...r })) } : {}),
         resume: live.stage,
       },
     ],
@@ -2518,8 +2797,9 @@ function deliveryCut(
     branch: op.branch,
     ...backups,
   }
+  // 묶음 Work에서 메인을 보내지 않던 전달은 메인의 전달 기록을 남기지 않는다 (D477). 끝난 서브모듈의 기록은 이미 있다
   return {
-    work: { ...omit(work, 'operation'), delivery },
+    work: op.skip_main ? omit(work, 'operation') : { ...omit(work, 'operation'), delivery },
     effects: [
       log(work, e.at, 'delivery.failed', {
         choice: op.choice,

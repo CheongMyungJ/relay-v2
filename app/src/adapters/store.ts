@@ -550,6 +550,17 @@ export class WorkFiles {
     return out
   }
 
+  /**
+   * task 디렉터리 안의 파일 하나 (D476: 묶음 Work의 서브모듈 PR 초안 `pr/<경로>.md`). rel은 `/`로 나눈 상대 경로다. 없으면
+   * null이다
+   */
+  async taskFile(
+    task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,
+    rel: string,
+  ): Promise<string | null> {
+    return readText(path.join(this.taskDir(task), ...rel.split('/')))
+  }
+
   /** 산출물의 이름과 내용 (D89): artifacts와 같은 파일이다. 이슈 기록의 코멘트에 접어 넣는다 (D339) */
   async artifactTexts(
     task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,

@@ -198,7 +198,7 @@ Ask on the spot:
 - Every 완료조건 of the intent has a verdict and evidence, judged on the final document and the diff.
 - `문서 밖 파일 변경` lists every changed file outside the target document and the knowledge files, and `다시 볼 결정` is written.
 <!-- /type -->
-- `pr.md` is written.
+- `pr.md` is written. If `context.md` has `## 레포`, a PR draft is written for every repo with commits, at the path given there.
 - Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
 <!-- type: general custom -->
 - Every `확인: 사람` item was asked about, and the answer recorded in `decisions`.
@@ -265,6 +265,7 @@ Ask on the spot:
 - The first line is `# <PR title>`. The app uses it as the PR title and the rest as the body.
 - Write it in the language the repo uses (recent commits and PRs), not necessarily Korean.
 - If the repo has a PR template (e.g. `.github/pull_request_template.md`), follow its structure. Otherwise use the sections below, in that language.
+- **Several repos:** if `context.md` has `## 레포`, this Work changes more than one repo, and each repo gets its own PR. Write one draft per repo that has commits since its base commit, at the path `## 레포` gives (`pr.md` for the main repo, `pr/<submodule path>.md` for a submodule), in that repo's language and PR template. Each draft covers only that repo's change. The main repo's draft also lists the submodules changed with it and that their PRs merge first; the app adds their links. If the main repo is not changed, write no `pr.md`. The review and the verdicts in `verification.md` still cover all repos together.
 <!-- type: bugfix -->
 
 ```markdown

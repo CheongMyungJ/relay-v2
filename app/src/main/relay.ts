@@ -11,12 +11,14 @@ import {
   addWorktree,
   branches as gitBranches,
   commitOf,
+  deleteBranches,
   fetchBranch,
   hasRemote,
   isGitlinkAt,
   remoteUrl,
   removeWorktree,
   submoduleList,
+  submodulesAt,
 } from '../adapters/git'
 import { listFiles, readTextFile, writeTextFile } from '../adapters/files'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
@@ -104,6 +106,7 @@ import type {
   FileSaveResult,
   MergeInput,
   NewWorkInput,
+  NewWorkRepo,
   PrItemAction,
   TidyView,
   ProjectInspection,
@@ -113,6 +116,7 @@ import type {
   ReviewView,
   SessionView,
   SubmoduleView,
+  RepoChoiceView,
   TerminalBacklog,
 } from '../shared/views'
 import {
@@ -120,6 +124,7 @@ import {
   type CustomTypeSource,
   type DeliveryChoice,
   type WorkCustomType,
+  type WorkRepo,
   type WorkState,
   type WorkType,
 } from '../shared/work'
@@ -129,8 +134,10 @@ import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from 
 import {
   checkGh,
   inspectProject,
+  inspectRepoChoice,
   prepareProject,
   prepareSubmoduleProject,
+  repoChecks,
   type ProjectEnv,
 } from './projects'
 import { SessionRunner, type SessionContext } from './session'
@@ -216,6 +223,11 @@ export class Relay {
   private configQueue: Promise<unknown> = Promise.resolve()
   /** project.json 고치기의 차례 (updateProject) */
   private projectWrites: Promise<unknown> = Promise.resolve()
+  /** 레포 표에서 고르는 중인 서브모듈 (repoChoice) */
+  private readonly choosing = new Map<
+    string,
+    Promise<{ ok: true; view: RepoChoiceView } | { ok: false; error: string }>
+  >()
   /** 준비하는 중인 서브모듈 (prepareSubmodule). 키는 메인 프로젝트 id와 서브모듈 경로다 */
   private readonly preparing = new Map<string, Promise<CommandResult & { project?: ProjectView }>>()
 
@@ -376,6 +388,7 @@ export class Relay {
       project: (projectId) => this.projects.get(projectId),
       projectIds: () => [...this.projects.keys()],
       recheck: (projectId) => this.recheck(projectId),
+      repoChecks: (dir) => repoChecks(dir, this.ghBin(), this.env, this.at()),
       knowledgeSources: (projectId, except) =>
         [...this.works.values()]
           .filter(
@@ -798,6 +811,53 @@ export class Relay {
     return run
   }
 
+  /**
+   * 새 Work 대화상자의 레포 표 (D472): 메인 기준 브랜치의 커밋에 있는 서브모듈. 기준 위치가 원격이면 마지막으로 받은
+   * origin/<브랜치>다(받지는 않는다). 서브모듈 프로젝트나 읽지 못한 브랜치면 빈 목록이다
+   */
+  async bundleRepos(
+    projectId: string,
+    branch: string,
+    location: 'local' | 'remote',
+  ): Promise<SubmoduleView[]> {
+    const project = this.projects.get(projectId)
+    if (!project || project.parent) return []
+    const env = this.env
+    const ref = location === 'remote' ? `origin/${branch}` : branch
+    try {
+      const commit = await commitOf(project.repo_path, ref, { env })
+      const listed = await submodulesAt(project.repo_path, commit, { env })
+      const checkout = await submoduleList(project.repo_path, { env }).catch(() => [])
+      return listed.map((e) => ({
+        ...e,
+        initialized: checkout.some((c) => c.path === e.path && c.initialized),
+        projectId: null,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * 레포 표에서 서브모듈을 고른다 (D472): 메인 체크아웃에 받지 않았으면 받고 기준 브랜치의 기본값과 목록을 돌려준다. 같은
+   * 서브모듈을 겹쳐 고르면 앞의 준비를 함께 기다린다
+   */
+  repoChoice(
+    projectId: string,
+    subPath: string,
+  ): Promise<{ ok: true; view: RepoChoiceView } | { ok: false; error: string }> {
+    const project = this.projects.get(projectId)
+    if (!project) return Promise.resolve({ ok: false, error: '프로젝트가 없습니다' })
+    const key = `choice\0${projectId}\0${subPath}`
+    const running = this.choosing.get(key)
+    if (running) return running
+    const run = inspectRepoChoice(project, subPath, { env: this.env }).finally(() =>
+      this.choosing.delete(key),
+    )
+    this.choosing.set(key, run)
+    return run
+  }
+
   private async prepareSubmoduleNow(
     projectId: string,
     subPath: string,
@@ -1000,6 +1060,27 @@ export class Relay {
     }
     const badTarget = target ? checkBranchName(target) : null
     if (badTarget) return { ok: false, error: `머지 대상: ${badTarget}` }
+    const picked = input.repos ?? []
+    const bundle = picked.length > 0 || input.editMain === false
+    if (bundle) {
+      if (project.parent)
+        return { ok: false, error: '서브모듈 프로젝트에서는 함께 고칠 레포를 고르지 않습니다' }
+      if (input.integration)
+        return { ok: false, error: '함께 고칠 레포와 메인 통합 검증은 같이 고르지 않습니다' }
+      if (input.editMain === false && picked.length === 0)
+        return { ok: false, error: '고칠 레포를 하나 이상 고르세요' }
+      const paths = picked.map((r) => r.path)
+      if (new Set(paths).size !== paths.length)
+        return { ok: false, error: '같은 서브모듈을 두 번 골랐습니다' }
+      for (const r of picked) {
+        if (!r.baseBranch.trim()) return { ok: false, error: `${r.path}: 기준 브랜치를 고르세요` }
+        const t = r.targetBranch?.trim()
+        if (r.targetBranch !== undefined && !t)
+          return { ok: false, error: `${r.path}: 머지 대상 브랜치를 고르세요` }
+        const bad = t ? checkBranchName(t) : null
+        if (bad) return { ok: false, error: `${r.path}의 머지 대상: ${bad}` }
+      }
+    }
     if (input.integration) {
       const main = project.parent ? this.projects.get(project.parent.project_id) : undefined
       if (!main) return { ok: false, error: '메인 통합 검증은 서브모듈 프로젝트에서만 고릅니다' }
@@ -1100,8 +1181,23 @@ export class Relay {
       integration = r.base
     }
 
+    const picked = input.repos ?? []
+    const bundle = picked.length > 0 || input.editMain === false
+    let repos: (WorkRepo & { dir: string })[] = []
+    if (bundle) {
+      const r = await this.bundleBases(project, baseCommit, ref, input.repos ?? [])
+      if (!r.ok) return r
+      repos = r.repos
+    }
+
     const at = this.at()
     const existing = await gitBranches(repo, { env })
+    // 작업 브랜치 이름은 모든 레포가 같다: 끝의 4자를 고른 레포 모두에서 겹치지 않게 뽑는다 (D471)
+    for (const r of repos) {
+      const b = await gitBranches(r.dir, { env })
+      existing.local.push(...b.local)
+      existing.remote.push(...b.remote)
+    }
     const workId = await this.nextWorkId(project, at, existing.local)
     const named = pickWorkBranch({
       rule: project.branch_rule ?? DEFAULT_BRANCH_RULE,
@@ -1138,12 +1234,44 @@ export class Relay {
       }
     }
     try {
-      await addWorktree(repo, tree, named.branch, baseCommit, { env })
+      // 메인을 고르지 않은 묶음 Work는 메인 worktree를 기준 커밋에 고정한다 (D471)
+      if (input.editMain === false) await addDetachedWorktree(repo, tree, baseCommit, { env })
+      else await addWorktree(repo, tree, named.branch, baseCommit, { env })
     } catch (e) {
       if (main && root)
         await removeWorktree(main.repo_path, root, { env, force: true }).catch(() => {})
       await dropFiles()
       return { ok: false, error: `worktree를 만들지 못했습니다. ${String(e)}` }
+    }
+    // 고른 서브모듈마다 메인 worktree 안의 그 자리(빈 폴더)에 서브모듈 레포의 worktree를 만든다 (D471)
+    const made: (WorkRepo & { dir: string })[] = []
+    for (const r of repos) {
+      try {
+        await addWorktree(
+          r.dir,
+          path.join(tree, ...r.path.split('/')),
+          named.branch,
+          r.base_commit,
+          {
+            env,
+          },
+        )
+        made.push(r)
+      } catch (e) {
+        for (const m of made.reverse()) {
+          await removeWorktree(m.dir, path.join(tree, ...m.path.split('/')), { env, force: true })
+            .then(() => deleteBranches(m.dir, [named.branch], { env }))
+            .catch(() => {})
+        }
+        await removeWorktree(repo, tree, { env, force: true }).catch(() => {})
+        if (input.editMain !== false)
+          await deleteBranches(repo, [named.branch], { env }).catch(() => {})
+        await dropFiles()
+        return {
+          ok: false,
+          error: `서브모듈 ${r.path}의 worktree를 만들지 못했습니다. ${String(e)}`,
+        }
+      }
     }
 
     const requestHash = await files.writeRequest(input.request)
@@ -1157,6 +1285,8 @@ export class Relay {
       branch: named.branch,
       ...(branches.target ? { targetBranch: branches.target } : {}),
       ...(integration ? { integration } : {}),
+      ...(repos.length ? { repos: repos.map(workRepoOf) } : {}),
+      ...(input.editMain === false ? { mainFixed: true } : {}),
       settings,
       requestHash,
       // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
@@ -1187,6 +1317,65 @@ export class Relay {
       ...(await workIds(this.o.home, project.project_id)),
       ...workIdsInBranches(local),
     ])
+  }
+
+  /**
+   * 묶음 Work의 서브모듈마다 기준 커밋 (D470, D472). 메인 기준 커밋에 그 서브모듈의 자리가 있어야 한다. 메인 체크아웃에
+   * 받지 않았으면 받는다. 기준 위치가 원격이면 그 서브모듈 레포에서 fetch한 origin/<브랜치>다. 하나라도 실패하면 Work를
+   * 만들지 않는다
+   */
+  private async bundleBases(
+    project: ProjectState,
+    mainCommit: string,
+    mainRef: string,
+    picks: readonly NewWorkRepo[],
+  ): Promise<{ ok: true; repos: (WorkRepo & { dir: string })[] } | { ok: false; error: string }> {
+    const env = this.env
+    const listed = await submodulesAt(project.repo_path, mainCommit, { env }).catch(() => [])
+    const out: (WorkRepo & { dir: string })[] = []
+    for (const pick of picks) {
+      const entry = listed.find((e) => e.path === pick.path)
+      if (!entry)
+        return { ok: false, error: `메인 레포의 ${mainRef}에는 서브모듈 ${pick.path}이 없습니다` }
+      const ready = await inspectRepoChoice(project, pick.path, { env })
+      if (!ready.ok) return ready
+      const dir = path.join(project.repo_path, ...pick.path.split('/'))
+      const branch = pick.baseBranch.trim()
+      let ref = branch
+      if (pick.baseLocation === 'remote') {
+        if (!(await hasRemote(dir, 'origin', { env }))) {
+          return {
+            ok: false,
+            error: `${pick.path}: origin 원격이 없어 원격 기준으로 만들 수 없습니다`,
+          }
+        }
+        try {
+          await fetchBranch(dir, branch, 'origin', { env })
+        } catch (e) {
+          return {
+            ok: false,
+            error: `${pick.path}: git fetch가 실패해 Work를 만들지 않았습니다. ${String(e)}`,
+          }
+        }
+        ref = `origin/${branch}`
+      }
+      let commit: string
+      try {
+        commit = await commitOf(dir, ref, { env })
+      } catch {
+        return { ok: false, error: `${pick.path}: 기준 브랜치를 찾을 수 없습니다: ${ref}` }
+      }
+      const target = pick.targetBranch?.trim()
+      out.push({
+        dir,
+        path: pick.path,
+        name: entry.name,
+        base_branch: branch,
+        base_commit: commit,
+        ...(target && target !== branch ? { target_branch: target } : {}),
+      })
+    }
+    return { ok: true, repos: out }
   }
 
   /**
@@ -1232,6 +1421,29 @@ export class Relay {
       }
     }
     return { ok: true, base: { base_branch: branch, base_commit: commit } }
+  }
+
+  /**
+   * [레포 추가] (D473): 진행 중인 묶음 Work(메인 레포만 고친 Work 포함)에 서브모듈을 더한다. 메인 기준 커밋에 그 자리가
+   * 있어야 하고, 기준 커밋은 새 Work처럼 정한다. worktree는 Work의 처리 줄에서 만든다
+   */
+  async addRepo(workKey: string, pick: NewWorkRepo): Promise<CommandResult> {
+    const runner = this.works.get(workKey)
+    if (!runner) return { ok: false, error: 'Work가 없습니다' }
+    const project = runner.project
+    if (project.parent)
+      return { ok: false, error: '서브모듈 프로젝트의 Work에는 레포를 더하지 않습니다' }
+    if (!pick.baseBranch.trim()) return { ok: false, error: `${pick.path}: 기준 브랜치를 고르세요` }
+    const t = pick.targetBranch?.trim()
+    const bad = t ? checkBranchName(t) : null
+    if (bad) return { ok: false, error: `${pick.path}의 머지 대상: ${bad}` }
+    const r = await this.bundleBases(project, runner.work.base_commit, runner.work.base_branch, [
+      pick,
+    ])
+    if (!r.ok) return r
+    const made = r.repos[0]
+    if (!made) return { ok: false, error: `서브모듈이 아닙니다: ${pick.path}` }
+    return runner.addRepo(workRepoOf(made))
   }
 
   // ---------- 승인 (시나리오 4) ----------
@@ -1728,4 +1940,15 @@ export class Relay {
 function subProjectsBlock(subs: readonly ProjectState[]): string {
   const names = subs.map((p) => p.parent?.path ?? p.project_id).join(', ')
   return `서브모듈 프로젝트가 있음 (${names}). 서브모듈 프로젝트를 먼저 등록 해제하세요`
+}
+
+/** bundleBases가 읽은 서브모듈에서 work.json에 적을 것 (D470): 그 서브모듈 저장소의 폴더를 뺀다 */
+function workRepoOf(r: WorkRepo & { dir: string }): WorkRepo {
+  return {
+    path: r.path,
+    name: r.name,
+    base_branch: r.base_branch,
+    base_commit: r.base_commit,
+    ...(r.target_branch ? { target_branch: r.target_branch } : {}),
+  }
 }

@@ -158,13 +158,27 @@ export interface DeliverInput {
    * 지금 목록을 다시 돌려준다. 변경이 없으면 null이다
    */
   uncommitted: { action: UncommittedAction; expect: string[] } | null
+  /**
+   * 묶음 Work의 레포마다 고른 전달 (D477, D478). 메인은 path ''다. 있으면 choice와 uncommitted 대신 이것과
+   * repoUncommitted를 따른다
+   */
+  repos?: { path: string; choice: DeliveryChoice | null; link?: boolean }[]
+  /** 묶음 Work의 레포마다 커밋 안 된 변경의 처리 (D475). expect는 사람에게 보인 그 레포의 변경이다 */
+  repoUncommitted?: { path: string; action: UncommittedAction; expect: string[] }[]
 }
 
 /**
- * 전달의 결과. 커밋 안 된 변경이 있어 사람이 골라야 하면 uncommitted에 변경 목록을 준다 (7-5).
- * 전달이 실패하면 error이고, 실패는 Work 완료 화면에도 남는다 (D120)
+ * 전달의 결과. 커밋 안 된 변경이 있어 사람이 골라야 하면 uncommitted에 변경 목록을 준다 (7-5). 묶음 Work는 보낼 레포마다
+ * repoUncommitted에 준다 (D475). 전달이 실패하면 error이고, 실패는 Work 완료 화면에도 남는다 (D120)
  */
-export type DeliverResult = { ok: true } | { ok: false; error: string; uncommitted?: string[] }
+export type DeliverResult =
+  | { ok: true }
+  | {
+      ok: false
+      error: string
+      uncommitted?: string[]
+      repoUncommitted?: { path: string; label: string; lines: string[] }[]
+    }
 
 /** 정리를 확인한 때의 사실. [정리]에 함께 보내 그 사이 바뀌었으면 받지 않는다 */
 export interface CleanExpect {
@@ -180,6 +194,14 @@ export interface CleanExpect {
   submodules: string[]
   /** 메인 통합 검증 worktree의 메인 쪽 변경 (D416). 없으면 없다 */
   integration?: string[]
+  /** 묶음 Work의 서브모듈마다 확인한 것 (D482). 없으면 없다 */
+  repos?: {
+    path: string
+    uncommitted: string[]
+    locks: string[]
+    remote: boolean
+    lost: string[]
+  }[]
 }
 
 /** [Work 정리]의 확인 요약 (시나리오 8-1) */
@@ -227,9 +249,32 @@ export interface CleanPreview {
    * --force로 지운다. 없으면 null
    */
   integration: { root: string; changes: string[] } | null
+  /**
+   * 묶음 Work의 서브모듈마다 (D482): 메인 worktree보다 먼저 지운다. 작업 브랜치와 origin의 브랜치 지우기는 레포마다 고른다.
+   * 묶음 Work가 아니면 없다
+   */
+  repos?: RepoCleanPreview[]
   /** 사람이 명시적으로 확인해야 하는 것. 비어 있지 않으면 확인해야 [정리]를 누를 수 있다 */
   confirm: string[]
   expect: CleanExpect
+}
+
+/** 묶음 Work의 서브모듈 하나의 정리 (D482) */
+export interface RepoCleanPreview {
+  path: string
+  /** 그 서브모듈 worktree가 있다 */
+  worktree: boolean
+  uncommitted: string[]
+  locks: string[]
+  /** 작업 브랜치: 메인과 같은 모양이다 (CleanPreview.branch) */
+  branch: CleanPreview['branch']
+  /** 머지로 끝난 그 레포의 PR이 있으면 origin의 작업 브랜치 (D178). 아니면 null */
+  remote: { name: string; exists: boolean } | null
+  /**
+   * 메인 PR이 아직 이 작업 브랜치에만 있는 커밋을 가리킨다 (D482). origin의 브랜치를 지우면 메인 PR이 가리키는 커밋을 받을 수
+   * 없게 되어 경고한다
+   */
+  pointed: boolean
 }
 
 export type CleanPreviewResult = { ok: true; preview: CleanPreview } | { ok: false; error: string }
@@ -260,6 +305,8 @@ export interface CleanInput {
   /** 작업 브랜치를 지울 때 그 브랜치에만 있는 커밋을 잃는 것을 확인했다 (D329) */
   confirmLost?: boolean
   expect: CleanExpect
+  /** 묶음 Work의 서브모듈마다 고른 것 (D482). 없는 레포는 브랜치를 지우지 않는다 */
+  repos?: { path: string; deleteBranch: boolean; deleteRemote?: boolean; confirmLost?: boolean }[]
 }
 
 // ---------- PR 진행 (시나리오 10, core/pr) ----------
@@ -507,6 +554,19 @@ export interface ProjectView {
   parent: { id: string; path: string } | null
 }
 
+/** 묶음 Work의 서브모듈 하나 (D470, D471) */
+export interface RepoView {
+  path: string
+  baseBranch: string
+  baseCommit: string
+  /** 머지 대상 (D428). 고르지 않았으면 기준 브랜치다 */
+  targetBranch: string
+  /** 그 서브모듈 worktree의 폴더: 메인 worktree 안의 그 자리 */
+  worktree: string
+  /** 이 레포의 마지막 전달 결과 (D477) */
+  delivery: DeliveryView | null
+}
+
 /** 새 Work 대화상자의 대상 목록에 보이는 서브모듈 (D413) */
 export interface SubmoduleView {
   name: string
@@ -642,6 +702,15 @@ export interface WorkView {
   canSetTarget: boolean
   /** 메인 통합 검증 worktree (D414): 메인 레포의 기준 브랜치, 고정한 커밋, 그 폴더. 없으면 null */
   integration: { baseBranch: string; baseCommit: string; root: string } | null
+  /**
+   * 묶음 Work (D470): 함께 고치는 서브모듈. 메인 레포만 고치는 Work면 빈 목록이다. 이전 스냅샷 호출자의 호환을 위해 생략할 수
+   * 있다
+   */
+  repos?: RepoView[]
+  /** 메인 레포를 고르지 않은 묶음 Work (D470). 메인 worktree는 기준 커밋에 고정되어 있다 */
+  mainFixed?: boolean
+  /** [레포 추가]로 더할 수 있다 (D473): 메인 프로젝트의 진행 중이거나 멈춘 Work다 */
+  canAddRepo?: boolean
   intent: ApprovedIntent | null
   /** 멈춘 이유: [이 단계 끝나면 멈춤]. 이전 단계 추천(D23)은 D418 전 기록이다 */
   stopNotice: string | null
@@ -772,6 +841,11 @@ export interface ReviewView {
   artifacts: Artifact[]
   /** 이 task의 변경 (task 시작 커밋 → 작업 트리) */
   diff: string
+  /**
+   * 묶음 Work의 레포마다 이 task의 변경 (D475): 메인이 맨 앞이고 서브모듈이 뒤다. [변경] 탭이 레포를 고른다. 묶음 Work가
+   * 아니면 없다(diff만 본다)
+   */
+  repoDiffs?: RepoDiffView[]
   /** 승인 버튼의 판정 (4.1) */
   gate: ApprovalGate
   /**
@@ -838,6 +912,40 @@ export interface Completion {
   branch: BranchInfo | null
   /** 이 Work가 바꾼 지식 (D298). 지식 관리를 끄면 null */
   knowledge: KnowledgeChange[] | null
+  /**
+   * 묶음 Work의 레포마다 전달 (D475, D477, D478): 메인이 맨 앞이다. 있으면 전달 버튼 대신 레포마다 고르고 [전달]을 누른다.
+   * 묶음 Work가 아니면 없다
+   */
+  repos?: RepoCompletion[]
+}
+
+/** 묶음 Work의 승인 화면에서 레포 하나의 변경 (D475) */
+export interface RepoDiffView {
+  /** 서브모듈 경로. 메인은 '' */
+  path: string
+  label: string
+  diff: string
+}
+
+/** 묶음 Work의 Work 완료 화면에서 레포 하나 (D475, D477, D478) */
+export interface RepoCompletion {
+  /** 서브모듈 경로. 메인은 '' */
+  path: string
+  label: string
+  /** 이 Work가 고치는 레포다. 메인을 고르지 않은 Work의 메인은 아니다 */
+  editable: boolean
+  /** 기준 커밋부터의 변경 */
+  diff: string
+  /** 작업 브랜치의 커밋. 브랜치가 없으면 null */
+  branch: BranchInfo | null
+  /** 커밋 안 된 변경 */
+  uncommitted: string[]
+  /** 전달 버튼을 누를 수 있는지와 이유 (D477) */
+  buttons: DeliveryButtons
+  /** 이 레포의 마지막 전달 결과 */
+  delivery: DeliveryView | null
+  /** 메인이 이 서브모듈의 새 커밋을 가리키게 할지 물을 수 있다 (D478): 메인을 고친 Work의 서브모듈이다 */
+  linkable: boolean
 }
 
 /** Work 완료 화면의 "이 Work의 지식" 한 줄 (D298) */
@@ -983,6 +1091,37 @@ export interface NewWorkInput {
    * (메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다). 없거나 null이면 서브모듈 worktree만 만든다
    */
   integration?: { baseBranch: string; baseLocation: 'local' | 'remote' } | null
+  /**
+   * 묶음 Work (D470): 함께 고칠 서브모듈과 그 기준. 메인 프로젝트에서만 쓴다. 없거나 비면 메인 레포만 고친다. 메인 레포의
+   * 기준은 baseBranch, baseLocation, targetBranch다
+   */
+  repos?: NewWorkRepo[]
+  /** 메인 레포를 고친다 (D470). 없으면 고친다. 끄면 repos가 하나 이상 있어야 한다 */
+  editMain?: boolean
+}
+
+/** 묶음 Work에서 함께 고칠 서브모듈 하나 (D470, D472) */
+export interface NewWorkRepo {
+  /** 메인 레포 안의 서브모듈 경로 */
+  path: string
+  baseBranch: string
+  baseLocation: 'local' | 'remote'
+  /** 머지 대상 (D428). 없으면 기준 브랜치다 */
+  targetBranch?: string
+}
+
+/**
+ * 새 Work 대화상자의 레포 표에서 고른 서브모듈의 정보 (D472). 고를 때 앱이 메인 체크아웃에 받고(받지 않았으면) 읽는다
+ */
+export interface RepoChoiceView {
+  name: string
+  path: string
+  /** 기준 브랜치의 기본값 (D413의 차례) */
+  defaultBranch: string
+  /** 고를 수 있는 기준 브랜치: 기본 브랜치가 맨 앞이다 */
+  branches: string[]
+  /** origin 원격이 있다. 없으면 원격 기준을 고르지 못한다 */
+  origin: boolean
 }
 
 /** 커스텀 유형 하나 (D459, D460). 형식이 깨졌으면 errors가 있고 고를 수 없다 */

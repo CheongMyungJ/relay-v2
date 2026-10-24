@@ -39,12 +39,14 @@ import { DEFAULT_BRANCH_RULE } from '../../shared/project'
 import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
 import type {
   CleanPreview,
+  RepoCleanPreview,
   CustomTypeView,
   DraftView,
   ProjectInspection,
   ProjectRemovePreview,
   ProjectView,
   SubmoduleView,
+  RepoChoiceView,
   TidyCandidateView,
   TidyView,
   WorkView,
@@ -538,6 +540,10 @@ export function NewWorkDialog({
   }
   const [modes, setModes] = useState<Overrides>({})
   const [auto, setAuto] = useState<AutoOverrides>({})
+  // 묶음 Work (D470, D472): 메인 레포를 고치는지, 메인 기준 커밋의 서브모듈, 고른 서브모듈과 그 기준
+  const [editMain, setEditMain] = useState(true)
+  const [bundleSubs, setBundleSubs] = useState<SubmoduleView[]>([])
+  const [picked, setPicked] = useState<Record<string, PickedRepo>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // 지식 정리 후보와 그것을 찾은 기준("<브랜치>|<위치>"). 늦게 온 앞 기준의 결과는 보이지 않는다 (D393)
@@ -570,6 +576,55 @@ export function NewWorkDialog({
       current = false
     }
   }, [target.id])
+
+  // 레포 표 (D472): 메인 기준 브랜치의 커밋에 있는 서브모듈. 기준을 바꾸면 다시 읽고, 없어진 서브모듈은 고른 것에서 뺀다
+  useEffect(() => {
+    if (target.parent) return
+    let current = true
+    void window.relay.bundleRepos(target.id, branch, location).then((list) => {
+      if (!current) return
+      setBundleSubs(list)
+      setPicked((p) =>
+        Object.fromEntries(Object.entries(p).filter(([k]) => list.some((m) => m.path === k))),
+      )
+    })
+    return () => {
+      current = false
+    }
+  }, [target.id, target.parent, branch, location])
+
+  /** 레포 표의 [고침] (D472): 고르면 앱이 메인 체크아웃에 받고(받지 않았으면) 기준 브랜치를 읽는다 */
+  const pickRepo = async (subPath: string, on: boolean) => {
+    if (!on) {
+      setPicked((p) => Object.fromEntries(Object.entries(p).filter(([k]) => k !== subPath)))
+      return
+    }
+    setPicked((p) => ({
+      ...p,
+      [subPath]: { view: null, error: null, baseBranch: '', baseLocation: 'local', target: null },
+    }))
+    const r = await call(() => window.relay.repoChoice(target.id, subPath))
+    setPicked((p) =>
+      subPath in p
+        ? {
+            ...p,
+            [subPath]: r.ok
+              ? {
+                  view: r.view,
+                  error: null,
+                  baseBranch: r.view.defaultBranch,
+                  baseLocation: 'local',
+                  target: null,
+                }
+              : { view: null, error: r.error, baseBranch: '', baseLocation: 'local', target: null },
+          }
+        : p,
+    )
+  }
+  const pickedList = Object.entries(picked)
+  const pickedBusy = pickedList.some(([, r]) => !r.view && !r.error)
+  const pickedBad = pickedList.some(([, r]) => r.error !== null)
+  const bundle = !target.parent && (pickedList.length > 0 || !editMain)
 
   useEffect(() => {
     void window.relay.submodules(mainId).then(setSubmodules)
@@ -695,6 +750,18 @@ export function NewWorkDialog({
         ...(target.parent && integrate
           ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
           : {}),
+        // 묶음 Work (D470): 고른 서브모듈과 그 기준, 메인 레포를 고치지 않으면 editMain: false
+        ...(bundle
+          ? {
+              repos: pickedList.map(([p, r]) => ({
+                path: p,
+                baseBranch: r.baseBranch,
+                baseLocation: r.baseLocation,
+                ...(r.target !== null ? { targetBranch: r.target } : {}),
+              })),
+              ...(editMain ? {} : { editMain: false }),
+            }
+          : {}),
         ...(Object.keys(settings).length ? { settings } : {}),
         ...(issueNumber !== null ? { issueNumber } : {}),
         ...(draft ? { draft: draft.ref } : {}),
@@ -734,7 +801,7 @@ export function NewWorkDialog({
           onUse={applyTidy}
         />
       ) : null}
-      {submodules.length > 0 || sub ? (
+      {sub ? (
         <label className="field">
           대상
           <select
@@ -880,6 +947,18 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
+      {!sub && bundleSubs.length > 0 ? (
+        <RepoTable
+          main={main.name}
+          editMain={editMain}
+          onEditMain={setEditMain}
+          subs={bundleSubs}
+          picked={picked}
+          disabled={busy}
+          onPick={(p, on) => void pickRepo(p, on)}
+          onChange={(p, next) => setPicked((x) => (p in x ? { ...x, [p]: next } : x))}
+        />
+      ) : null}
       <div className="row branch-row">
         <label
           className="field grow"
@@ -993,7 +1072,10 @@ export function NewWorkDialog({
             preparing !== null ||
             !type ||
             !request.trim() ||
-            (type === 'custom' && !chosenCustom)
+            (type === 'custom' && !chosenCustom) ||
+            pickedBusy ||
+            pickedBad ||
+            (!editMain && pickedList.length === 0)
           }
           title={type ? '' : '유형을 고르세요'}
           onClick={() => void start()}
@@ -1002,6 +1084,160 @@ export function NewWorkDialog({
         </button>
       </div>
     </Modal>
+  )
+}
+
+/** 레포 표에서 고른 서브모듈 (D472). view가 없고 error도 없으면 받는 중이다 */
+interface PickedRepo {
+  view: RepoChoiceView | null
+  error: string | null
+  baseBranch: string
+  baseLocation: 'local' | 'remote'
+  /** 머지 대상 (D428). null이면 기준 브랜치다 */
+  target: string | null
+}
+
+/**
+ * 새 Work 대화상자의 레포 표 (D470, D472): 메인 레포와 메인 기준 커밋의 서브모듈 가운데 고칠 것을 고른다. 메인의 기준은
+ * 아래 칸이고, 고른 서브모듈마다 기준 브랜치·위치·머지 대상을 고른다
+ */
+function RepoTable({
+  main,
+  editMain,
+  onEditMain,
+  subs,
+  picked,
+  disabled,
+  onPick,
+  onChange,
+}: {
+  main: string
+  editMain: boolean
+  onEditMain: (on: boolean) => void
+  subs: readonly SubmoduleView[]
+  picked: Readonly<Record<string, PickedRepo>>
+  disabled: boolean
+  onPick: (path: string, on: boolean) => void
+  onChange: (path: string, next: PickedRepo) => void
+}) {
+  return (
+    <div className="field">
+      고칠 레포
+      <table className="repo-table" aria-label="고칠 레포">
+        <tbody>
+          <tr>
+            <td>
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  aria-label={`${main} 고침`}
+                  checked={editMain}
+                  disabled={disabled}
+                  onChange={(e) => onEditMain(e.target.checked)}
+                />
+                {main} (메인)
+              </label>
+            </td>
+            <td className="dim">
+              {editMain
+                ? '기준은 아래 기준 브랜치와 위치입니다'
+                : '고치지 않습니다: 기준 커밋에 고정해 빌드와 테스트에만 씁니다'}
+            </td>
+          </tr>
+          {subs.map((m) => {
+            const r = picked[m.path]
+            const branches = r?.view
+              ? r.view.branches.includes(r.baseBranch)
+                ? r.view.branches
+                : [...r.view.branches, r.baseBranch]
+              : []
+            const shownTarget = r?.target ?? r?.baseBranch ?? ''
+            return (
+              <tr key={m.path}>
+                <td>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      aria-label={`${m.path} 고침`}
+                      checked={!!r}
+                      disabled={disabled}
+                      onChange={(e) => onPick(m.path, e.target.checked)}
+                    />
+                    {m.path} (서브모듈)
+                  </label>
+                </td>
+                <td>
+                  {!r ? (
+                    <span className="dim">
+                      {m.initialized ? '' : '고르면 메인 체크아웃에 받습니다'}
+                    </span>
+                  ) : r.error ? (
+                    <span className="error">{r.error}</span>
+                  ) : !r.view ? (
+                    <span className="dim">준비 중…</span>
+                  ) : (
+                    <span className="row">
+                      <select
+                        aria-label={`${m.path} 기준 브랜치`}
+                        value={r.baseBranch}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          onChange(m.path, { ...r, baseBranch: e.target.value, target: null })
+                        }
+                      >
+                        {branches.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label={`${m.path} 기준 위치`}
+                        value={r.baseLocation}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          onChange(m.path, {
+                            ...r,
+                            baseLocation: e.target.value === 'remote' ? 'remote' : 'local',
+                          })
+                        }
+                      >
+                        <option value="local">로컬</option>
+                        <option value="remote" disabled={!r.view.origin}>
+                          원격
+                        </option>
+                      </select>
+                      <select
+                        aria-label={`${m.path} 머지 대상`}
+                        title="[PR 생성]이 PR을 보낼 브랜치 (D428)"
+                        value={shownTarget}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          onChange(m.path, {
+                            ...r,
+                            target: e.target.value === r.baseBranch ? null : e.target.value,
+                          })
+                        }
+                      >
+                        {branches.map((b) => (
+                          <option key={b} value={b}>
+                            {b === r.baseBranch ? `${b} (기준 브랜치)` : `머지 대상 ${b}`}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <span className="dim">
+        고른 서브모듈은 메인 worktree 안의 그 자리에서 고치고, 레포마다 따로 커밋하고 전달합니다.
+        작업 브랜치 이름은 모든 레포가 같습니다.
+      </span>
+    </div>
   )
 }
 
@@ -1959,6 +2195,102 @@ export function UncommittedDialog({
  * (D178, 기본은 끔). 되감기 백업 브랜치의 "함께 삭제"는 기본으로 체크한다. 산출물은 지우지 않는다.
  * remove면 [기록 지우기](D407)다: 같은 확인으로 정리한 뒤 산출물과 기록도 지운다.
  */
+/** 묶음 Work의 서브모듈 하나에서 고른 정리 (D482) */
+interface RepoCleanPick {
+  deleteBranch: boolean
+  deleteRemote: boolean
+  confirmLost: boolean
+}
+
+/** [Work 정리]의 서브모듈 하나 (D482): 그 worktree의 커밋 안 된 변경과 작업 브랜치, origin의 브랜치 */
+function RepoCleanSection({
+  repo,
+  pick,
+  onChange,
+}: {
+  repo: RepoCleanPreview
+  pick: RepoCleanPick
+  onChange: (next: RepoCleanPick) => void
+}) {
+  const b = repo.branch
+  return (
+    <section aria-label={`서브모듈 ${repo.path}`}>
+      <h3>
+        서브모듈 {repo.path}
+        {repo.worktree ? '' : ' (worktree 없음)'}
+      </h3>
+      {repo.uncommitted.length ? (
+        <>
+          <div className="error">커밋 안 된 변경이 백업 없이 지워집니다.</div>
+          <ul className="files">
+            {repo.uncommitted.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      <div>
+        작업 브랜치 {b.name}:{' '}
+        {!b.exists
+          ? '브랜치가 없습니다'
+          : b.pushed
+            ? 'origin에 push됐습니다'
+            : b.merged
+              ? '머지 대상에 머지됐습니다'
+              : '원격에도 머지 대상에도 없습니다'}
+      </div>
+      {b.lost.length ? (
+        <ul className="files" aria-label={`${repo.path} 작업 브랜치에만 있는 커밋`}>
+          {b.lost.map((c) => (
+            <li key={c.sha}>
+              {c.sha.slice(0, 7)} {c.subject}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <label className="toggle">
+        <input
+          type="checkbox"
+          aria-label={`${repo.path} 작업 브랜치 삭제`}
+          disabled={!b.deletable}
+          checked={pick.deleteBranch && b.deletable}
+          onChange={(e) => onChange({ ...pick, deleteBranch: e.target.checked })}
+        />
+        작업 브랜치 삭제 {b.deletable ? '' : '(push됐거나 머지됐을 때만)'}
+      </label>
+      {pick.deleteBranch && b.deletable && b.lost.length ? (
+        <label className="toggle">
+          <input
+            type="checkbox"
+            aria-label={`${repo.path} 커밋을 잃는 것을 확인`}
+            checked={pick.confirmLost}
+            onChange={(e) => onChange({ ...pick, confirmLost: e.target.checked })}
+          />
+          이 커밋 {b.lost.length}개를 잃는 것을 확인했습니다
+        </label>
+      ) : null}
+      {repo.remote ? (
+        <label className="toggle">
+          <input
+            type="checkbox"
+            aria-label={`${repo.path} 원격 브랜치 삭제`}
+            disabled={!repo.remote.exists}
+            checked={pick.deleteRemote && repo.remote.exists}
+            onChange={(e) => onChange({ ...pick, deleteRemote: e.target.checked })}
+          />
+          origin의 {repo.remote.name}도 삭제 {repo.remote.exists ? '' : '(origin에 없음)'}
+        </label>
+      ) : null}
+      {repo.pointed ? (
+        <div className="notice">
+          메인 PR이 아직 이 브랜치에만 있는 커밋을 가리킵니다. origin의 브랜치를 지우면 메인 PR이
+          가리키는 커밋을 받을 수 없습니다.
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 export function CleanDialog({
   work,
   remove = false,
@@ -1974,6 +2306,8 @@ export function CleanDialog({
   const [deleteBackups, setDeleteBackups] = useState(true)
   const [confirmLost, setConfirmLost] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  // 묶음 Work의 서브모듈마다 고른 것 (D482)
+  const [repoPicks, setRepoPicks] = useState<Record<string, RepoCleanPick>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -1985,6 +2319,18 @@ export function CleanDialog({
         setPreview(r.preview)
         // 머지로 완료한 Work는 기본 체크다(D178). 작업 브랜치에만 있는 커밋이 있으면 기본은 두고 까닭을 보인다 (D329)
         setDeleteBranch(r.preview.merged && r.preview.branch.lost.length === 0)
+        setRepoPicks(
+          Object.fromEntries(
+            (r.preview.repos ?? []).map((x) => [
+              x.path,
+              {
+                deleteBranch: x.remote !== null && x.branch.lost.length === 0 && x.branch.deletable,
+                deleteRemote: false,
+                confirmLost: false,
+              },
+            ]),
+          ),
+        )
       } else setError(r.error)
     })
     return () => {
@@ -2003,6 +2349,19 @@ export function CleanDialog({
       confirmed,
       confirmLost,
       expect: preview.expect,
+      ...(preview.repos
+        ? {
+            repos: preview.repos.map((x) => {
+              const pick = repoPicks[x.path]
+              return {
+                path: x.path,
+                deleteBranch: !!pick?.deleteBranch && x.branch.deletable,
+                deleteRemote: !!pick?.deleteRemote && x.remote?.exists === true,
+                confirmLost: !!pick?.confirmLost,
+              }
+            }),
+          }
+        : {}),
     }
     const r = await call(() =>
       remove ? window.relay.deleteWork(work.key, input) : window.relay.clean(work.key, input),
@@ -2123,6 +2482,20 @@ export function CleanDialog({
               ) : null}
             </section>
           ) : null}
+          {(preview.repos ?? []).map((x) => (
+            <RepoCleanSection
+              key={x.path}
+              repo={x}
+              pick={
+                repoPicks[x.path] ?? {
+                  deleteBranch: false,
+                  deleteRemote: false,
+                  confirmLost: false,
+                }
+              }
+              onChange={(next) => setRepoPicks((p) => ({ ...p, [x.path]: next }))}
+            />
+          ))}
           {preview.backups.length ? (
             <section>
               <h3>되감기 백업 브랜치</h3>
@@ -2183,7 +2556,14 @@ export function CleanDialog({
             (deleteBranch &&
               preview.branch.deletable &&
               preview.branch.lost.length > 0 &&
-              !confirmLost)
+              !confirmLost) ||
+            (preview.repos ?? []).some(
+              (x) =>
+                repoPicks[x.path]?.deleteBranch &&
+                x.branch.deletable &&
+                x.branch.lost.length > 0 &&
+                !repoPicks[x.path]?.confirmLost,
+            )
           }
           onClick={() => void clean()}
         >
@@ -2309,6 +2689,137 @@ export function RemoveProjectDialog({
           onClick={() => void remove()}
         >
           {busy ? '해제하는 중…' : '등록 해제'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * [레포 추가] (D473): 진행 중인 Work에 고르지 않은 서브모듈을 더한다. 목록은 이 Work의 메인 기준 커밋에 있는 서브모듈이다.
+ * 고르면 앱이 메인 체크아웃에 받고(받지 않았으면) 기준 브랜치를 읽는다
+ */
+export function AddRepoDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+  const [subs, setSubs] = useState<SubmoduleView[] | null>(null)
+  const [pickedPath, setPickedPath] = useState<string | null>(null)
+  const [repo, setRepo] = useState<PickedRepo | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const chosen = new Set((work.repos ?? []).map((r) => r.path))
+
+  useEffect(() => {
+    let current = true
+    void window.relay.bundleRepos(work.projectId, work.baseCommit, 'local').then((list) => {
+      if (current) setSubs(list)
+    })
+    return () => {
+      current = false
+    }
+  }, [work.projectId, work.baseCommit])
+
+  const pick = async (p: string) => {
+    setPickedPath(p)
+    setRepo(null)
+    setError(null)
+    const r = await call(() => window.relay.repoChoice(work.projectId, p))
+    if (r.ok)
+      setRepo({
+        view: r.view,
+        error: null,
+        baseBranch: r.view.defaultBranch,
+        baseLocation: 'local',
+        target: null,
+      })
+    else setError(r.error)
+  }
+  const add = async () => {
+    if (!pickedPath || !repo) return
+    setBusy(true)
+    setError(null)
+    const r = await call(() =>
+      window.relay.addRepo(work.key, {
+        path: pickedPath,
+        baseBranch: repo.baseBranch,
+        baseLocation: repo.baseLocation,
+        ...(repo.target !== null ? { targetBranch: repo.target } : {}),
+      }),
+    )
+    setBusy(false)
+    if (r.ok) onClose()
+    else setError(r.error)
+  }
+  const left = (subs ?? []).filter((m) => !chosen.has(m.path))
+  return (
+    <Modal title={`레포 추가 · ${work.workId}`} onClose={onClose}>
+      <p className="dim">
+        고른 서브모듈의 worktree를 메인 worktree 안의 그 자리에 작업 브랜치{' '}
+        <code>{work.branch}</code>로 만듭니다. 지금 세션에는 터미널에서 알리고, 다음 단계부터는 앱이
+        알립니다.
+      </p>
+      {subs === null ? (
+        <div className="dim">읽는 중…</div>
+      ) : left.length === 0 ? (
+        <div className="dim">더할 서브모듈이 없습니다</div>
+      ) : (
+        <label className="field">
+          서브모듈
+          <select
+            aria-label="더할 서브모듈"
+            value={pickedPath ?? ''}
+            disabled={busy}
+            onChange={(e) => void pick(e.target.value)}
+          >
+            <option value="" disabled>
+              고르세요
+            </option>
+            {left.map((m) => (
+              <option key={m.path} value={m.path}>
+                {m.path}
+                {m.initialized ? '' : ' (고르면 메인 체크아웃에 받음)'}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {pickedPath && !repo && !error ? <div className="dim">준비 중…</div> : null}
+      {repo?.view ? (
+        <div className="row">
+          <label className="field">
+            기준 브랜치
+            <select
+              aria-label="추가할 레포 기준 브랜치"
+              value={repo.baseBranch}
+              onChange={(e) => setRepo({ ...repo, baseBranch: e.target.value, target: null })}
+            >
+              {repo.view.branches.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            기준 위치
+            <select
+              aria-label="추가할 레포 기준 위치"
+              value={repo.baseLocation}
+              onChange={(e) =>
+                setRepo({ ...repo, baseLocation: e.target.value === 'remote' ? 'remote' : 'local' })
+              }
+            >
+              <option value="local">로컬</option>
+              <option value="remote" disabled={!repo.view.origin}>
+                원격
+              </option>
+            </select>
+          </label>
+        </div>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="primary" disabled={busy || !repo?.view} onClick={() => void add()}>
+          {busy ? '더하는 중…' : '더하기'}
         </button>
       </div>
     </Modal>

@@ -38,6 +38,10 @@ const api: RelayApi = {
   skillProcedure: (skill) => ipcRenderer.invoke(IPC.skillProcedure, skill),
   submodules: (projectId) => ipcRenderer.invoke(IPC.submodules, projectId),
   prepareSubmodule: (projectId, path) => ipcRenderer.invoke(IPC.prepareSubmodule, projectId, path),
+  bundleRepos: (projectId, branch, location) =>
+    ipcRenderer.invoke(IPC.bundleRepos, projectId, branch, location),
+  repoChoice: (projectId, path) => ipcRenderer.invoke(IPC.repoChoice, projectId, path),
+  addRepo: (workKey, repo) => ipcRenderer.invoke(IPC.addRepo, workKey, repo),
   createWork: (projectId, input) => ipcRenderer.invoke(IPC.createWork, projectId, input),
   knowledgeTidy: (projectId, branch, location) =>
     ipcRenderer.invoke(IPC.knowledgeTidy, projectId, branch, location),

@@ -23,6 +23,7 @@ import type {
 } from '../../shared/views'
 import { call } from './commands'
 import {
+  AddRepoDialog,
   CleanDialog,
   ConfirmDialog,
   DeleteWorkDialog,
@@ -73,6 +74,7 @@ type Dialog =
   | { kind: 'work-settings'; workKey: string }
   | { kind: 'abandon'; workKey: string }
   | { kind: 'clean'; workKey: string }
+  | { kind: 'add-repo'; workKey: string }
   /** cleaned는 연 때 보관됐는지다. 정리한 뒤 지우다 실패해도 연 창에 그 까닭을 보인다 */
   | { kind: 'work-delete'; workKey: string; cleaned: boolean }
   | { kind: 'side'; workKey: string; fresh: boolean }
@@ -848,6 +850,7 @@ export function App() {
             onSettings={() => setDialog({ kind: 'work-settings', workKey: work.key })}
             onAbandon={() => setDialog({ kind: 'abandon', workKey: work.key })}
             onClean={() => setDialog({ kind: 'clean', workKey: work.key })}
+            onAddRepo={() => setDialog({ kind: 'add-repo', workKey: work.key })}
             onResumed={() => setPicked((m) => without(m, work.key))}
             onOpenSide={() => requestSide(work.key, false)}
           />
@@ -944,6 +947,9 @@ export function App() {
       ) : null}
       {dialog?.kind === 'clean' && dialogWork ? (
         <CleanDialog work={dialogWork} onClose={() => setDialog(null)} />
+      ) : null}
+      {dialog?.kind === 'add-repo' && dialogWork ? (
+        <AddRepoDialog work={dialogWork} onClose={() => setDialog(null)} />
       ) : null}
       {/* 보관된 Work는 지우기만 확인하고, 정리하지 않은 Work는 정리 확인과 함께 지운다 (D407) */}
       {dialog?.kind === 'work-delete' && dialogWork ? (
@@ -1137,6 +1143,7 @@ function ActionBar({
   onSettings,
   onAbandon,
   onClean,
+  onAddRepo,
   onResumed,
   onOpenSide,
 }: {
@@ -1144,6 +1151,8 @@ function ActionBar({
   onSettings: () => void
   onAbandon: () => void
   onClean: () => void
+  /** [레포 추가] (D473) */
+  onAddRepo: () => void
   onResumed: () => void
   onOpenSide: () => Promise<CommandResult>
 }) {
@@ -1206,6 +1215,15 @@ function ActionBar({
           Work 설정
         </button>
       ) : null}
+      {work.canAddRepo ? (
+        <button
+          disabled={busy}
+          title="고르지 않은 서브모듈을 이 Work에서 함께 고칩니다 (D473)"
+          onClick={onAddRepo}
+        >
+          레포 추가
+        </button>
+      ) : null}
       {a.abandon ? (
         <button className="danger" disabled={busy} onClick={onAbandon}>
           Work 포기
@@ -1237,6 +1255,8 @@ function ActionBar({
       {error ? <span className="error">{error}</span> : null}
       <span className="dim info">
         {work.workId} · 기준 {work.baseBranch} {work.baseCommit.slice(0, 8)}
+        {work.mainFixed ? ' (메인 고정)' : ''}
+        {work.repos?.length ? ` · 함께 고침 ${work.repos.map((r) => r.path).join(', ')}` : ''}
         {work.intent ? ` · intent v${work.intent.version}` : ''}
       </span>
       {work.problems.length ? <span className="error">{work.problems.at(-1)}</span> : null}
