@@ -59,7 +59,7 @@ test.beforeAll(async () => {
   app = exe
     ? await electron.launch({ executablePath: exe, env })
     : await electron.launch({ args: [APP_DIR], env })
-  // 실제로 열지 않고 OS 앱으로 연 경로를 모은다
+  // 실제로 열지 않고 OS 앱으로 연 경로를 모은다. Windows는 .js를 열지 않고 폴더에서 보여 준다(D412)
   await app.evaluate(({ dialog, shell }, dir) => {
     dialog.showOpenDialog = (() =>
       Promise.resolve({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
@@ -70,6 +70,9 @@ test.beforeAll(async () => {
     shell.openPath = (p: string) => {
       opened.push(p)
       return Promise.resolve('')
+    }
+    shell.showItemInFolder = (p: string) => {
+      opened.push(p)
     }
   }, repo)
 })
