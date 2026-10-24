@@ -32,6 +32,8 @@ import { Activity } from './Activity'
 import { FilesView } from './Files'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
+import { PanelResizer } from './PanelResizer'
+import { loadPanelWidths, panelColumns, savePanelWidths, type PanelWidths } from './panelWidth'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
 import {
@@ -125,6 +127,9 @@ export function App() {
   const [hiddenQuestionId, setHiddenQuestionId] = useState<string | null>(null)
   // 접은 프로젝트와 아카이브. 이 컴퓨터의 화면 설정이라 브라우저 저장소에 둔다
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(loadCollapsed)
+  // 사람이 끈 오른쪽 패널 너비(보통, 넓음). 접은 것처럼 이 컴퓨터의 화면 설정이다 (D469)
+  const [panelWidths, setPanelWidths] = useState<PanelWidths>(loadPanelWidths)
+  const panelRef = useRef<HTMLElement>(null)
   // 끝난 Work, 기본 세션, 프로젝트의 우클릭 메뉴. 옮기지 못하면 그 까닭을 메뉴 안에 보인다
   const [menu, setMenu] = useState<
     | { kind: 'work'; workKey: string; x: number; y: number; error?: string }
@@ -279,6 +284,7 @@ export function App() {
   const groups = useMemo(() => sidebarGroups(Object.values(works)), [works])
   const toggleGroup = (group: string) => setCollapsed((c) => toggled(c, group))
   useEffect(() => saveCollapsed(collapsed), [collapsed])
+  useEffect(() => savePanelWidths(panelWidths), [panelWidths])
 
   // 메뉴 밖을 누르거나 다른 곳을 우클릭하거나 창 크기가 바뀌거나 Esc를 누르면 닫는다. 사이드바를 스크롤해도 닫는다
   // (aside의 onScroll). 우클릭은 먼저(capture) 받아 닫으므로, 다른 보관된 Work를 우클릭하면 그 Work의 메뉴가 열린다
@@ -416,6 +422,8 @@ export function App() {
 
   const wide =
     (wantsApproval(review) && review?.taskId === task?.id) || (!!work && showsPr(work, task?.id))
+  const panelMode = wide ? 'wide' : 'normal'
+  const columns = panelColumns(panelWidths[panelMode])
   const dialogWork =
     dialog?.kind === 'work-settings' ||
     dialog?.kind === 'abandon' ||
@@ -447,7 +455,10 @@ export function App() {
       : undefined
 
   return (
-    <div className={`layout${wide ? ' wide' : ''}`}>
+    <div
+      className={`layout${wide ? ' wide' : ''}`}
+      style={columns ? { gridTemplateColumns: columns } : undefined}
+    >
       <aside className="sidebar" onScroll={menu ? () => setMenu(null) : undefined}>
         <header className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -838,7 +849,7 @@ export function App() {
         )}
       </main>
 
-      <aside className="panel">
+      <aside className="panel" ref={panelRef}>
         {session ? (
           <SessionPanel
             key={session.id}
@@ -860,6 +871,12 @@ export function App() {
           <div className="panel-body panel-empty dim">handoff 상태와 산출물</div>
         )}
       </aside>
+      <PanelResizer
+        panel={panelRef}
+        width={panelWidths[panelMode]}
+        onResize={(w) => setPanelWidths((m) => ({ ...m, [panelMode]: w }))}
+        onReset={() => setPanelWidths((m) => ({ ...m, [panelMode]: null }))}
+      />
 
       {dialog?.kind === 'project' ? <ProjectDialog onClose={() => setDialog(null)} /> : null}
       {!dialog && work && question && questionTaskId && question.id !== hiddenQuestionId ? (

@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -181,6 +181,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I165 | [파일] 탭(D464~D468)의 판정은 `core/files`(받는 상대 경로, 트리의 차례, 글 판정과 줄 끝·BOM)의 순수 함수이고, 읽기·쓰기는 `adapters/files`가 한다. 어댑터는 worktree의 실제 경로(`realpath.native`, Windows는 긴 이름)에서 시작해 이름마다 lstat하고, 링크는 readlink로 풀어(`core/files`의 `localLinkTarget`) 실제 경로나 Work가 아는 경로 기준 이름으로 바꿔 `core/files`의 검사를 지난다. 밖을 가리키면 그 링크에서 멈추므로 worktree 밖의 경로는 lstat도 하지 않는다. Windows는 끝에 `realpath.native`로 긴 이름을 얻어 다시 검사한다(8.3 짧은 이름). `main/links`의 `realLinkPath`는 쓰지 않는다: 밖을 받고 네트워크만 막기 때문이다. 장치 이름(`windowsDeviceName`), 네트워크 경로, 링크 대상의 앞머리 떼기는 `core/files`에 두고 `main/links`와 함께 쓴다. 해시는 `adapters/store`의 `sha256`이다 | 경로 검사를 [단위]에서, 실제 링크와 junction을 [어댑터]에서 본다(CLAUDE.md의 층). 판정을 한 곳에 두어 터미널 링크와 [파일] 탭의 장치 이름이 어긋나지 않는다 | |
 | I166 | 명령은 `workFiles(workKey, rel)`, `readWorkFile(workKey, rel)`, `saveWorkFile(workKey, rel, text, hash)`이고 IPC는 `files:list`·`files:read`·`files:save`다. 보는 폴더는 `WorkRunner.filesRoot()`(보관된 Work는 null)다. 바뀐 파일 판정은 열 때 읽은 바이트의 sha256(`hash`)과 저장 직전의 파일을 견준다. `hash`가 null이면 [덮어쓰기]다. 쓰기는 `fs.writeFile`로 그 자리에 쓴다(원자적 쓰기가 아님). 링크 수(`nlink`)가 2 이상이면 쓰지 않는다 | mtime은 해상도가 거친 파일 시스템에서 같은 때의 두 번 쓰기를 놓친다. 이름 바꾸기로 하는 원자적 쓰기는 링크를 보통 파일로 바꾸고 권한을 잃는다 | |
 | I167 | 화면은 `renderer/src/Files.tsx`의 `FilesView`다. 탭 id는 `@files`(정리 세션 `@cleanup`, 곁 세션 `@side`와 같은 자리)이고, 한 번 연 Work의 `FilesView`는 숨겨 두고 다시 쓴다. 탭을 보일 때마다 `setTimeout` 뒤에 펼친 폴더와 연 파일을 다시 읽는다(effect에서 바로 상태를 바꾸지 않는 react-hooks 규칙). 마크다운은 `Markdown`(markdown-it, `html: false`)을 그대로 쓴다. 렌더러는 core를 부르지 못해(tsconfig.web) 마크다운 확장자 판정은 화면에 둔다. 늦게 온 읽기 응답은 버린다: 열기는 차례 번호(`openSeq`)로, 다시 읽기는 읽기 전의 `file`과 같은지로 본다(저장하면 바뀐다). 고친 것이 없으면 저장하지 않는다. Ctrl+S는 `e.code === 'KeyS'`로도 본다(한글 자판의 `e.key`는 `ㄴ`). 폴더를 접으면 그 아래 펼친 폴더도 접는다 | 터미널(D143)처럼 연 적 있는 Work만 만든다. 고치던 글이 탭을 옮겨도 남는다(D464) | |
+| I168 | 패널 너비(D469)의 범위, grid 열, 저장은 `renderer/src/panelWidth.ts`의 순수 함수이고 손잡이는 `PanelResizer`다. 정한 너비는 `.layout`의 인라인 `grid-template-columns`로 주고, 창 크기에 따른 범위는 CSS `clamp(280px, <너비>, calc(100vw - 660px))`가 맡아 창 크기 이벤트를 듣지 않는다. 정하지 않은 쪽은 인라인 스타일이 없어 `.layout`·`.layout.wide`의 기본 열이다. 패널(`aside`)은 스크롤되므로 손잡이는 패널 안이 아니라 같은 grid 칸(3열 1행)에 겹쳐 둔다. 끌기는 pointer capture로 받아 터미널 위를 지나도 끊기지 않는다. 끌기 시작 너비는 그려진 너비라 기본 너비에서도 끊김 없이 시작한다. 저장 키는 `relay.panel.width`(`{ normal, wide }`)다 | 판정을 [단위]에서 보고 손잡이는 [스모크]가 이어지는 것만 본다(CLAUDE.md의 층). 렌더러 순수 함수라 `tsconfig.node.json`에 넣어 시험이 타입 검사를 지난다(`sidebar.ts`와 같음) | |
 
 ## 3. 확인한 사실
 
@@ -311,6 +312,7 @@ app/src/
 | main | `security` | 창의 격리 설정과 외부 주소 검사 | I2 |
 | main | `links` | 터미널 출력의 경로 풀기, 열면 실행되는 파일 판정, 붙여넣은 그림의 형식 | D410~D412, I145 |
 | renderer | `Files` | Work의 [파일] 탭: 파일 트리, 마크다운 보기, 편집과 저장 | D464~D468, I167 |
+| renderer | `panelWidth`, `PanelResizer` | 오른쪽 패널 너비의 범위·저장과 끄는 손잡이 | D469, I168 |
 | main | `ipc`, `ports` | 렌더러 명령 처리와 스냅샷 전송, 조립 코드가 주입받는 바깥(창, 알림) | I14, I26 |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자, PR 패널 | 화면 구성 |
 
@@ -1375,6 +1377,19 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[흐름]** `test/flow/files.test.ts`: 명령이 그 Work의 worktree(메인 체크아웃이 아님)를 읽고 고치며(Windows의 CRLF 체크아웃도 같다), 정리한 Work와 없는 Work는 worktree가 없다고 답한다.
 - **[스모크]** `test/smoke/files.spec.ts`: [파일] 탭의 트리와 지금 task 패널, README.md 보기와 [편집]·Ctrl+S(원래 줄 끝 유지, 고친 것이 없으면 쓰지 않음), 코드 파일 열기, 다른 파일로 옮길 때의 확인, 다른 탭에 다녀와도 남는 글, 바뀐 파일 알림과 [덮어쓰기].
 - **[계약]**, **[실제]** 바뀌지 않았다: 에이전트와 `claude`, gh에 닿지 않는다.
+
+
+### M32. 오른쪽 패널 너비 (D469)
+
+사람이 "우측 패널 크기는 앱이 상황에 맞게 자동 조절하던데 크기 조절 가능하게 하는 건 어떨까"를 제안했다. 설계 v0.27.
+
+- 화면: `renderer/src/panelWidth.ts`(범위, grid 열, 저장)와 `PanelResizer.tsx`(손잡이), `App.tsx`의 보통·넓음 너비 상태(I168).
+
+**시험**
+
+- **[단위]** `test/unit/panel-width.test.ts`: 너비의 범위(가운데 400px 남김, 280px 아래로 줄지 않음, 아주 좁은 창), 정한 너비의 grid 열, 보통·넓음 따로 저장, 깨진 값과 쓸 수 없는 저장소.
+- **[스모크]** `test/smoke/panel.spec.ts`: 손잡이를 끌면 그만큼 넓어지고, ←·→ 키로 바뀌며, 다시 켜도 남고, 두 번 누르면 기본 너비다.
+- **[어댑터]**, **[흐름]**, **[계약]**, **[실제]** 바뀌지 않았다: 화면만 바뀐다.
 
 ## 8. 테스트 전략
 
