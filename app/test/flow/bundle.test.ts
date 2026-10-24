@@ -70,11 +70,13 @@ async function setup(s: Scenario): Promise<Setup> {
     ok: true,
     view: { name: 'lib', path: 'lib', defaultBranch: 'main', branches: ['main'], origin: true },
   })
-  // 가짜 claude가 서브모듈 레포에 커밋할 수 있게 사용자 설정을 둔다(CI에는 전역 설정이 없다)
-  const lib = path.join(checkout, 'lib')
-  git(lib, 'config', 'user.email', 'relay-test@example.com')
-  git(lib, 'config', 'user.name', 'relay test')
-  git(lib, 'config', 'commit.gpgsign', 'false')
+  // 가짜 claude와 앱이 메인과 서브모듈 레포에 커밋할 수 있게 사용자 설정을 둔다(CI에는 전역 설정이 없고, Windows의
+  // git은 사용자 이름을 짐작하지 못한다)
+  for (const dir of [checkout, path.join(checkout, 'lib')]) {
+    git(dir, 'config', 'user.email', 'relay-test@example.com')
+    git(dir, 'config', 'user.name', 'relay test')
+    git(dir, 'config', 'commit.gpgsign', 'false')
+  }
   return { h: hh, checkout, mainId, libSource, mainRemote: remote }
 }
 
