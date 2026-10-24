@@ -78,7 +78,9 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - **The type's review points:** if these instructions end with `## This Work type's review points`, review those points too. They come from whoever defined the type.
 <!-- /type -->
 <!-- type: bugfix feature refactor general custom -->
-- Missing cases and edge conditions.
+- **Line by line:** read every hunk of the diff, then the whole function around it: a defect in an unchanged line of a touched function is in scope too. For each line ask what input, state, timing or platform makes it wrong. Look for missing cases and edge conditions, inverted or wrong conditions, off-by-one, a value used where it can be missing, a missing `await`, zero or empty treated as missing, a copy-pasted wrong variable, an error swallowed in a catch, an unescaped pattern.
+- **Removed behavior:** for every line the diff deletes or replaces, name what it enforced, then find where the new code does it again. If nowhere, it is a candidate: a removed guard, a dropped error path, a narrowed validation, a deleted test that covered a real case.
+- **Callers:** for each function the diff changes, find its callers and check whether the change breaks one: a new precondition, a changed return shape, a new error, an order dependency. Check its callees too: does another change in this diff make a call unsafe?
 <!-- /type -->
 <!-- type: bugfix -->
 - Do the tests really catch the fix?
@@ -96,9 +98,12 @@ Review the whole change of this Work, apply only the findings the human picks, t
 - Does every change in code behavior have a test that catches it? If not, is the reason in the custom step's artifact sound?
 <!-- /type -->
 <!-- type: bugfix feature refactor general custom -->
-- The repo's conventions and readability.
+- **Conventions:** the repo's conventions and readability. Read the instruction files that govern the changed code (such as `CLAUDE.md`, `AGENTS.md` or `CONTRIBUTING.md` at the repo root and in the folders above a changed file). Flag a broken convention only when you can quote the rule and the line that breaks it, and name the file of the rule. No style preferences.
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
-- Duplication: code that repeats a function or abstraction the repo already has.
+- **Reuse:** Duplication: code that repeats a function or abstraction the repo already has. Search the shared modules and the files next to the change, and name the one to call instead.
+- **Simplification:** complexity the diff adds without need: state that can be derived, copy-paste with small changes, deep nesting, dead code left behind. Name the simpler form that does the same job.
+- **Efficiency:** wasted work the diff adds: repeated computation or I/O, independent work run one after another, blocking work added to startup or a hot path. Name the cheaper way.
+- **Altitude:** does each change fix the root cause at the right depth, or patch a symptom? A special case added on top of shared code is a sign it is not deep enough: name the more general change to the underlying mechanism.
 - Maintainability: complexity that grows (deep nesting, long functions, more flags), and tests tied to internal details that will break on any change.
 - A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 finding. For entries listed by title only, open the ones that touch the changed code to see whether they are rules.
 - Changes that are not needed.
