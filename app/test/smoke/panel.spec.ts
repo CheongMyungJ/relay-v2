@@ -52,36 +52,43 @@ test.afterAll(() => {
 })
 
 test('패널 손잡이를 끌면 넓어지고 다시 켜도 남으며 두 번 누르면 기본 너비다 (D469)', async () => {
-  const app = await launch()
-  const win = await open(app)
-  const handle = win.getByRole('separator', { name: '오른쪽 패널 너비' })
-  await handle.dblclick()
-  await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH)
+  // 너비는 RELAY_HOME 밖(userData)에 남는다. 중간에 실패해도 뒤 시험과 개발 앱에 남기지 않는다
+  let app = await launch()
+  try {
+    let win = await open(app)
+    const handle = () => win.getByRole('separator', { name: '오른쪽 패널 너비' })
+    await handle().dblclick()
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH)
+    await expect(handle()).toHaveAttribute('aria-valuenow', String(DEFAULT_WIDTH))
 
-  // 왼쪽으로 150px 끌면 그만큼 넓어진다
-  const box = await handle.boundingBox()
-  if (!box) throw new Error('손잡이가 보이지 않는다')
-  const x = box.x + box.width / 2
-  const y = box.y + box.height / 2
-  await win.mouse.move(x, y)
-  await win.mouse.down()
-  await win.mouse.move(x - 75, y)
-  await win.mouse.move(x - 150, y)
-  await win.mouse.up()
-  await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150)
+    // 왼쪽으로 150px 끌면 그만큼 넓어진다
+    const box = await handle().boundingBox()
+    if (!box) throw new Error('손잡이가 보이지 않는다')
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await win.mouse.move(x, y)
+    await win.mouse.down()
+    await win.mouse.move(x - 75, y)
+    await win.mouse.move(x - 150, y)
+    await win.mouse.up()
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150)
 
-  // 화살표 키로도 바뀐다: 왼쪽은 넓게, 오른쪽은 좁게
-  await handle.focus()
-  await win.keyboard.press('ArrowRight')
-  await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150 - 24)
-  await win.keyboard.press('ArrowLeft')
-  await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150)
-  await app.close()
+    // 화살표 키로도 바뀐다: 왼쪽은 넓게, 오른쪽은 좁게
+    await handle().focus()
+    await win.keyboard.press('ArrowRight')
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150 - 24)
+    await win.keyboard.press('ArrowLeft')
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150)
+    await app.close()
 
-  const again = await launch()
-  const win2 = await open(again)
-  await expect.poll(() => panelWidth(win2)).toBe(DEFAULT_WIDTH + 150)
-  await win2.getByRole('separator', { name: '오른쪽 패널 너비' }).dblclick()
-  await expect.poll(() => panelWidth(win2)).toBe(DEFAULT_WIDTH)
-  await again.close()
+    app = await launch()
+    win = await open(app)
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH + 150)
+    await handle().dblclick()
+    await expect.poll(() => panelWidth(win)).toBe(DEFAULT_WIDTH)
+  } finally {
+    const win = app.windows()[0]
+    await win?.evaluate(() => localStorage.removeItem('relay.panel.width')).catch(() => undefined)
+    await app.close()
+  }
 })

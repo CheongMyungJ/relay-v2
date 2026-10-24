@@ -7,9 +7,7 @@ export interface PanelWidths {
   wide: number | null
 }
 
-export type PanelMode = keyof PanelWidths
-
-/** 사이드바 너비 (styles.css의 `.layout`) */
+/** 사이드바 너비 (styles.css의 `.layout`과 같게) */
 export const SIDEBAR_WIDTH = 260
 /** 패널이 이보다 좁아지지 않는다 */
 export const PANEL_MIN = 280
@@ -27,14 +25,25 @@ export function clampPanelWidth(width: number, viewport: number): number {
   return Math.round(Math.min(panelMax(viewport), Math.max(PANEL_MIN, width)))
 }
 
+/** 가운데가 CENTER_MIN만큼 남는 패널 너비의 CSS 상한 */
+const CSS_MAX = `calc(100vw - ${SIDEBAR_WIDTH + CENTER_MIN}px)`
+
+/** 정한 너비의 패널 열. 창을 줄이면 CSS가 가운데를 남기도록 줄이고, 다시 늘리면 정한 너비로 돌아간다 */
+export function panelColumn(width: number): string {
+  return `clamp(${PANEL_MIN}px, ${width}px, ${CSS_MAX})`
+}
+
 /**
- * 정한 너비의 grid 열. 창을 줄이면 CSS가 가운데를 남기도록 줄이고, 다시 늘리면 정한 너비로 돌아간다.
- * 정한 너비가 없으면 null이라 styles.css의 `.layout`과 `.layout.wide`를 쓴다
+ * `.layout`에 줄 CSS 변수. `--panel-col`은 지금 쪽(보통 또는 넓음)의 정한 너비이고, 없으면 styles.css의 기본 열이다.
+ * 넓은 쪽의 기본 너비는 보통 쪽의 정한 너비(`--panel-normal`)보다 좁지 않다: 넓어져야 할 때 좁아지지 않게 한다
  */
-export function panelColumns(width: number | null): string | null {
-  if (width === null) return null
-  const max = `calc(100vw - ${SIDEBAR_WIDTH + CENTER_MIN}px)`
-  return `${SIDEBAR_WIDTH}px minmax(0, 1fr) clamp(${PANEL_MIN}px, ${width}px, ${max})`
+export function panelStyle(widths: PanelWidths, wide: boolean): Record<string, string> {
+  const style: Record<string, string> = {}
+  const chosen = wide ? widths.wide : widths.normal
+  if (chosen !== null) style['--panel-col'] = panelColumn(chosen)
+  if (wide && widths.normal !== null)
+    style['--panel-normal'] = `min(${widths.normal}px, ${CSS_MAX})`
+  return style
 }
 
 const STORAGE_KEY = 'relay.panel.width'

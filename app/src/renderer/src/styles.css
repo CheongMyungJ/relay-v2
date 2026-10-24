@@ -120,15 +120,18 @@ body,
   background: transparent;
 }
 
-/* 3단 레이아웃 (D79). 승인 대기가 되면 오른쪽 패널이 넓어진다 */
+/* 3단 레이아웃 (D79). 승인 대기가 되면 오른쪽 패널이 넓어진다. 패널 열은 사람이 끌어 정한 너비가 앞선다 (D469):
+   끄는 중의 --panel-drag, 정한 --panel-col, 넓을 때는 보통 쪽의 정한 너비(--panel-normal)보다 좁지 않다 */
 .layout {
   display: grid;
-  grid-template-columns: 260px 1fr 360px;
+  grid-template-columns: 260px 1fr var(--panel-drag, var(--panel-col, 360px));
   height: 100%;
 }
 
 .layout.wide {
-  grid-template-columns: 260px 1fr minmax(440px, 45%);
+  grid-template-columns:
+    260px 1fr
+    var(--panel-drag, var(--panel-col, max(440px, 45%, var(--panel-normal, 0px))));
 }
 
 /* 패널 너비 손잡이 (D469). 패널은 스크롤되므로 같은 칸에 겹쳐 패널의 왼쪽 테두리 위에 둔다 */

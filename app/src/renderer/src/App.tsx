@@ -1,6 +1,14 @@
 // 3단 레이아웃 (D79): 사이드바 / 터미널 탭과 액션 바 / 오른쪽 패널.
 // 화면은 메인이 보낸 스냅샷을 그리기만 하고, 명령은 invoke로 보낸다 (I14).
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import type { AppInfo } from '../../shared/api'
 import { WORK_TYPE_LABEL, WORK_TYPE_SHORT } from '../../shared/work'
 import type {
@@ -33,7 +41,7 @@ import { FilesView } from './Files'
 import { withOpened } from './opened'
 import { Panel, showsPr, wantsApproval } from './Panel'
 import { PanelResizer } from './PanelResizer'
-import { loadPanelWidths, panelColumns, savePanelWidths, type PanelWidths } from './panelWidth'
+import { loadPanelWidths, panelStyle, savePanelWidths, type PanelWidths } from './panelWidth'
 import { TerminalView } from './TerminalView'
 import { QuestionDialog } from './QuestionDialog'
 import {
@@ -423,7 +431,6 @@ export function App() {
   const wide =
     (wantsApproval(review) && review?.taskId === task?.id) || (!!work && showsPr(work, task?.id))
   const panelMode = wide ? 'wide' : 'normal'
-  const columns = panelColumns(panelWidths[panelMode])
   const dialogWork =
     dialog?.kind === 'work-settings' ||
     dialog?.kind === 'abandon' ||
@@ -457,7 +464,7 @@ export function App() {
   return (
     <div
       className={`layout${wide ? ' wide' : ''}`}
-      style={columns ? { gridTemplateColumns: columns } : undefined}
+      style={panelStyle(panelWidths, wide) as CSSProperties}
     >
       <aside className="sidebar" onScroll={menu ? () => setMenu(null) : undefined}>
         <header className="brand">
@@ -873,7 +880,6 @@ export function App() {
       </aside>
       <PanelResizer
         panel={panelRef}
-        width={panelWidths[panelMode]}
         onResize={(w) => setPanelWidths((m) => ({ ...m, [panelMode]: w }))}
         onReset={() => setPanelWidths((m) => ({ ...m, [panelMode]: null }))}
       />

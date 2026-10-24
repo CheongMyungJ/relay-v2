@@ -6,8 +6,9 @@ import {
   SIDEBAR_WIDTH,
   clampPanelWidth,
   loadPanelWidths,
-  panelColumns,
+  panelColumn,
   panelMax,
+  panelStyle,
   savePanelWidths,
 } from '../../src/renderer/src/panelWidth'
 
@@ -25,11 +26,32 @@ describe('패널 너비의 범위', () => {
     expect(clampPanelWidth(600, 700)).toBe(PANEL_MIN)
   })
 
-  it('정한 너비는 grid 열이 되고 창이 좁아지면 CSS가 줄인다. 정하지 않았으면 기본 열이다', () => {
-    expect(panelColumns(null)).toBeNull()
-    expect(panelColumns(520)).toBe(
-      `${SIDEBAR_WIDTH}px minmax(0, 1fr) clamp(${PANEL_MIN}px, 520px, calc(100vw - ${SIDEBAR_WIDTH + CENTER_MIN}px))`,
+  it('정한 너비의 열은 창이 좁아지면 CSS가 가운데를 남기도록 줄인다', () => {
+    expect(panelColumn(520)).toBe(
+      `clamp(${PANEL_MIN}px, 520px, calc(100vw - ${SIDEBAR_WIDTH + CENTER_MIN}px))`,
     )
+  })
+})
+
+describe('보통과 넓을 때의 패널 열', () => {
+  const max = `calc(100vw - ${SIDEBAR_WIDTH + CENTER_MIN}px)`
+
+  it('정하지 않았으면 변수가 없어 styles.css의 기본 열이다', () => {
+    expect(panelStyle({ normal: null, wide: null }, false)).toEqual({})
+    expect(panelStyle({ normal: null, wide: null }, true)).toEqual({})
+  })
+
+  it('지금 쪽의 정한 너비만 쓴다', () => {
+    const widths = { normal: 420, wide: 760 }
+    expect(panelStyle(widths, false)).toEqual({ '--panel-col': panelColumn(420) })
+    expect(panelStyle(widths, true)['--panel-col']).toBe(panelColumn(760))
+    expect(panelStyle({ normal: null, wide: 760 }, false)).toEqual({})
+  })
+
+  it('넓은 쪽을 정하지 않았으면 기본 너비가 보통 쪽의 정한 너비보다 좁지 않게 그 너비를 넘긴다 (D79)', () => {
+    expect(panelStyle({ normal: 700, wide: null }, true)).toEqual({
+      '--panel-normal': `min(700px, ${max})`,
+    })
   })
 })
 
