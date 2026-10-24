@@ -6136,18 +6136,24 @@ export class WorkRunner {
         base: r.base_commit,
       })),
     ]
-    try {
-      const read = await Promise.all(
-        lanes.map(async (l) => ({
-          prefix: l.prefix,
-          diff: await changedPaths(l.dir, l.base, opts),
-          untracked: await untrackedPaths(l.dir, opts),
-        })),
-      )
-      return { ok: true, changes: treeChanges(read) }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
+    // 서브모듈 하나를 읽지 못해도(체크아웃 안 됨, 기준 커밋이 없음) 나머지는 보인다. 메인을 읽지 못하면 실패다
+    let error: string | null = null
+    const read = await Promise.all(
+      lanes.map(async (l, i) => {
+        try {
+          const [diff, untracked] = await Promise.all([
+            changedPaths(l.dir, l.base, opts),
+            untrackedPaths(l.dir, opts),
+          ])
+          return { prefix: l.prefix, diff, untracked }
+        } catch (e) {
+          if (i === 0) error = e instanceof Error ? e.message : String(e)
+          return null
+        }
+      }),
+    )
+    if (error !== null) return { ok: false, error }
+    return { ok: true, changes: treeChanges(read.filter((l) => l !== null)) }
   }
 
   // ---------- 이슈 기록 (설계 3.7, D336~D349, I98~I100) ----------

@@ -15,8 +15,6 @@ export interface ChangeMarks {
   dirs: ReadonlyMap<string, ChangeStatus>
 }
 
-export const NO_MARKS: ChangeMarks = { files: new Map(), dirs: new Map() }
-
 /** 폴더의 상태: 아래가 모두 더한 것이면 A, 모두 지운 것이면 D, 섞였으면 M이다 */
 function merge(a: ChangeStatus | undefined, b: ChangeStatus): ChangeStatus {
   return a === undefined || a === b ? b : 'M'

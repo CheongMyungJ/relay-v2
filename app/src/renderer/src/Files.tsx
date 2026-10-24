@@ -2,18 +2,16 @@
 // 고쳐 저장한다. 트리는 Work가 더하거나 고치거나 지운 파일을 표시하고, 지운 파일도 그 자리에 보인다.
 // 트리는 폴더를 펼칠 때 그 폴더만 읽는다. 탭을 다시 열거나 [새로 고침]을 누르면 펼친 폴더, 바뀐 파일, 연 파일(고치지
 // 않았으면)을 다시 읽는다. 다른 탭이나 Work로 옮겨도 고치던 글이 남도록 Work마다 한 번 만들어 숨겨 둔다.
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { FileChangeView, FileEntryView, FileReadResult } from '../../shared/views'
 import { call } from './commands'
 import {
-  NO_MARKS,
   afterClose,
   baseName,
   changeMarks,
   parentDirs,
   tabHints,
   withDeleted,
-  type ChangeMarks,
   type ChangeStatus,
 } from './fileTree'
 import { Markdown } from './Markdown'
@@ -65,15 +63,20 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
   const [dirs, setDirs] = useState<Record<string, Dir>>({})
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['']))
   const [changes, setChanges] = useState<FileChangeView[]>([])
-  const [marks, setMarks] = useState<ChangeMarks>(NO_MARKS)
+  const marks = useMemo(() => changeMarks(changes), [changes])
+  // 트리를 그릴 때마다(글자를 칠 때마다) 지운 것만 훑도록 미리 거른다
+  const deletions = useMemo(() => changes.filter((c) => c.status === 'D'), [changes])
   const [changesError, setChangesError] = useState<string | null>(null)
   const [tabs, setTabs] = useState<Opened[]>([])
   const [current, setCurrent] = useState<string | null>(null)
   // 고친 글이 있어 닫기 확인을 기다리는 탭
   const [closing, setClosing] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  // 마지막으로 고른 파일의 차례. 늦게 온 앞 응답이 나중에 고른 탭을 가리지 않게 한다
+  // 저장 중인 탭. 다른 탭의 저장은 막지 않는다
+  const [saving, setSaving] = useState<ReadonlySet<string>>(() => new Set())
+  // 마지막으로 고른 탭의 차례. 늦게 온 앞 열기 응답이 나중에 고른 탭을 가리지 않게 한다
   const openSeq = useRef(0)
+  // 마지막으로 부른 바뀐 파일 읽기의 차례. 늦게 온 앞 응답이 새 표시를 덮지 않게 한다
+  const changesSeq = useRef(0)
   const treeRef = useRef<HTMLDivElement>(null)
 
   const opened = tabs.find((t) => t.path === current)
@@ -85,27 +88,31 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
   }
 
   const loadChanges = async () => {
+    const seq = ++changesSeq.current
     const r = await call(() => window.relay.workFileChanges(workKey))
-    if (!r.ok) {
-      setChangesError(r.error)
-      return
-    }
-    setChangesError(null)
-    setChanges(r.changes)
-    setMarks(changeMarks(r.changes))
+    if (seq !== changesSeq.current) return
+    // 읽지 못하면 낡은 표시를 남기지 않는다
+    setChangesError(r.ok ? null : r.error)
+    setChanges(r.ok ? r.changes : [])
   }
 
   const patch = (rel: string, f: (t: Opened) => Opened) =>
     setTabs((ts) => ts.map((t) => (t.path === rel ? f(t) : t)))
 
+  /** 탭을 고른다. 아직 읽고 있는 앞의 열기는 다 읽어도 이 탭을 가리지 않는다 */
+  const select = (rel: string | null) => {
+    ++openSeq.current
+    setCurrent(rel)
+  }
+
   /** 파일을 탭으로 연다. 이미 연 파일이면 그 탭을 고른다 */
   const openFile = async (rel: string) => {
-    const seq = ++openSeq.current
     setClosing(null)
     if (tabs.some((t) => t.path === rel)) {
-      setCurrent(rel)
+      select(rel)
       return
     }
+    const seq = ++openSeq.current
     const file = await call(() => window.relay.readWorkFile(workKey, rel))
     const tab: Opened = {
       path: rel,
@@ -120,20 +127,26 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
     if (seq === openSeq.current) setCurrent(rel)
   }
 
-  /** 탭의 파일을 다시 읽는다. 고친 글은 버린다 */
+  /** 탭의 파일을 다시 읽는다. 고친 글은 버린다. 읽는 사이에 더 고쳤거나 저장했으면 두고 본다 */
   const reload = async (rel: string) => {
+    const before = tabs.find((t) => t.path === rel)
+    if (!before) return
     const file = await call(() => window.relay.readWorkFile(workKey, rel))
-    patch(rel, (t) => ({ ...t, file, draft: textOf(file), conflict: false, error: null }))
+    patch(rel, (t) =>
+      t.draft !== before.draft || t.file !== before.file
+        ? t
+        : { ...t, file, draft: textOf(file), conflict: false, error: null },
+    )
   }
 
   const closeTab = (rel: string, force: boolean) => {
     if (!force && isDirty(tabs.find((t) => t.path === rel))) {
-      setCurrent(rel)
+      select(rel)
       setClosing(rel)
       return
     }
     setClosing(null)
-    setCurrent(
+    select(
       afterClose(
         tabs.map((t) => t.path),
         current,
@@ -211,13 +224,13 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
 
   const save = async (force: boolean) => {
     // 고친 것이 없으면 쓰지 않는다: 줄 끝이 섞인 파일을 바꾸거나 거짓 충돌을 알리지 않게
-    if (!opened || !opened.file.ok || opened.file.kind !== 'text' || busy || !isDirty(opened))
-      return
+    if (!opened || !opened.file.ok || opened.file.kind !== 'text' || !isDirty(opened)) return
     const { path: rel, draft } = opened
+    if (saving.has(rel)) return
     const hash = force ? null : opened.file.hash
-    setBusy(true)
+    setSaving((s) => new Set(s).add(rel))
     const r = await call(() => window.relay.saveWorkFile(workKey, rel, draft, hash))
-    setBusy(false)
+    setSaving((s) => new Set([...s].filter((p) => p !== rel)))
     if (!r.ok) {
       patch(rel, (t) => ({
         ...t,
@@ -247,10 +260,14 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
     }
     return (
       <>
-        {withDeleted(rel, dir.entries, changes).map((e) => {
+        {withDeleted(rel, dir.entries, deletions).map((e) => {
           const path = join(rel, e.name)
           const isOpen = e.kind === 'dir' && expanded.has(path)
-          const status = e.kind === 'dir' ? marks.dirs.get(path) : marks.files.get(path)
+          // 서브모듈 자리(gitlink)는 폴더지만 그 자체가 바뀐 파일로 온다
+          const status =
+            e.kind === 'dir'
+              ? (marks.dirs.get(path) ?? marks.files.get(path))
+              : marks.files.get(path)
           const gone = e.deleted === true
           const openable = e.kind === 'dir' || (e.kind === 'file' && !gone)
           const title =
@@ -382,7 +399,7 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
                     className="file-tab-name"
                     onClick={() => {
                       setClosing(null)
-                      setCurrent(t.path)
+                      select(t.path)
                     }}
                   >
                     {baseName(t.path)}
@@ -435,7 +452,7 @@ export function FilesView({ workKey, active }: { workKey: string; active: boolea
             {text ? (
               <button
                 className="primary"
-                disabled={!dirty || busy}
+                disabled={!dirty || saving.has(opened.path)}
                 onClick={() => void save(false)}
               >
                 저장

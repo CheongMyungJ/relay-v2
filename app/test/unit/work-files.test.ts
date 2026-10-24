@@ -165,6 +165,17 @@ describe('[파일] 탭의 바뀐 파일 (D490)', () => {
     ])
   })
 
+  it('지운 것으로 온 경로가 추적하지 않는 파일로 남아 있으면(git rm --cached) 고친 것이다', () => {
+    expect(
+      treeChanges([
+        { prefix: '', diff: [{ status: 'D', path: 'foo.ts' }], untracked: ['foo.ts', 'bar.ts'] },
+      ]),
+    ).toEqual([
+      { path: 'bar.ts', status: 'A' },
+      { path: 'foo.ts', status: 'M' },
+    ])
+  })
+
   it('상한을 넘으면 앞의 것만 둔다', () => {
     const untracked = Array.from({ length: CHANGES_MAX + 5 }, (_, i) => `f${i}`)
     expect(treeChanges([{ prefix: '', diff: [], untracked }])).toHaveLength(CHANGES_MAX)
