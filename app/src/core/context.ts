@@ -175,6 +175,11 @@ export interface RespondInput {
   /** 이번 라운드의 항목. [대응 시작]을 누른 때의 차례다 */
   items: readonly PrItem[]
   previous: readonly PreviousRound[]
+  /**
+   * 묶음 Work의 서브모듈 PR 카드 (D480): 그 서브모듈의 경로와 머지 대상. 메인 PR이면 없다. 이 라운드는 그 서브모듈만
+   * 고친다
+   */
+  repo?: { path: string; base: string }
 }
 
 export interface ContextInput {
@@ -211,6 +216,32 @@ export interface ContextInput {
   submodules?: readonly string[]
   /** 서브모듈 Work (D413, D414). 메인 레포의 Work면 없다 */
   target?: SubmoduleTarget | null
+  /** 묶음 Work (D470, D474). 있으면 "레포" 절이 "서브모듈" 절을 대신한다. 메인 레포만 고치는 Work면 없다 */
+  bundle?: BundleInput | null
+}
+
+/** 묶음 Work의 레포들 (D470, D474) */
+export interface BundleInput {
+  /** 메인 레포의 폴더 이름 */
+  main: string
+  /** 메인 레포를 고친다. 아니면 메인 worktree는 기준 커밋에 고정되어 있다 (D471) */
+  mainEditable: boolean
+  /** 메인 worktree의 폴더 (에이전트의 작업 폴더) */
+  root: string
+  /** 고른 서브모듈. 폴더는 메인 worktree 안의 그 경로다 */
+  repos: readonly {
+    path: string
+    baseBranch: string
+    baseCommit: string
+    /** 머지 대상. 기준 브랜치와 같으면 없다 */
+    targetBranch?: string
+    /** verify가 쓸 이 레포의 PR 초안 파일 (D476). verify가 아니면 없다 */
+    draft?: string
+  }[]
+  /** 고르지 않은 서브모듈의 경로 */
+  others: readonly string[]
+  /** verify가 쓸 메인 레포의 PR 초안 파일 (D476). verify가 아니거나 메인을 고치지 않으면 없다 */
+  mainDraft?: string
 }
 
 /** 서브모듈 Work의 대상과 메인 통합 검증 worktree (D413, D414) */
@@ -373,6 +404,63 @@ function targetSection(t: SubmoduleTarget): [string, string] {
   ]
 }
 
+/**
+ * 레포 절 (D474): 묶음 Work에서 어느 폴더가 어느 레포인지, 레포마다 따로 커밋하고 고른 서브모듈의 자리(gitlink)는 메인에
+ * 커밋하지 않는다는 것(앱이 전달 때 맞춤, D478), 고르지 않은 레포는 고치지 않는다는 것, 고른 서브모듈을 git submodule
+ * update로 갱신하지 않는다는 것(D415). 고르지 않은 서브모듈은 D383의 안내를 그대로 준다
+ */
+function bundleSection(b: BundleInput, branch: string): [string, string] {
+  const picked = b.repos.map((r) => `\`${r.path}\``).join(', ')
+  const repoLines = [
+    b.mainEditable
+      ? `메인 레포 \`${b.main}\`: 지금 폴더 \`${b.root}\`. 고친다.${b.mainDraft ? ` PR 초안: \`${b.mainDraft}\`.` : ''}`
+      : `메인 레포 \`${b.main}\`: 지금 폴더 \`${b.root}\`. 고치지 않는다: 기준 커밋에 분리된 HEAD로 고정했다. 빌드와 테스트는 여기서 한다.`,
+    ...b.repos.map(
+      (r) =>
+        `서브모듈 \`${r.path}\`: 폴더 \`${r.path}/\`. 고친다. 기준 브랜치 ${r.baseBranch}, 기준 커밋 ${r.baseCommit}${r.targetBranch ? `, 머지 대상 ${r.targetBranch}` : ''}.${r.draft ? ` PR 초안: \`${r.draft}\`.` : ''}`,
+    ),
+  ]
+  const rules = [
+    `레포마다 따로 커밋한다. 서브모듈의 변경은 그 폴더에서 커밋한다(예: \`git -C ${b.repos[0]?.path ?? '<경로>'} commit\`). 작업 브랜치는 모든 레포가 \`${branch}\`다.`,
+    ...(b.repos.length
+      ? [
+          `메인 레포에 고른 서브모듈(${picked})의 자리(가리키는 커밋)를 커밋하지 않는다. \`git add -A\` 대신 파일을 골라 더하거나, 더한 뒤 \`git reset -q -- <경로>\`로 뺀다. 메인이 가리키는 커밋은 앱이 전달 때 사람에게 묻고 맞춘다.`,
+          `고른 서브모듈(${picked})은 \`git submodule update\`로 갱신하지 않는다. 앱이 건너뛰게 해 두었다. \`--checkout\` 같은 옵션으로 갱신하면 작업 브랜치에서 벗어나고 사용자 체크아웃의 서브모듈이 깨진다.`,
+        ]
+      : []),
+    ...(b.mainEditable
+      ? []
+      : [
+          '메인 레포의 파일은 고치지 않고, 메인 레포에서 커밋하지 않는다. 앱은 메인 쪽 변경을 전달하지 않고 [Work 정리] 때 지운다. 검증에 꼭 필요해 고쳤으면 무엇을 왜 고쳤는지 handoff에 적는다.',
+        ]),
+    '고르지 않은 레포는 고치지 않는다. 고쳐야 하면 고치지 말고 사람에게 알린다. 사람이 [레포 추가]로 더하면 그때 고친다.',
+  ]
+  const others = b.others.length
+    ? [
+        '',
+        `고르지 않은 서브모듈: ${b.others.map((p) => `\`${p}\``).join(', ')}. 앱은 이것을 받지 않는다.`,
+        '',
+        list([
+          '빌드나 테스트에 그 코드가 필요하면 지금 폴더에서 `git submodule update --init --recursive`로 받는다.',
+          '받지 못하면 빠진 코드를 흉내 내거나, 빌드 설정에서 빼거나, 다른 패키지로 바꾸는 식으로 우회하지 않는다. 받지 못한 까닭을 사람에게 알린다.',
+          '서브모듈이 없어 건너뛴 테스트를 통과로 보지 않는다.',
+          '기준 브랜치를 병합하거나 커밋을 받아 그 서브모듈이 가리키는 커밋이 바뀌면 `git submodule update --recursive`로 맞춘다. 맞추지 않은 채 커밋하면 서브모듈이 옛 커밋으로 되돌아간다.',
+        ]),
+      ]
+    : []
+  return [
+    '레포',
+    [
+      '이 Work는 아래 레포를 함께 다룬다(묶음 Work). 고른 서브모듈은 메인 worktree 안의 그 자리에 서브모듈 레포의 worktree로 있다.',
+      '',
+      list(repoLines),
+      '',
+      list(rules),
+      ...others,
+    ].join('\n'),
+  ]
+}
+
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim()
 
 /** 외부 글이 데이터라는 안내 (D162, 5.6.7) */
@@ -487,6 +575,12 @@ function respondSection(r: RespondInput, base: string): [string, string] {
     [
       `PR #${r.pr.number}의 대응 라운드 ${r.round}다. 아래 항목과 사람 지시에 대응한다. 고친 것은 커밋하고, 코멘트 항목마다 ` +
         `\`${REPLIES_FILE}\`에 답글 초안을 쓰고, 항목별 결과를 \`${RESPONSE_FILE}\`에 쓴다. push와 답글 게시는 승인 뒤 앱이 한다.`,
+      ...(r.repo
+        ? [
+            '',
+            `이 PR은 서브모듈 \`${r.repo.path}\`의 PR이다(묶음 Work, D480). 지금 폴더 안의 \`${r.repo.path}/\`에서 고치고 그 레포에 커밋한다. git 명령(병합, 커밋)도 그 폴더에서 한다(\`git -C ${r.repo.path} …\`). 다른 레포는 고치지 않는다.`,
+          ]
+        : []),
       '',
       '### PR',
       '',
@@ -524,7 +618,9 @@ export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
   const type = workType(work)
-  const entry = input.respond ? respondSection(input.respond, targetBranch(work)) : null
+  const entry = input.respond
+    ? respondSection(input.respond, input.respond.repo?.base ?? targetBranch(work))
+    : null
   const custom = customTypeSection(work, task)
   const typeName =
     type === 'custom' && work.custom_type
@@ -561,7 +657,11 @@ export function buildContext(input: ContextInput): string {
     ['질문 방식', questionLine(config, work.settings, task.node)],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
     ...(input.target ? [targetSection(input.target)] : []),
-    ...(input.submodules?.length ? [submoduleSection(input.submodules)] : []),
+    ...(input.bundle
+      ? [bundleSection(input.bundle, workBranch(work))]
+      : input.submodules?.length
+        ? [submoduleSection(input.submodules)]
+        : []),
     [
       work.intent ? `intent (버전 ${work.intent.version})` : 'intent',
       input.intent === null ? '없음 (의도 승인 전)' : fenced(input.intent),

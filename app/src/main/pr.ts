@@ -27,6 +27,7 @@ import {
   type CommentFact,
   type PrLocation,
 } from '../core/pr'
+import { withoutRepoPaths } from '../core/repos'
 import type { SyncKind } from '../shared/views'
 
 export interface PrReadContext {
@@ -35,6 +36,8 @@ export interface PrReadContext {
   /** 메인 체크아웃. gh와 fetch를 여기서 부른다 */
   repo: string
   worktree: string
+  /** 깨끗한지 볼 때 빼는 자리: 묶음 Work 메인 worktree 안의 고른 서브모듈 (D475) */
+  ignore?: readonly string[]
   /** Work 브랜치 relay/<work-id> */
   branch: string
   location: PrLocation
@@ -133,7 +136,9 @@ async function compare(
   }
   const localInRemote = await isAncestor(ctx.repo, local, view.head, opts)
   const remoteInLocal = localInRemote ? false : await isAncestor(ctx.repo, view.head, local, opts)
-  const clean = localInRemote ? (await statusLines(ctx.worktree, opts)).length === 0 : true
+  const clean = localInRemote
+    ? withoutRepoPaths(await statusLines(ctx.worktree, opts), ctx.ignore ?? []).length === 0
+    : true
   const onBranch = localInRemote ? (await currentBranch(ctx.worktree, opts)) === ctx.branch : true
   return syncKind({ local, remote: view.head, localInRemote, remoteInLocal, clean, onBranch })
 }

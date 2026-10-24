@@ -13,6 +13,7 @@ import type {
   DeliverInput,
   MergeInput,
   NewWorkInput,
+  NewWorkRepo,
   PrItemAction,
   RespondStartInput,
 } from '../shared/views'
@@ -21,6 +22,7 @@ import {
   type CustomTypeSource,
   type DeliveryChoice,
   type MergeMethod,
+  type UncommittedAction,
   type WorkType,
 } from '../shared/work'
 import type { Relay } from './relay'
@@ -122,16 +124,70 @@ function choice(v: unknown): DeliveryChoice {
   return v
 }
 
+function uncommittedAction(v: unknown): UncommittedAction {
+  if (v !== 'discard' && v !== 'commit') throw new Error('커밋 안 된 변경의 처리가 아님')
+  return v
+}
+
+/** 묶음 Work의 레포별 전달 (D477, D478) */
+function repoPicks(v: unknown): NonNullable<DeliverInput['repos']> {
+  if (!Array.isArray(v)) throw new Error('레포별 전달이 아님')
+  return v.map((x) => {
+    if (!x || typeof x !== 'object') throw new Error('레포별 전달이 아님')
+    const o = x as Record<string, unknown>
+    return {
+      path: text(o['path']),
+      choice: o['choice'] === null ? null : choice(o['choice']),
+      ...(o['link'] === undefined ? {} : { link: flag(o['link']) }),
+    }
+  })
+}
+
+/** 묶음 Work의 레포별 커밋 안 된 변경 처리 (D475) */
+function repoUncommitted(v: unknown): NonNullable<DeliverInput['repoUncommitted']> {
+  if (!Array.isArray(v)) throw new Error('레포별 커밋 안 된 변경의 처리가 아님')
+  return v.map((x) => {
+    if (!x || typeof x !== 'object') throw new Error('레포별 커밋 안 된 변경의 처리가 아님')
+    const o = x as Record<string, unknown>
+    return {
+      path: text(o['path']),
+      action: uncommittedAction(o['action']),
+      expect: texts(o['expect']),
+    }
+  })
+}
+
 function deliverInput(v: unknown): DeliverInput {
   if (!v || typeof v !== 'object') throw new Error('전달 입력이 아님')
   const o = v as Record<string, unknown>
+  const bundle = {
+    ...(o['repos'] === undefined ? {} : { repos: repoPicks(o['repos']) }),
+    ...(o['repoUncommitted'] === undefined
+      ? {}
+      : { repoUncommitted: repoUncommitted(o['repoUncommitted']) }),
+  }
   const u = o['uncommitted']
-  if (u === null || u === undefined) return { choice: choice(o['choice']), uncommitted: null }
+  if (u === null || u === undefined)
+    return { choice: choice(o['choice']), uncommitted: null, ...bundle }
   if (typeof u !== 'object') throw new Error('커밋 안 된 변경의 처리가 아님')
   const w = u as Record<string, unknown>
-  const action = w['action']
-  if (action !== 'discard' && action !== 'commit') throw new Error('커밋 안 된 변경의 처리가 아님')
-  return { choice: choice(o['choice']), uncommitted: { action, expect: texts(w['expect']) } }
+  return {
+    choice: choice(o['choice']),
+    uncommitted: { action: uncommittedAction(w['action']), expect: texts(w['expect']) },
+    ...bundle,
+  }
+}
+
+/** 묶음 Work의 서브모듈 하나 (D470, D473) */
+function newWorkRepo(v: unknown): NewWorkRepo {
+  if (!v || typeof v !== 'object') throw new Error('레포 입력이 아님')
+  const o = v as Record<string, unknown>
+  return {
+    path: text(o['path']),
+    baseBranch: text(o['baseBranch']),
+    baseLocation: o['baseLocation'] === 'remote' ? 'remote' : 'local',
+    ...(typeof o['targetBranch'] === 'string' ? { targetBranch: o['targetBranch'] } : {}),
+  }
 }
 
 function cleanInput(v: unknown): CleanInput {
@@ -149,8 +205,29 @@ function cleanInput(v: unknown): CleanInput {
     lost: x['lost'] === undefined ? [] : texts(x['lost']),
     submodules: x['submodules'] === undefined ? [] : texts(x['submodules']),
     ...(x['integration'] === undefined ? {} : { integration: texts(x['integration']) }),
+    ...(x['repos'] === undefined
+      ? {}
+      : {
+          repos: list(x['repos']).map((r) => ({
+            path: text(r['path']),
+            uncommitted: texts(r['uncommitted']),
+            locks: texts(r['locks']),
+            remote: flag(r['remote']),
+            lost: texts(r['lost']),
+          })),
+        }),
   }
   return {
+    ...(o['repos'] === undefined
+      ? {}
+      : {
+          repos: list(o['repos']).map((r) => ({
+            path: text(r['path']),
+            deleteBranch: flag(r['deleteBranch']),
+            ...(r['deleteRemote'] === undefined ? {} : { deleteRemote: flag(r['deleteRemote']) }),
+            ...(r['confirmLost'] === undefined ? {} : { confirmLost: flag(r['confirmLost']) }),
+          })),
+        }),
     deleteBranch: flag(o['deleteBranch']),
     deleteBackups: flag(o['deleteBackups']),
     ...(o['deleteRemote'] === undefined ? {} : { deleteRemote: flag(o['deleteRemote']) }),
@@ -158,6 +235,20 @@ function cleanInput(v: unknown): CleanInput {
     ...(o['confirmLost'] === undefined ? {} : { confirmLost: flag(o['confirmLost']) }),
     expect,
   }
+}
+
+/** PR 카드 (D480): 서브모듈 경로. 없으면 메인 PR('')이다 */
+function lane(v: unknown): string {
+  return v === undefined || v === null ? '' : text(v)
+}
+
+/** 객체 목록 */
+function list(v: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(v)) throw new Error('목록이 아님')
+  return v.map((x) => {
+    if (!x || typeof x !== 'object') throw new Error('목록의 항목이 객체가 아님')
+    return x as Record<string, unknown>
+  })
 }
 
 function mergeMethod(v: unknown): MergeMethod {
@@ -168,7 +259,11 @@ function mergeMethod(v: unknown): MergeMethod {
 function mergeInput(v: unknown): MergeInput {
   if (!v || typeof v !== 'object') throw new Error('머지 입력이 아님')
   const o = v as Record<string, unknown>
-  return { method: mergeMethod(o['method']), head: text(o['head']) }
+  return {
+    method: mergeMethod(o['method']),
+    head: text(o['head']),
+    ...(o['repo'] ? { repo: text(o['repo']) } : {}),
+  }
 }
 
 function itemAction(v: unknown): PrItemAction {
@@ -181,7 +276,11 @@ function respondInput(v: unknown): RespondStartInput {
   const o = v as Record<string, unknown>
   const items = o['items']
   if (!Array.isArray(items)) throw new Error('항목 목록이 아님')
-  return { items: items.map(text), instruction: text(o['instruction']) }
+  return {
+    items: items.map(text),
+    instruction: text(o['instruction']),
+    ...(o['repo'] ? { repo: text(o['repo']) } : {}),
+  }
 }
 
 /** 새 Work를 만든 초안의 자리 (D404) */
@@ -289,6 +388,21 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.prepareSubmodule, async (_e, projectId: unknown, sub: unknown) =>
     (await ready).prepareSubmodule(text(projectId), text(sub)),
   )
+  ipcMain.handle(
+    IPC.bundleRepos,
+    async (_e, projectId: unknown, branch: unknown, location: unknown) =>
+      (await ready).bundleRepos(
+        text(projectId),
+        text(branch),
+        location === 'remote' ? 'remote' : 'local',
+      ),
+  )
+  ipcMain.handle(IPC.repoChoice, async (_e, projectId: unknown, sub: unknown) =>
+    (await ready).repoChoice(text(projectId), text(sub)),
+  )
+  ipcMain.handle(IPC.addRepo, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).addRepo(text(workKey), newWorkRepo(repo)),
+  )
 
   ipcMain.handle(IPC.createWork, async (_e, projectId: unknown, input: NewWorkInput) =>
     (await ready).createWork(text(projectId), {
@@ -316,6 +430,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
             },
           }
         : {}),
+      // 묶음 Work (D470). 메인 프로젝트인지와 고른 서브모듈은 Relay.createWork가 본다
+      ...(Array.isArray(input.repos) ? { repos: input.repos.map(newWorkRepo) } : {}),
+      ...(input.editMain === false ? { editMain: false } : {}),
     }),
   )
   ipcMain.handle(
@@ -429,26 +546,35 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.dismissNotice, async (_e, workKey: unknown, id: unknown) =>
     (await ready).dismissNotice(text(workKey), text(id)),
   )
-  ipcMain.handle(IPC.prRefresh, async (_e, workKey: unknown) =>
-    (await ready).prRefresh(text(workKey)),
+  ipcMain.handle(IPC.prRefresh, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).prRefresh(text(workKey), lane(repo)),
   )
-  ipcMain.handle(IPC.prItem, async (_e, workKey: unknown, itemId: unknown, action: unknown) =>
-    (await ready).prItem(text(workKey), text(itemId), itemAction(action)),
+  ipcMain.handle(
+    IPC.prItem,
+    async (_e, workKey: unknown, itemId: unknown, action: unknown, repo: unknown) =>
+      (await ready).prItem(text(workKey), text(itemId), itemAction(action), lane(repo)),
   )
-  ipcMain.handle(IPC.prMergeInfo, async (_e, workKey: unknown) =>
-    (await ready).prMergeInfo(text(workKey)),
+  ipcMain.handle(IPC.prMergeInfo, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).prMergeInfo(text(workKey), lane(repo)),
   )
   ipcMain.handle(IPC.prMerge, async (_e, workKey: unknown, input: unknown) =>
     (await ready).prMerge(text(workKey), mergeInput(input)),
   )
-  ipcMain.handle(IPC.prEnd, async (_e, workKey: unknown) => (await ready).prEnd(text(workKey)))
-  ipcMain.handle(IPC.prCleanOffered, async (_e, workKey: unknown) =>
-    (await ready).prCleanOffered(text(workKey)),
+  ipcMain.handle(IPC.prEnd, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).prEnd(text(workKey), lane(repo)),
+  )
+  ipcMain.handle(IPC.prCleanOffered, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).prCleanOffered(text(workKey), lane(repo)),
   )
   ipcMain.handle(IPC.prRespond, async (_e, workKey: unknown, input: unknown) =>
     (await ready).prRespond(text(workKey), respondInput(input)),
   )
-  ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown) => (await ready).prRerun(text(workKey)))
+  ipcMain.handle(IPC.prRelink, async (_e, workKey: unknown) =>
+    (await ready).prRelink(text(workKey)),
+  )
+  ipcMain.handle(IPC.prRerun, async (_e, workKey: unknown, repo: unknown) =>
+    (await ready).prRerun(text(workKey), lane(repo)),
+  )
   ipcMain.handle(IPC.issueRetry, async (_e, workKey: unknown) =>
     (await ready).issueRetry(text(workKey)),
   )

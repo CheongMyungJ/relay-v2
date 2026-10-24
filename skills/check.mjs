@@ -484,15 +484,15 @@ const spec = {
     ['D436', '기능 추가·변경 리뷰: 구조 맞춤대로인지, 없앤 것이 다 없어졌는지', /sit where `구조 맞춤` in `design\.md` says[\s\S]*is it all gone\? Look for references left, dead code/, ['feature']],
     ['D436', '리뷰: 구조 맞춤, 중복, 유지보수성, 팀 지식 규칙 위반은 차단', /Fit with the existing structure[\s\S]*dependency directions[\s\S]*Duplication[\s\S]*Maintainability[\s\S]*tests tied to internal details[\s\S]*`kind: rule`[\s\S]*차단 finding[\s\S]*listed by title only, open the ones that touch the changed code/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
     ['D437', '범위 밖 유지보수성 문제는 지적이 아니라 나중에 정리할 곳에, 고르지 않음', /Out of scope:\*\* a maintainability problem beyond this Work[\s\S]*not a finding[\s\S]*`나중에 정리할 곳`[\s\S]*not picked or applied/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D470', '후보 형식: 파일과 줄, 한 줄 요약, 실패 시나리오(정리 후보는 드는 비용), 실패 시나리오를 댈 수 있으면 거르지 않고 넘김', /## How to review[\s\S]*file and line, a one-line summary, and a failure scenario[\s\S]*cleanup candidate[\s\S]*concrete cost[\s\S]*Pass every candidate that has a nameable failure scenario[\s\S]*half believe/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D472', '리뷰 순서: 범위 → 찾기 → 중복 정리(가장 구체적인 하나) → 확인(확인됨 / 가능성 / 틀림, 가능성이 기본, 틀림은 코드로 보일 때만, 틀림은 버림) → 쓰기', /\*\*Scope:\*\*[\s\S]*\*\*Find candidates:\*\*[\s\S]*every angle of `## What to review`[\s\S]*\*\*Dedup:\*\*[\s\S]*same defect, location and reason[\s\S]*most concrete failure scenario[\s\S]*\*\*Check\*\*[\s\S]*\*\*확인됨:\*\*[\s\S]*\*\*가능성:\*\*[\s\S]*\*\*틀림:\*\*[\s\S]*가능성 is the default[\s\S]*틀림 only when the code shows it[\s\S]*Drop 틀림[\s\S]*\*\*Write\*\*/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D474', '서브에이전트: 찾기 하나와 새 확인 하나에 차례로 맡기고 기다림, 브리프(context.md·산출물 경로, 기준 커밋, What to review 전문 / 후보 목록 전부, 확인 규칙 전문), 파일 안 바꿈·안 물음·목록만, 못 띄우면 스스로 차례로 하고 남은 위험', /if you can start subagents[\s\S]*two of them, one after the other[\s\S]*wait for each result[\s\S]*\*\*Finder\*\* \(steps 1–3\)[\s\S]*`context\.md`[\s\S]*base commit[\s\S]*whole text of `## What to review`[\s\S]*\*\*Checker\*\* \(step 4\)[\s\S]*new subagent[\s\S]*base commit[\s\S]*whole list[\s\S]*whole text of step 4[\s\S]*change no files, ask the human nothing, and return only the list[\s\S]*If you cannot start subagents, do steps 1–5 yourself[\s\S]*"한 세션에서 리뷰함\(확인이 찾은 쪽과 같은 컨텍스트\)"[\s\S]*`남은 위험`/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D474', '브리프: 찾기에 유형의 리뷰 관점 절(커스텀), 확인에 context.md·산출물 경로', /\*\*Finder\*\*[^\n]*`## This Work type's review points`[^\n]*\n- \*\*Checker\*\*[^\n]*`context\.md`, the paths of this Work's artifacts/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D474', '엔진 중립: Claude Code 전용 도구 이름이나 /code-review에 기대지 않음', /^(?![\s\S]*(?:ReportFindings|\/code-review|\b(?:Agent|Task) tool\b))/],
-    ['D473', '지적 형식: 확인 결과(확인됨 / 가능성), 들여쓴 줄에 실패 시나리오, 심각한 것부터·정확성 먼저, 개수의 상한·하한 없음, 템플릿도 같음', /\*\*Review\.\*\* Follow `## How to review`[\s\S]*check result \(확인됨 \/ 가능성\)[\s\S]*indented line[\s\S]*failure scenario[\s\S]*Most severe first[\s\S]*correctness findings before cleanup findings[\s\S]*no maximum or minimum[\s\S]*## 리뷰 지적\n1\. \[차단 \/ 권장 \/ 사소\] 파일:줄 — 무엇이 문제인지와 제안 \(확인됨 \/ 가능성\)\n {3}실패 시나리오: /, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D473', '완료조건: 리뷰 지적은 확인을 거친 것만, 실패 시나리오와 함께', /## Done when[\s\S]*only findings that went through the check \(확인됨 or 가능성\), each with its failure scenario/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
-    ['D475', '설계 유형에는 코드 리뷰 순서가 없음', /^(?![\s\S]*## How to review)/, ['spec']],
-    ['D471', '리뷰 각도 여덟: 줄 단위(감싼 함수까지), 지운 동작, 호출부, 관례(규칙과 줄 인용), 재사용, 단순화, 효율, 깊이', /\*\*Line by line:\*\* read every hunk[\s\S]*whole function around it[\s\S]*\*\*Removed behavior:\*\*[\s\S]*where the new code does it again[\s\S]*\*\*Callers:\*\*[\s\S]*find its callers[\s\S]*\*\*Conventions:\*\*[\s\S]*quote the rule and the line that breaks it[\s\S]*\*\*Reuse\*\* \(Duplication\)[\s\S]*name the one to call instead[\s\S]*\*\*Simplification:\*\*[\s\S]*Name the simpler form[\s\S]*\*\*Efficiency:\*\*[\s\S]*Name the cheaper way[\s\S]*\*\*Altitude:\*\*[\s\S]*root cause[\s\S]*symptom/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D484', '후보 형식: 파일과 줄, 한 줄 요약, 실패 시나리오(정리 후보는 드는 비용), 실패 시나리오를 댈 수 있으면 거르지 않고 넘김', /## How to review[\s\S]*file and line, a one-line summary, and a failure scenario[\s\S]*cleanup candidate[\s\S]*concrete cost[\s\S]*Pass every candidate that has a nameable failure scenario[\s\S]*half believe/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D486', '리뷰 순서: 범위 → 찾기 → 중복 정리(가장 구체적인 하나) → 확인(확인됨 / 가능성 / 틀림, 가능성이 기본, 틀림은 코드로 보일 때만, 틀림은 버림) → 쓰기', /\*\*Scope:\*\*[\s\S]*\*\*Find candidates:\*\*[\s\S]*every angle of `## What to review`[\s\S]*\*\*Dedup:\*\*[\s\S]*same defect, location and reason[\s\S]*most concrete failure scenario[\s\S]*\*\*Check\*\*[\s\S]*\*\*확인됨:\*\*[\s\S]*\*\*가능성:\*\*[\s\S]*\*\*틀림:\*\*[\s\S]*가능성 is the default[\s\S]*틀림 only when the code shows it[\s\S]*Drop 틀림[\s\S]*\*\*Write\*\*/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D488', '서브에이전트: 찾기 하나와 새 확인 하나에 차례로 맡기고 기다림, 브리프(context.md·산출물 경로, 기준 커밋, What to review 전문 / 후보 목록 전부, 확인 규칙 전문), 파일 안 바꿈·안 물음·목록만, 못 띄우면 스스로 차례로 하고 남은 위험', /if you can start subagents[\s\S]*two of them, one after the other[\s\S]*wait for each result[\s\S]*\*\*Finder\*\* \(steps 1–3\)[\s\S]*`context\.md`[\s\S]*base commit[\s\S]*whole text of `## What to review`[\s\S]*\*\*Checker\*\* \(step 4\)[\s\S]*new subagent[\s\S]*base commit[\s\S]*whole list[\s\S]*whole text of step 4[\s\S]*change no files, ask the human nothing, and return only the list[\s\S]*If you cannot start subagents, do steps 1–5 yourself[\s\S]*"한 세션에서 리뷰함\(확인이 찾은 쪽과 같은 컨텍스트\)"[\s\S]*`남은 위험`/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D488', '브리프: 찾기에 유형의 리뷰 관점 절(커스텀), 확인에 context.md·산출물 경로', /\*\*Finder\*\*[^\n]*`## This Work type's review points`[^\n]*\n- \*\*Checker\*\*[^\n]*`context\.md`, the paths of this Work's artifacts/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D488', '엔진 중립: Claude Code 전용 도구 이름이나 /code-review에 기대지 않음', /^(?![\s\S]*(?:ReportFindings|\/code-review|\b(?:Agent|Task) tool\b))/],
+    ['D487', '지적 형식: 확인 결과(확인됨 / 가능성), 들여쓴 줄에 실패 시나리오, 심각한 것부터·정확성 먼저, 개수의 상한·하한 없음, 템플릿도 같음', /\*\*Review\.\*\* Follow `## How to review`[\s\S]*check result \(확인됨 \/ 가능성\)[\s\S]*indented line[\s\S]*failure scenario[\s\S]*Most severe first[\s\S]*correctness findings before cleanup findings[\s\S]*no maximum or minimum[\s\S]*## 리뷰 지적\n1\. \[차단 \/ 권장 \/ 사소\] 파일:줄 — 무엇이 문제인지와 제안 \(확인됨 \/ 가능성\)\n {3}실패 시나리오: /, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D487', '완료조건: 리뷰 지적은 확인을 거친 것만, 실패 시나리오와 함께', /## Done when[\s\S]*only findings that went through the check \(확인됨 or 가능성\), each with its failure scenario/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D489', '설계 유형에는 코드 리뷰 순서가 없음', /^(?![\s\S]*## How to review)/, ['spec']],
+    ['D485', '리뷰 각도 여덟: 줄 단위(감싼 함수까지), 지운 동작, 호출부, 관례(규칙과 줄 인용), 재사용, 단순화, 효율, 깊이', /\*\*Line by line:\*\* read every hunk[\s\S]*whole function around it[\s\S]*\*\*Removed behavior:\*\*[\s\S]*where the new code does it again[\s\S]*\*\*Callers:\*\*[\s\S]*find its callers[\s\S]*\*\*Conventions:\*\*[\s\S]*quote the rule and the line that breaks it[\s\S]*\*\*Reuse\*\* \(Duplication\)[\s\S]*name the one to call instead[\s\S]*\*\*Simplification:\*\*[\s\S]*Name the simpler form[\s\S]*\*\*Efficiency:\*\*[\s\S]*Name the cheaper way[\s\S]*\*\*Altitude:\*\*[\s\S]*root cause[\s\S]*symptom/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
     ['D275', '리팩터링 입력: refactor.md (fix.md와 재현 규칙 없음)', /`refactor\.md` at the path in `context\.md`/, ['refactor']],
     ['D275', '리팩터링 리뷰: 로직 변경 없음, 받아들이지 않은 동작 변경은 차단, 구조 목표, 범위', /logic change[\s\S]*did not accept is a 차단 finding[\s\S]*structural goals[\s\S]*scope grow/, ['refactor']],
     ['D273', '안전망 항목: 같은 worktree에서 안전망 커밋 체크아웃(I64), 마지막 코드에서도, 둘 다 통과, 없으면 판정 불가, 브랜치 확인', /same worktree[\s\S]*safety-net commit[\s\S]*final code too[\s\S]*only if both pass[\s\S]*판정 불가[\s\S]*`git branch --show-current`/, ['refactor']],
@@ -571,8 +571,8 @@ for (const [name, items] of Object.entries(spec)) {
   }
 }
 
-// verify의 코드 리뷰 방법은 내장 code-review high에서 들였다. 출처와 판단은 따로 둔 문서에 있다 (D470~D475)
-console.log('\n[4] 설계 대조: 리뷰 방법 문서 (D470~D475)');
+// verify의 코드 리뷰 방법은 내장 code-review high에서 들였다. 출처와 판단은 따로 둔 문서에 있다 (D484~D489)
+console.log('\n[4] 설계 대조: 리뷰 방법 문서 (D484~D489)');
 const reviewMethodPath = join(root, 'docs/review-method.md');
 const reviewMethod = existsSync(reviewMethodPath) ? read('docs/review-method.md') : '';
 check(reviewMethod !== '', 'docs/review-method.md 있음');
@@ -581,9 +581,9 @@ const rmMissing = REVIEW_METHOD_SECTIONS.filter((h) => !headings(reviewMethod).i
 check(rmMissing.length === 0, `docs/review-method.md: 필수 절 ${REVIEW_METHOD_SECTIONS.length}개${rmMissing.length ? ` (빠짐: ${rmMissing.join(', ')})` : ''}`);
 const rmSub = reviewMethod.split('## 5. 서브에이전트에게 맡길지')[1]?.split('\n## ')[0] ?? '';
 check(/찾기[\s\S]*확인[\s\S]*메인/.test(rmSub), 'docs/review-method.md: 서브에이전트 판단에 찾기·확인·메인 세션에 두는 것');
-const dMissing = ['D470', 'D471', 'D472', 'D473', 'D474', 'D475'].filter((d) => !design.includes(`\n| ${d} |`));
-check(dMissing.length === 0, `design.md: 결정 D470~D475${dMissing.length ? ` (빠짐: ${dMissing.join(', ')})` : ''}`);
-check(/\n\| D474 \|[^\n]*서브에이전트[^\n]*review-method\.md/.test(design), 'design.md: D474는 서브에이전트 판단이고 review-method.md를 가리킴');
+const dMissing = ['D484', 'D485', 'D486', 'D487', 'D488', 'D489'].filter((d) => !design.includes(`\n| ${d} |`));
+check(dMissing.length === 0, `design.md: 결정 D484~D489${dMissing.length ? ` (빠짐: ${dMissing.join(', ')})` : ''}`);
+check(/\n\| D488 \|[^\n]*서브에이전트[^\n]*review-method\.md/.test(design), 'design.md: D488는 서브에이전트 판단이고 review-method.md를 가리킴');
 
 console.log('\n[5] 유형별 조립 (D279)');
 for (const v of variants) {
@@ -598,11 +598,11 @@ for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
 }
-// 설계 유형 verify는 문서를 리뷰해 코드 리뷰 방법(D470~D474)을 들이지 않았다. 조립 결과가 들이기 전(3df9b94)과 같은지
-// 해시로 본다. 설계 verify를 일부러 바꾸면 이 값도 함께 고친다 (D475)
-const SPEC_VERIFY_SHA256 = '7dbdcf7ad783d98930b1a8cd257e07547f945123fe4231d5cb2b0c62b5b7c320';
+// 설계 유형 verify는 문서를 리뷰해 코드 리뷰 방법(D484~D488)을 들이지 않았다. 조립 결과가 들이기 전(main 350bf69, 레포별 PR 초안 문구가 들어감)과 같은지
+// 해시로 본다. 설계 verify를 일부러 바꾸면 이 값도 함께 고친다 (D489)
+const SPEC_VERIFY_SHA256 = 'f15ffa1f7574ad616d9e75203bb49ed375354c57de490c95073988f43978164d';
 const specVerify = createHash('sha256').update(assemble(stripFrontMatter(skills.verify), 'spec')).digest('hex');
-check(specVerify === SPEC_VERIFY_SHA256, `verify·spec: 조립 결과가 코드 리뷰 방법을 들이기 전과 같음 (D475)${specVerify === SPEC_VERIFY_SHA256 ? '' : ` (${specVerify})`}`);
+check(specVerify === SPEC_VERIFY_SHA256, `verify·spec: 조립 결과가 코드 리뷰 방법을 들이기 전과 같음 (D489)${specVerify === SPEC_VERIFY_SHA256 ? '' : ` (${specVerify})`}`);
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
 process.exit(failures ? 1 : 0);

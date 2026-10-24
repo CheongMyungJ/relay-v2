@@ -8,6 +8,7 @@ import type { AutoRespondView } from '../shared/views'
 import type { RespondRound, RespondStage, TaskRecord, WorkState } from '../shared/work'
 import type { PrReadState } from './pr'
 import { RESPOND } from './pipeline'
+import { cardDone, laneOf } from './repos'
 import { replySections } from './validate'
 
 // ---------- 대응 task와 라운드 ----------
@@ -25,15 +26,27 @@ export function isRespondPending(task: Pick<TaskRecord, 'node' | 'status'>): boo
 
 /**
  * 돌거나 기다리는 PR 대응 task (D176, D183): 지금 task가 끝나지 않은 대응 task면 그 task, 아니면 null. 대응 task는 한
- * 번에 하나이고 늘 마지막 task다 (D170)
+ * 번에 하나이고 늘 마지막 task다 (D170). 서브모듈 PR 카드의 렌즈(D480)에서는 그 카드의 대응 task만 본다
  */
-export function pendingRespond(work: Pick<WorkState, 'tasks'>): TaskRecord | null {
+export function pendingRespond(work: Pick<WorkState, 'tasks' | 'lens'>): TaskRecord | null {
+  const task = anyPendingRespond(work)
+  return task && laneOf(task) === (work.lens ?? '') ? task : null
+}
+
+/** 어느 PR 카드든 끝나지 않은 대응 task (D480): 한 Work에서 동시에 도는 대응 task는 하나다 */
+export function anyPendingRespond(work: Pick<WorkState, 'tasks'>): TaskRecord | null {
   const task = work.tasks[work.tasks.length - 1]
   return task && isRespondPending(task) ? task : null
 }
 
-/** 라운드 기록이 있는 PR 대응 task. 차례대로다 */
+/** 라운드 기록이 있는 PR 대응 task. 차례대로다. 서브모듈 PR 카드의 렌즈(D480)에서는 그 카드의 것만이다 */
 export function respondTasks(
+  work: Pick<WorkState, 'tasks' | 'lens'>,
+): (TaskRecord & { respond: RespondRound })[] {
+  return allRespondTasks(work).filter((t) => laneOf(t) === (work.lens ?? ''))
+}
+
+function allRespondTasks(
   work: Pick<WorkState, 'tasks'>,
 ): (TaskRecord & { respond: RespondRound })[] {
   return work.tasks.filter(
@@ -45,7 +58,7 @@ export function respondTasks(
  * push를 미룬 라운드 (D193): 승인했지만 원격 PR 브랜치의 새 커밋 때문에 push와 답글 게시를 미룬 대응 task. 다음 라운드가
  * 원격을 병합한 뒤 함께 push하고 답글도 게시한다
  */
-export function deferredRounds(work: Pick<WorkState, 'tasks'>): TaskRecord[] {
+export function deferredRounds(work: Pick<WorkState, 'tasks' | 'lens'>): TaskRecord[] {
   return respondTasks(work).filter(
     (t) => t.status === 'approved' && t.respond.deferred_at && !t.respond.published_at,
   )
@@ -56,7 +69,8 @@ export function deferredRounds(work: Pick<WorkState, 'tasks'>): TaskRecord[] {
  * 시작하지 않은 대응 task도 센다: 번호가 겹치지 않는다
  */
 export function nextRound(work: Pick<WorkState, 'tasks'>): number {
-  return Math.max(0, ...respondTasks(work).map((t) => t.respond.round)) + 1
+  // PR 카드가 여럿이어도 Work 안에서 겹치지 않게 모든 카드의 라운드를 센다 (D480)
+  return Math.max(0, ...allRespondTasks(work).map((t) => t.respond.round)) + 1
 }
 
 // ---------- 항목 ----------
@@ -109,7 +123,10 @@ export function respondBlocked(
   if (work.status !== 'pr' || !work.pr) return 'PR 진행인 Work가 아님'
   if (work.operation) return '진행 중인 작업이 있음'
   if (work.pr.closed_at) return PR_CLOSED
-  if (pendingRespond(work))
+  // 머지되거나 끝낸 카드는 다른 카드가 남아 PR 진행이어도 대응하지 않는다 (D480)
+  if (cardDone(work.pr)) return '이 PR은 이미 머지되었거나 끝냈음'
+  // PR 카드가 여럿이어도 대응 task는 Work에 하나다 (D480)
+  if (anyPendingRespond(work))
     return '끝나지 않은 PR 대응 task가 있음 (대응 task는 한 번에 하나, D170)'
   return null
 }
