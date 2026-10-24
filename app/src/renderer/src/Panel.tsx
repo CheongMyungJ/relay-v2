@@ -19,6 +19,8 @@ import type {
   KnowledgeChange,
   PrView,
   ProjectView,
+  RepoCompletion,
+  RepoDiffView,
   ReviewView,
   TaskView,
   WorkView,
@@ -26,7 +28,7 @@ import type {
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { Activity } from './Activity'
 import { call } from './commands'
-import { ConfirmDialog, UncommittedDialog } from './dialogs'
+import { ConfirmDialog, Modal, UncommittedDialog } from './dialogs'
 import { DraftCards } from './DraftCards'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
@@ -49,7 +51,12 @@ interface Props {
 
 /** PR 패널을 보일 때인가: PR 진행을 시작한 Work의 지금 task(verify)를 보고 있다 (시나리오 10) */
 export function showsPr(work: WorkView, taskId: string | undefined): boolean {
-  return work.pr !== null && taskId === work.current
+  return prCards(work).length > 0 && taskId === work.current
+}
+
+/** PR 카드 (D480): 메인 PR이 맨 앞이고 서브모듈 PR이 뒤다 */
+export function prCards(work: WorkView): PrView[] {
+  return [...(work.pr ? [work.pr] : []), ...(work.prs ?? [])]
 }
 
 /**
@@ -132,12 +139,12 @@ export function Panel({
       task.id === work.current ? (
         <TaskNotice task={task} pr={work.status === 'pr'} />
       ) : null}
-      {showsPr(work, task.id) && work.pr ? (
+      {showsPr(work, task.id) ? (
         <PrSection
           key={`${work.key}|${review.taskId}|${wantsApproval(review) ? 'approve' : ''}`}
           work={work}
           task={task}
-          pr={work.pr}
+          cards={prCards(work)}
           review={review}
           onApproved={onApproved}
         />
@@ -558,7 +565,13 @@ function Review({
             <div className="dim">산출물 없음</div>
           )
         ) : null}
-        {tab === 'changes' ? <Diff text={review.diff} /> : null}
+        {tab === 'changes' ? (
+          review.repoDiffs ? (
+            <RepoDiff repos={review.repoDiffs} />
+          ) : (
+            <Diff text={review.diff} />
+          )
+        ) : null}
         {tab === 'verdicts' && review.completion?.knowledge ? (
           <KnowledgeLine changes={review.completion.knowledge} onOpen={() => setTab('knowledge')} />
         ) : null}
@@ -589,7 +602,13 @@ function Review({
             <div className="dim">바꾸려면 승인 전에 터미널에서 지시하세요</div>
           </section>
         ) : null}
-        {tab === 'work' && review.completion ? <Diff text={review.completion.diff} /> : null}
+        {tab === 'work' && review.completion ? (
+          review.completion.repos ? (
+            <RepoDiff repos={review.completion.repos} />
+          ) : (
+            <Diff text={review.completion.diff} />
+          )
+        ) : null}
         {tab === 'knowledge' && review.completion?.knowledge ? (
           <KnowledgeList changes={review.completion.knowledge} />
         ) : null}
@@ -794,19 +813,22 @@ const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
 function PrSection({
   work,
   task,
-  pr,
+  cards,
   review,
   onApproved,
 }: {
   work: WorkView
   task: TaskView
-  pr: PrView
+  /** PR 카드 (D480). 하나 이상이다 */
+  cards: PrView[]
   review: ReviewView
   onApproved: () => void
 }) {
   const respond = review.respond !== null
   const approving = respond && work.status === 'pr' && wantsApproval(review)
-  const [tab, setTab] = useState<'pr' | 'task'>(approving ? 'task' : 'pr')
+  // 탭: PR 카드마다(`pr:<레포>`, 메인은 `pr:`)와 task
+  const [tab, setTab] = useState<string>(approving ? 'task' : `pr:${cards[0]?.repo ?? ''}`)
+  const pr = tab.startsWith('pr:') ? cards.find((c) => `pr:${c.repo}` === tab) : undefined
   const body = !respond ? (
     <Review review={review} readOnly />
   ) : approving ? (
@@ -821,14 +843,17 @@ function PrSection({
   return (
     <>
       <div className="review-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === 'pr'}
-          className={tab === 'pr' ? 'active' : ''}
-          onClick={() => setTab('pr')}
-        >
-          PR
-        </button>
+        {cards.map((c) => (
+          <button
+            key={c.repo}
+            role="tab"
+            aria-selected={tab === `pr:${c.repo}`}
+            className={tab === `pr:${c.repo}` ? 'active' : ''}
+            onClick={() => setTab(`pr:${c.repo}`)}
+          >
+            {cards.length > 1 ? `${c.repo || '메인'} PR #${c.number}` : 'PR'}
+          </button>
+        ))}
         <button
           role="tab"
           aria-selected={tab === 'task'}
@@ -838,7 +863,7 @@ function PrSection({
           {respond ? task.label : '리뷰와 검증 결과'}
         </button>
       </div>
-      {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : body}
+      {pr ? <PrPanel key={pr.repo} work={work} pr={pr} /> : body}
     </>
   )
 }
@@ -1143,6 +1168,13 @@ function CompletionActions({
   const [asking, setAsking] = useState<{ label: string; go: () => void } | null>(null)
   // 커밋 안 된 변경이 있어 고를 것 (7-5)
   const [pending, setPending] = useState<{ choice: DeliveryChoice; files: string[] } | null>(null)
+  // 묶음 Work: 레포마다 고른 전달(사람이 바꾼 것만, 나머지는 기본값)과 메인이 가리키게 할지 (D477, D478)
+  const [picks, setPicks] = useState<Record<string, DeliveryChoice | null>>({})
+  const [links, setLinks] = useState<Record<string, boolean>>({})
+  // 묶음 Work: 보낼 레포의 커밋 안 된 변경 (D475)
+  const [repoPending, setRepoPending] = useState<
+    { path: string; label: string; lines: string[] }[] | null
+  >(null)
   const c = review.completion
   if (!c) return null
   const gate = review.gate
@@ -1291,6 +1323,132 @@ function CompletionActions({
   }
   if (c.mode !== 'deliver') return null
 
+  if (c.repos) {
+    const repos = c.repos
+    const pickOf = (r: RepoCompletion) =>
+      r.path in picks ? (picks[r.path] ?? null) : defaultPick(r)
+    const linkOf = (r: RepoCompletion) => links[r.path] ?? true
+    const sending = repos.filter((r) => pickOf(r) !== null)
+    const deliverRepos = async (
+      uncommitted: { path: string; action: UncommittedAction; expect: string[] }[],
+    ) => {
+      const r = await run('전달', () =>
+        window.relay.deliver(work.key, {
+          choice: 'push',
+          uncommitted: null,
+          repos: repos.map((x) => ({
+            path: x.path,
+            choice: pickOf(x),
+            ...(x.linkable ? { link: linkOf(x) } : {}),
+          })),
+          repoUncommitted: uncommitted,
+        }),
+      )
+      if (r.ok) {
+        setRepoPending(null)
+        onApproved?.()
+      } else if ('repoUncommitted' in r && r.repoUncommitted) setRepoPending(r.repoUncommitted)
+      else setError(r.error)
+    }
+    const failedRepos = repos.filter((r) => r.delivery?.status === 'failed')
+    const blockedRepos = repos.filter(
+      (r) => r.editable && (!r.buttons.push.enabled || !r.buttons.pr.enabled),
+    )
+    return (
+      <div className="completion-actions">
+        <BundlePicker
+          work={work}
+          repos={repos}
+          pickOf={pickOf}
+          linkOf={linkOf}
+          mainSending={pickOf(repos[0] as RepoCompletion) !== null}
+          disabled={!!busy || open}
+          onPick={(path, choice) => setPicks((p) => ({ ...p, [path]: choice }))}
+          onLink={(path, on) => setLinks((l) => ({ ...l, [path]: on }))}
+        />
+        <footer className="review-actions">
+          <button
+            className="primary"
+            disabled={!!busy || open || !ready}
+            onClick={ask('완료만', () => void complete())}
+          >
+            완료만
+          </button>
+          <button
+            disabled={!!busy || open || !ready || sending.length === 0}
+            title={sending.length === 0 ? '보낼 레포를 고르세요' : ''}
+            onClick={ask('전달', () => void deliverRepos([]))}
+          >
+            전달
+          </button>
+          {!stopped && gate.force ? (
+            <button className="danger" disabled={!!busy || open || cut} onClick={onForce}>
+              오류 무시하고 승인
+            </button>
+          ) : null}
+          {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
+        </footer>
+        {blockedRepos.length ? (
+          <div className="dim">
+            {blockedRepos.flatMap((r) =>
+              (['push', 'pr'] as const)
+                .filter((k) => !r.buttons[k].enabled)
+                .map((k) => (
+                  <div key={`${r.path}-${k}`}>
+                    {r.label} [{DELIVERY_BUTTON[k]}]: {r.buttons[k].reason}
+                  </div>
+                )),
+            )}
+            <button disabled={!!busy} onClick={() => void recheck()}>
+              다시 점검
+            </button>
+          </div>
+        ) : null}
+        {failedRepos.length ? (
+          <div className="notice fail">
+            {failedRepos.map((r) => (
+              <div key={r.path}>
+                {r.label}: 전달 실패 ([{r.delivery?.label}],{' '}
+                {r.delivery?.stage ?? '알 수 없는 단계'}): {r.delivery?.error}
+              </div>
+            ))}
+            <div className="notice-actions">
+              <button
+                className="primary"
+                disabled={!!busy || open || cut || !ready}
+                onClick={() => void deliverRepos([])}
+              >
+                다시 시도
+              </button>
+              <button disabled={!!busy || open || !ready} onClick={() => void complete()}>
+                전달 없이 완료
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {error ? <div className="error">{error}</div> : null}
+        {repoPending ? (
+          <RepoUncommittedDialog
+            workId={work.workId}
+            repos={repoPending}
+            busy={!!busy}
+            onDeliver={(actions) =>
+              void deliverRepos(
+                repoPending.map((x) => ({
+                  path: x.path,
+                  action: actions[x.path] ?? 'commit',
+                  expect: x.lines,
+                })),
+              )
+            }
+            onClose={() => setRepoPending(null)}
+          />
+        ) : null}
+        {askingDialog}
+      </div>
+    )
+  }
+
   const failed = c.delivery?.status === 'failed' ? c.delivery : null
   const blocked = (['push', 'pr'] as const).filter((k) => !c.buttons[k].enabled)
   const button = (choice: DeliveryChoice) => (
@@ -1372,6 +1530,193 @@ function CompletionActions({
       ) : null}
       {askingDialog}
     </div>
+  )
+}
+
+/** 묶음 Work의 [변경]·[전체 변경]: 레포를 골라 그 레포의 diff를 본다 (D475) */
+function RepoDiff({ repos }: { repos: readonly Pick<RepoDiffView, 'path' | 'label' | 'diff'>[] }) {
+  const [picked, setPicked] = useState(repos[0]?.path ?? '')
+  const shown = repos.find((r) => r.path === picked) ?? repos[0]
+  return (
+    <>
+      <div className="repo-tabs" role="tablist" aria-label="레포">
+        {repos.map((r) => (
+          <button
+            key={r.path}
+            role="tab"
+            aria-selected={shown?.path === r.path}
+            className={shown?.path === r.path ? 'active' : ''}
+            onClick={() => setPicked(r.path)}
+          >
+            {r.label}
+            {r.diff.trim() ? '' : ' · 변경 없음'}
+          </button>
+        ))}
+      </div>
+      <Diff text={shown?.diff ?? ''} />
+    </>
+  )
+}
+
+/** 묶음 Work의 레포 하나에 처음 고르는 전달 (D477): 커밋이 있으면 쓸 수 있는 것 가운데 [PR 생성], 없으면 [push]다 */
+function defaultPick(r: RepoCompletion): DeliveryChoice | null {
+  const commits = (r.branch?.ahead ?? 0) > 0 || r.uncommitted.length > 0
+  if (!r.editable || !commits) return null
+  if (r.buttons.pr.enabled) return 'pr'
+  if (r.buttons.push.enabled) return 'push'
+  return null
+}
+
+/**
+ * 묶음 Work의 Work 완료 화면: 레포마다 전달을 고른다 (D475, D477, D478). 커밋이 없거나 고치지 않은 레포는 고를 것이
+ * 없다. 메인을 보내면 서브모듈마다 메인이 새 커밋을 가리키게 할지 묻는다
+ */
+function BundlePicker({
+  work,
+  repos,
+  pickOf,
+  linkOf,
+  mainSending,
+  disabled,
+  onPick,
+  onLink,
+}: {
+  work: WorkView
+  repos: RepoCompletion[]
+  pickOf: (r: RepoCompletion) => DeliveryChoice | null
+  linkOf: (r: RepoCompletion) => boolean
+  mainSending: boolean
+  disabled: boolean
+  onPick: (path: string, choice: DeliveryChoice | null) => void
+  onLink: (path: string, on: boolean) => void
+}) {
+  return (
+    <table className="bundle-picker" aria-label="레포별 전달">
+      <tbody>
+        {repos.map((r) => {
+          const commits = (r.branch?.ahead ?? 0) > 0 || r.uncommitted.length > 0
+          const pick = pickOf(r)
+          const name = `deliver-${r.path || 'main'}`
+          return (
+            <tr key={r.path}>
+              <th scope="row">
+                {r.label}
+                <div className="dim">
+                  {!r.editable
+                    ? '고치지 않음'
+                    : r.branch
+                      ? `${r.branch.name}: 커밋 ${r.branch.ahead}개${r.uncommitted.length ? `, 커밋 안 된 변경 ${r.uncommitted.length}개` : ''}`
+                      : '작업 브랜치 없음'}
+                </div>
+                {r.delivery?.status === 'succeeded' ? (
+                  <div className="dim">
+                    보냄([{r.delivery.label}]){' '}
+                    {r.delivery.prUrl ? (
+                      <a href={r.delivery.prUrl} target="_blank" rel="noreferrer">
+                        PR
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+              </th>
+              <td>
+                {r.editable && commits ? (
+                  <fieldset aria-label={`${r.label} 전달`} disabled={disabled}>
+                    {([null, 'push', 'pr'] as const).map((k) => (
+                      <label key={k ?? 'none'} title={k ? (r.buttons[k].reason ?? '') : ''}>
+                        <input
+                          type="radio"
+                          name={name}
+                          checked={pick === k}
+                          disabled={k !== null && !r.buttons[k].enabled}
+                          onChange={() => onPick(r.path, k)}
+                        />
+                        {k ? DELIVERY_BUTTON[k] : '보내지 않음'}
+                      </label>
+                    ))}
+                  </fieldset>
+                ) : (
+                  <span className="dim">{r.editable ? '보낼 커밋 없음' : '전달하지 않음'}</span>
+                )}
+                {r.linkable && mainSending && pick !== null ? (
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      aria-label={`메인이 ${r.label}의 새 커밋을 가리키게 함`}
+                      checked={linkOf(r)}
+                      disabled={disabled}
+                      onChange={(e) => onLink(r.path, e.target.checked)}
+                    />
+                    메인이 새 커밋을 가리키게 함
+                  </label>
+                ) : null}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+      <caption className="dim">
+        서브모듈을 먼저 보내고 메인을 마지막에 보냅니다. 작업 브랜치 <code>{work.branch}</code>
+      </caption>
+    </table>
+  )
+}
+
+/** 묶음 Work에서 보낼 레포의 커밋 안 된 변경: 레포마다 커밋하거나 버린다 (D475) */
+function RepoUncommittedDialog({
+  workId,
+  repos,
+  busy,
+  onDeliver,
+  onClose,
+}: {
+  workId: string
+  repos: { path: string; label: string; lines: string[] }[]
+  busy: boolean
+  onDeliver: (actions: Record<string, UncommittedAction>) => void
+  onClose: () => void
+}) {
+  const [actions, setActions] = useState<Record<string, UncommittedAction>>({})
+  return (
+    <Modal title="커밋 안 된 변경" onClose={onClose}>
+      <p>보낼 레포에 커밋 안 된 변경이 있습니다. 레포마다 어떻게 할지 고르세요.</p>
+      {repos.map((r) => (
+        <section key={r.path} aria-label={`${r.label}의 커밋 안 된 변경`}>
+          <h4>{r.label}</h4>
+          <ul className="files">
+            {r.lines.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+          <fieldset>
+            <label>
+              <input
+                type="radio"
+                name={`uncommitted-${r.path || 'main'}`}
+                checked={(actions[r.path] ?? 'commit') === 'commit'}
+                onChange={() => setActions((a) => ({ ...a, [r.path]: 'commit' }))}
+              />
+              커밋하고 진행 (&quot;relay({workId}): 완료 전 남은 변경&quot;)
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`uncommitted-${r.path || 'main'}`}
+                checked={actions[r.path] === 'discard'}
+                onChange={() => setActions((a) => ({ ...a, [r.path]: 'discard' }))}
+              />
+              변경 버리고 진행 (git stash -u로 백업)
+            </label>
+          </fieldset>
+        </section>
+      ))}
+      <div className="buttons">
+        <button onClick={onClose}>취소</button>
+        <button className="primary" disabled={busy} onClick={() => onDeliver(actions)}>
+          고른 대로 하고 전달
+        </button>
+      </div>
+    </Modal>
   )
 }
 

@@ -565,6 +565,36 @@ describe('task 검사 (5.2.1)', () => {
     expect(feature('design', { 'handoff.md': handoff(), 'design.md': '' })).toEqual([])
   })
 
+  it('묶음 Work의 verify: 커밋이 있는 서브모듈의 PR 초안이 없거나 첫 줄이 제목이 아니면 오류다. 메인을 고치지 않으면 pr.md가 없어도 된다 (D476)', () => {
+    const verify = (
+      files: Record<string, string>,
+      bundleDrafts: { drafts: { file: string; text: string | null }[]; main: boolean },
+    ) =>
+      errorsOf(
+        checkTask({
+          node: 'verify',
+          type: 'bugfix',
+          files: { 'handoff.md': handoff(), 'verification.md': '', ...files },
+          config: DEFAULT_CONFIG,
+          bundleDrafts,
+        }),
+      )
+    const pr = { 'pr.md': '# 메인\n' }
+    expect(verify(pr, { drafts: [{ file: 'pr/lib.md', text: '# lib\n' }], main: true })).toEqual([])
+    expect(verify(pr, { drafts: [{ file: 'pr/lib.md', text: null }], main: true })).toEqual([
+      '`pr/lib.md` 없음: 커밋이 있는 서브모듈의 PR 초안 (D476)',
+    ])
+    expect(
+      verify(pr, { drafts: [{ file: 'pr/lib.md', text: '제목 없음\n' }], main: true }),
+    ).toEqual(['`pr/lib.md` 첫 줄이 `# <PR 제목>`이 아님 (지금: 제목 없음)'])
+    expect(verify({}, { drafts: [{ file: 'pr/lib.md', text: '# lib\n' }], main: false })).toEqual(
+      [],
+    )
+    expect(verify({}, { drafts: [], main: true })).toEqual([
+      '`pr.md` 없음: `status: awaiting_approval`일 때 필수 산출물',
+    ])
+  })
+
   it('필수 산출물: 설계 문답은 spec.md다. 설계 문서는 레포에 커밋하므로 보지 않는다 (3.1, D351, D372)', () => {
     const spec = (files: Record<string, string>) =>
       errorsOf(checkTask({ node: 'spec', type: 'spec', files, config: DEFAULT_CONFIG }))

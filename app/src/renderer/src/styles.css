@@ -1255,6 +1255,73 @@ textarea {
   min-height: 120px;
 }
 
+/* 묶음 Work의 레포 고르기 (D475) */
+.repo-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.repo-tabs button {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.repo-tabs button.active {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* 묶음 Work의 레포별 전달 (D477) */
+.bundle-picker {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+}
+
+.bundle-picker th,
+.bundle-picker td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bundle-picker th {
+  font-weight: 500;
+}
+
+.bundle-picker fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bundle-picker caption {
+  caption-side: bottom;
+  text-align: left;
+  padding-top: 4px;
+}
+
+/* 새 Work 대화상자의 레포 표 (D472) */
+.repo-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.repo-table th,
+.repo-table td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
 .review-actions {
   display: flex;
   flex-wrap: wrap;

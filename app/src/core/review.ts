@@ -254,6 +254,39 @@ export function changeRange(work: WorkState, taskId: string): ChangeRange | null
   return { from, to: null }
 }
 
+/**
+ * 묶음 Work의 서브모듈 하나에서 [변경] 탭의 범위 (D475). changeRange와 같은 규칙을 그 레포의 시작 커밋(repo_starts)으로
+ * 한다. 그 레포의 worktree가 없던 때 시작한 task(나중에 [레포 추가]로 더함)는 null이다. 되감기(D418 전)는 묶음 Work에
+ * 없다
+ */
+export function repoChangeRange(
+  work: WorkState,
+  taskId: string,
+  repoPath: string,
+): ChangeRange | null {
+  const i = work.tasks.findIndex((t) => t.id === taskId)
+  const from = work.tasks[i]?.repo_starts?.[repoPath]
+  if (!from) return null
+  for (const next of work.tasks.slice(i + 1)) {
+    const to = next.repo_starts?.[repoPath]
+    if (to) return { from, to }
+  }
+  return repoEndRange(work, repoPath, from)
+}
+
+/**
+ * 묶음 Work의 서브모듈 하나에서 from부터 지금 코드까지의 범위: 보관된 Work는 정리하기 전 HEAD, 정리 중이면 정리를 시작할
+ * 때의 HEAD, 아니면 작업 트리(null)다 (changeRange와 같음)
+ */
+export function repoEndRange(work: WorkState, repoPath: string, from: string): ChangeRange {
+  if (work.status === 'archived') return { from, to: work.cleaned?.repos?.[repoPath]?.head ?? from }
+  const op = work.operation
+  if (op?.kind === 'clean') {
+    return { from, to: op.repos?.find((r) => r.path === repoPath)?.head ?? from }
+  }
+  return { from, to: null }
+}
+
 export interface EmphasisInput {
   node: TaskRecord['node']
   /** Work의 업무 유형. 이전 단계는 유형의 파이프라인으로 가른다 (3.2) */
@@ -267,6 +300,8 @@ export interface EmphasisInput {
   submodules?: readonly string[]
   /** 서브모듈 Work의 메인 통합 검증 worktree (D414, D415). 없으면 없다 */
   integration?: IntegrationFacts
+  /** 묶음 Work의 레포들 (D471, D475). 없으면 없다 */
+  bundle?: BundleFacts
   /** PR 대응 task: 이번 라운드에 바뀌거나 지워진 기존 테스트 파일 (D180, D202) */
   tests?: readonly string[]
   /** PR 대응 task: 승인 뒤 실패한 push나 답글 게시 (시나리오 10-6) */
@@ -282,6 +317,18 @@ export interface IntegrationFacts {
   /** 서브모듈 worktree의 지금 브랜치. 분리된 HEAD면 null */
   branch: string | null
   /** 서브모듈 worktree가 있어야 할 작업 브랜치 (relay/<work-id>) */
+  workBranch: string
+  /** 앱이 서브모듈 저장소의 core.worktree를 되돌린 적이 있다 */
+  repaired: boolean
+}
+
+/** 승인 화면이 보는 묶음 Work의 사실 (D471, D475). main이 git에서 읽는다 */
+export interface BundleFacts {
+  /** 메인을 고르지 않은 묶음 Work의 메인 쪽 변경(고른 서브모듈 자리 제외). 전달되지 않는다. 메인을 고쳤으면 빈 목록이다 */
+  mainChanges: readonly string[]
+  /** 작업 브랜치에 있지 않은 서브모듈 worktree와 그 지금 브랜치(분리된 HEAD면 null) */
+  offBranch: readonly { path: string; branch: string | null }[]
+  /** 레포마다 있어야 할 작업 브랜치 */
   workBranch: string
   /** 앱이 서브모듈 저장소의 core.worktree를 되돌린 적이 있다 */
   repaired: boolean
@@ -372,6 +419,32 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '메인 레포 변경 (전달 안 됨)',
       lines: [...g.mainChanges],
       hint: '통합 검증용 메인 worktree의 변경입니다. 이 Work는 서브모듈 레포만 전달하고 이 변경은 [Work 정리] 때 지웁니다. 메인 레포도 고쳐야 하면 메인 프로젝트에서 따로 Work를 만듭니다.',
+    })
+  }
+  const b = input.bundle
+  if (b && (b.offBranch.length > 0 || b.repaired)) {
+    out.push({
+      kind: 'submodule_guard',
+      title: '서브모듈 worktree',
+      lines: [
+        ...b.offBranch.map(
+          (r) =>
+            `${r.path}: 작업 브랜치 ${b.workBranch}에 있지 않습니다 (지금: ${r.branch ?? '분리된 HEAD'}). 전달은 작업 브랜치만 보냅니다. 터미널에서 git -C ${r.path} switch ${b.workBranch}로 돌아가거나 에이전트에게 맡기세요.`,
+        ),
+        ...(b.repaired
+          ? [
+              '메인 worktree에서 한 git submodule update가 서브모듈 저장소의 설정(core.worktree)을 바꿔 앱이 되돌렸습니다. 그동안 메인 체크아웃의 서브모듈 폴더에서 git이 실패했을 수 있습니다.',
+            ]
+          : []),
+      ],
+    })
+  }
+  if (b?.mainChanges.length) {
+    out.push({
+      kind: 'main_changes',
+      title: '메인 레포 변경 (전달 안 됨)',
+      lines: [...b.mainChanges],
+      hint: '이 Work는 메인 레포를 고르지 않아 메인 worktree를 기준 커밋에 고정했습니다. 이 변경은 전달하지 않고 [Work 정리] 때 지웁니다. 메인 레포도 고쳐야 하면 새 Work에서 메인 레포를 함께 고르세요.',
     })
   }
   if (input.errors.length > 0) {

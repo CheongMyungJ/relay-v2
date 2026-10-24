@@ -2,8 +2,8 @@
 // 사람이 고른 것으로 지울 브랜치와 --force를 정한다. git에서 읽는 사실(커밋 안 된 변경, 잠금 파일,
 // 체크아웃된 서브모듈, 작업 브랜치가 원격이나 기준 브랜치에 있는지, 되감기 백업 브랜치)과 살아 있는 세션은
 // main이 넘긴다.
-import type { CleanExpect, CleanInput, CleanPreview } from '../shared/views'
-import type { WorkState } from '../shared/work'
+import type { CleanExpect, CleanInput, CleanPreview, RepoCleanPreview } from '../shared/views'
+import type { RepoCleanStep, WorkState } from '../shared/work'
 import { sameChanges } from './delivery'
 
 /** 정리할 수 있는 Work: 완료나 포기한 Work다 (시나리오 8). 진행 중인 여러 단계 작업(D77)이 있으면 기다린다 */
@@ -103,6 +103,56 @@ export interface CleanFacts {
   remote: { name: string; exists: boolean } | null
   /** 서브모듈 Work의 메인 통합 검증 worktree와 그 메인 쪽 변경 (D416). 폴더가 없거나 서브모듈 Work가 아니면 없다 */
   integration?: { root: string; changes: readonly string[] } | null
+  /** 묶음 Work의 서브모듈마다 (D482). 묶음 Work가 아니면 없다 */
+  repos?: readonly RepoCleanFacts[]
+}
+
+/** 묶음 Work의 서브모듈 하나의 정리 사실 (D482). main이 그 서브모듈 저장소와 worktree에서 읽는다 */
+export interface RepoCleanFacts {
+  path: string
+  worktree: boolean
+  uncommitted: readonly string[]
+  locks: readonly string[]
+  /** CleanFacts.branch와 같다. stacked는 없다 */
+  branch: Omit<CleanFacts['branch'], 'stacked'>
+  /** 그 레포의 PR이 머지로 끝났다 */
+  merged: boolean
+  remote: { name: string; exists: boolean } | null
+  /** 메인 PR이 아직 이 작업 브랜치에만 있는 커밋을 가리킨다 (D482) */
+  pointed: boolean
+}
+
+/** 묶음 Work의 서브모듈 하나의 확인 요약 (D482): 메인과 같은 규칙이다 */
+function repoPreview(f: RepoCleanFacts): RepoCleanPreview {
+  const b = f.branch
+  const lost = b.pushed || b.merged ? [] : [...(b.lost ?? [])]
+  return {
+    path: f.path,
+    worktree: f.worktree,
+    uncommitted: [...f.uncommitted],
+    locks: [...f.locks],
+    branch: {
+      name: b.name,
+      exists: b.exists,
+      pushed: b.pushed,
+      merged: b.merged,
+      deletable: b.exists && (b.pushed || b.merged || (f.merged && b.lost !== null)),
+      lost,
+    },
+    remote: f.remote ? { ...f.remote } : null,
+    pointed: f.pointed,
+  }
+}
+
+function repoConfirm(f: RepoCleanFacts): string[] {
+  const out: string[] = []
+  if (f.uncommitted.length > 0)
+    out.push(`${f.path}: 커밋 안 된 변경 ${f.uncommitted.length}개를 백업 없이 지웁니다`)
+  if (f.locks.length > 0)
+    out.push(
+      `${f.path}: git 잠금 파일 ${f.locks.length}개가 남아 있습니다. worktree와 함께 지웁니다`,
+    )
+  return out
 }
 
 /**
@@ -125,6 +175,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       `체크아웃된 서브모듈 ${facts.submodules.length}개(${facts.submodules.join(', ')}) 안의 커밋 안 된 변경과 push 안 한 커밋도 함께 지웁니다`,
     )
   }
+  for (const r of facts.repos ?? []) confirm.push(...repoConfirm(r))
   const g = facts.integration ?? null
   if (g && g.changes.length > 0) {
     confirm.push(
@@ -157,6 +208,7 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
     // 쌓은 Work가 이 브랜치로 PR을 만들 수 있게 origin의 브랜치도 고르지 못하게 둔다 (D428)
     remote: facts.remote && stacked.length === 0 ? { ...facts.remote } : null,
     integration: g ? { root: g.root, changes: [...g.changes] } : null,
+    ...(facts.repos ? { repos: facts.repos.map(repoPreview) } : {}),
     confirm,
     expect: {
       uncommitted: [...facts.uncommitted],
@@ -167,6 +219,17 @@ export function cleanPreview(facts: CleanFacts): CleanPreview {
       lost: lost.map((c) => c.sha),
       submodules: [...facts.submodules],
       ...(g ? { integration: [...g.changes] } : {}),
+      ...(facts.repos
+        ? {
+            repos: facts.repos.map((r) => ({
+              path: r.path,
+              uncommitted: [...r.uncommitted],
+              locks: [...r.locks],
+              remote: r.remote?.exists === true,
+              lost: repoPreview(r).branch.lost.map((c) => c.sha),
+            })),
+          }
+        : {}),
     },
   }
 }
@@ -180,12 +243,34 @@ function sameExpect(a: CleanExpect, b: CleanExpect): boolean {
     sameChanges(a.backups, b.backups) &&
     sameChanges(a.lost ?? [], b.lost ?? []) &&
     sameChanges(a.submodules ?? [], b.submodules ?? []) &&
-    sameChanges(a.integration ?? [], b.integration ?? [])
+    sameChanges(a.integration ?? [], b.integration ?? []) &&
+    sameRepos(a.repos ?? [], b.repos ?? [])
   )
 }
 
+function sameRepos(a: NonNullable<CleanExpect['repos']>, b: NonNullable<CleanExpect['repos']>) {
+  if (a.length !== b.length) return false
+  return a.every((x) => {
+    const y = b.find((r) => r.path === x.path)
+    return (
+      !!y &&
+      x.remote === y.remote &&
+      sameChanges(x.uncommitted, y.uncommitted) &&
+      sameChanges(x.locks, y.locks) &&
+      sameChanges(x.lost, y.lost)
+    )
+  })
+}
+
 export type CleanPlan =
-  | { ok: true; force: boolean; deleteBranches: string[]; deleteRemote: string | null }
+  | {
+      ok: true
+      force: boolean
+      deleteBranches: string[]
+      deleteRemote: string | null
+      /** 묶음 Work의 서브모듈마다 (D482). head는 main이 채운다. 묶음 Work가 아니면 없다 */
+      repos?: Omit<RepoCleanStep, 'head'>[]
+    }
   | { ok: false; error: string }
 
 /**
@@ -215,8 +300,34 @@ export function planClean(preview: CleanPreview, input: CleanInput): CleanPlan {
   if (input.deleteRemote && !preview.remote?.exists) {
     return { ok: false, error: 'origin의 브랜치는 머지로 완료한 Work에서 원격에 있을 때만 지움' }
   }
+  const repos: Omit<RepoCleanStep, 'head'>[] = []
+  for (const r of preview.repos ?? []) {
+    const pick = input.repos?.find((x) => x.path === r.path)
+    if (pick?.deleteBranch && !r.branch.deletable) {
+      return { ok: false, error: `${r.path}: 작업 브랜치는 push됐거나 머지됐을 때만 지움` }
+    }
+    if (pick?.deleteBranch && r.branch.lost.length > 0 && !pick.confirmLost) {
+      return {
+        ok: false,
+        error: `${r.path}: 작업 브랜치에만 있는 커밋 ${r.branch.lost.length}개를 잃습니다. 확인이 필요함`,
+      }
+    }
+    if (pick?.deleteRemote && !r.remote?.exists) {
+      return {
+        ok: false,
+        error: `${r.path}: origin의 브랜치는 머지로 끝난 PR이 원격에 있을 때만 지움`,
+      }
+    }
+    repos.push({
+      path: r.path,
+      force: r.uncommitted.length > 0 || r.locks.length > 0,
+      delete_branches: pick?.deleteBranch ? [r.branch.name] : [],
+      ...(pick?.deleteRemote && r.remote ? { delete_remote: r.remote.name } : {}),
+    })
+  }
   return {
     ok: true,
+    ...(preview.repos ? { repos } : {}),
     force:
       preview.uncommitted.length > 0 || preview.locks.length > 0 || preview.submodules.length > 0,
     deleteBranches: [

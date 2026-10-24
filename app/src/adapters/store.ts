@@ -382,8 +382,8 @@ export class WorkFiles {
    * pr-items.json (D191). 없으면 빈 목록이다. 앱 소유이고 해시는 확인하지 않는다: 항목은 앱이 GitHub에서 다시 읽는다.
    * 읽을 수 없는 내용이면 오류다. M9 때 쓴 파일에는 대응 라운드(rounds)가 없어 빈 목록으로 둔다
    */
-  async readPrItems(): Promise<PrItemsFile> {
-    const file = await readJson<Partial<PrItemsFile>>(this.prItems)
+  async readPrItems(lane = ''): Promise<PrItemsFile> {
+    const file = await readJson<Partial<PrItemsFile>>(this.prItemsOf(lane))
     if (!file) return { ...EMPTY_PR_ITEMS, items: [], synced: [], rounds: [] }
     return {
       schema_version: 1,
@@ -394,8 +394,15 @@ export class WorkFiles {
   }
 
   /** pr-items.json을 원자적으로 쓴다 */
-  async writePrItems(file: PrItemsFile): Promise<void> {
-    await writeJson(this.prItems, file)
+  async writePrItems(file: PrItemsFile, lane = ''): Promise<void> {
+    await writeJson(this.prItemsOf(lane), file)
+  }
+
+  /**
+   * PR 카드의 pr-items.json (D480, I175): 메인 PR은 pr-items.json, 서브모듈 PR은 pr-items.<인코딩한 경로>.json이다
+   */
+  prItemsOf(lane: string): string {
+    return lane ? path.join(this.dir, `pr-items.${encodeURIComponent(lane)}.json`) : this.prItems
   }
 
   /** tasks/<nn>-<node>. 커스텀 단계는 tasks/<nn>-<단계 id>다 (D462) */
@@ -548,6 +555,17 @@ export class WorkFiles {
       if (text !== null) out[name] = text
     }
     return out
+  }
+
+  /**
+   * task 디렉터리 안의 파일 하나 (D476: 묶음 Work의 서브모듈 PR 초안 `pr/<경로>.md`). rel은 `/`로 나눈 상대 경로다. 없으면
+   * null이다
+   */
+  async taskFile(
+    task: Pick<TaskRecord, 'seq' | 'node' | 'step'>,
+    rel: string,
+  ): Promise<string | null> {
+    return readText(path.join(this.taskDir(task), ...rel.split('/')))
   }
 
   /** 산출물의 이름과 내용 (D89): artifacts와 같은 파일이다. 이슈 기록의 코멘트에 접어 넣는다 (D339) */

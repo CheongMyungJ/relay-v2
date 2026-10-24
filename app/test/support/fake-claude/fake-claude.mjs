@@ -327,19 +327,30 @@ async function steps(list, ctx, vars) {
     } else if (s === 'remove') {
       fs.rmSync(path.join(ctx.taskDir, step.file), { force: true })
     } else if (s === 'commit') {
+      // dir은 worktree 안의 폴더다(묶음 Work의 서브모듈 worktree, D474). 거기서 그 레포에 커밋한다
+      const cwd = path.join(process.cwd(), step.dir ?? '')
       for (const [name, text] of Object.entries(step.files ?? {})) {
-        const file = path.join(process.cwd(), name)
+        const file = path.join(cwd, name)
         fs.mkdirSync(path.dirname(file), { recursive: true })
         fs.writeFileSync(file, fill(text, vars))
       }
-      execFileSync('git', ['add', '-A'], { stdio: 'ignore' })
+      // 묶음 Work의 메인은 고른 서브모듈의 자리를 더하지 않는다(D474의 안내를 따른다)
+      execFileSync(
+        'git',
+        ['add', '-A', '--', '.', ...(step.exclude ?? []).map((p) => `:(exclude)${p}`)],
+        {
+          cwd,
+          stdio: 'ignore',
+        },
+      )
       execFileSync('git', ['commit', '-q', '-m', step.message ?? 'fake commit'], {
+        cwd,
         stdio: 'ignore',
       })
     } else if (s === 'edit') {
       // 커밋하지 않고 worktree의 파일을 고친다. 끝나지 않은 fix의 커밋 안 된 변경을 흉내 낸다 (D116)
       for (const [name, text] of Object.entries(step.files ?? {})) {
-        const file = path.join(process.cwd(), name)
+        const file = path.join(process.cwd(), step.dir ?? '', name)
         fs.mkdirSync(path.dirname(file), { recursive: true })
         fs.writeFileSync(file, fill(text, vars))
       }

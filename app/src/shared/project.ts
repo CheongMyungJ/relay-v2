@@ -44,6 +44,17 @@ export interface ProjectState {
    * 서브모듈 폴더다. 새 Work 대화상자에서 서브모듈을 처음 고를 때 앱이 만든다. 메인 프로젝트면 없다
    */
   parent?: SubmoduleParent
+  /**
+   * 서브모듈 경로마다의 설정 (D483). 묶음 Work의 그 서브모듈 PR 카드에 쓴다. 없는 키는 위의 메인 값을 쓴다. 서브모듈 프로젝트에
+   * 두던 설정의 자리다
+   */
+  submodules?: Record<string, SubmoduleSettings>
+}
+
+/** 서브모듈 PR 카드의 설정 (D483): 받을 봇(D161)과 머지 창의 기본 방식(D177). 없으면 메인 프로젝트의 값이다 */
+export interface SubmoduleSettings {
+  allowed_bots?: string[]
+  merge_method?: MergeMethod
 }
 
 /** 서브모듈 프로젝트의 메인 프로젝트와 그 안의 자리 (D413) */
@@ -63,10 +74,26 @@ export interface ProjectSettings {
   issue_log?: boolean
   /** 작업 브랜치 이름 규칙 (D426). 없으면 바꾸지 않는다. 빈 문자열이면 지운다(기본 규칙) */
   branch_rule?: string
+  /** 서브모듈마다의 설정 (D483). 없으면 바꾸지 않는다. 있으면 통째로 바꾼다 */
+  submodules?: Record<string, SubmoduleSettings>
 }
 
 /** 규칙이 없을 때의 작업 브랜치 규칙 (D426). 예전 Work의 브랜치 이름(relay/<work-id>)과 같은 모양이다 */
 export const DEFAULT_BRANCH_RULE = 'relay/{work-id}'
+
+/**
+ * 레포의 PR 설정 (D483): 메인(빈 경로)은 프로젝트의 값이고, 서브모듈은 그 경로의 칸을 쓰되 없는 키는 메인의 값이다
+ */
+export function repoSettings(
+  project: Pick<ProjectState, 'allowed_bots' | 'merge_method' | 'submodules'>,
+  path: string,
+): { allowedBots: string[]; mergeMethod: MergeMethod | null } {
+  const own = path ? project.submodules?.[path] : undefined
+  return {
+    allowedBots: own?.allowed_bots ?? project.allowed_bots ?? [],
+    mergeMethod: own?.merge_method ?? project.merge_method ?? null,
+  }
+}
 
 /** 이슈 기록이 켜져 있는가 (D337): 없으면 켜짐이다 */
 export function issueLogOn(project: Pick<ProjectState, 'issue_log'>): boolean {
