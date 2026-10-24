@@ -361,6 +361,13 @@ export interface PrItemView {
 
 /** PR 패널 (시나리오 10, D183): PR 요약, 항목, 머지 조건, 받은 커밋 */
 export interface PrView {
+  /** PR 카드 (D480): 서브모듈 PR이면 그 경로, 메인 PR이면 '' */
+  repo: string
+  /**
+   * 메인 PR이 머지된 커밋을 가리키지 않는 서브모듈 (D481): 그 서브모듈 PR을 squash·rebase로 머지했다. [서브모듈 커밋 맞추기]를
+   * 보인다. 메인 PR이 아니거나 없으면 빈 목록이다
+   */
+  relink: string[]
   number: number
   url: string
   /** 앱이 마지막으로 읽은 원격 head */
@@ -488,6 +495,8 @@ export type MergeInfoResult = { ok: true; info: MergeInfo } | { ok: false; error
 export interface MergeInput {
   method: MergeMethod
   head: string
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /** PR 패널의 항목 조작: [제외], [다시 넣기], [받기] (D160, D161, D170, D189) */
@@ -500,6 +509,8 @@ export type PrItemAction = 'exclude' | 'include' | 'accept'
 export interface RespondStartInput {
   items: string[]
   instruction: string
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 // ---------- 사이드바 배지 (core/approval, D80) ----------
@@ -552,6 +563,8 @@ export interface ProjectView {
   branchSlug: boolean
   /** 서브모듈 프로젝트의 메인 프로젝트 id와 그 안의 경로 (D413). 메인 프로젝트면 null */
   parent: { id: string; path: string } | null
+  /** 서브모듈 경로마다의 설정 (D483). 빈 목록과 null은 메인의 값을 쓴다 */
+  submodules: Record<string, { allowedBots: string[]; mergeMethod: MergeMethod | null }>
 }
 
 /** 묶음 Work의 서브모듈 하나 (D470, D471) */
@@ -720,6 +733,8 @@ export interface WorkView {
   delivery: DeliveryView | null
   /** PR 진행 (시나리오 10). [PR 생성]이 성공한 Work에 있다 */
   pr: PrView | null
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 없으면 빈 목록이다. 이전 스냅샷 호출자의 호환을 위해 생략할 수 있다 */
+  prs?: PrView[]
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   cleanup: CleanupView | null
   /** 곁 세션 (시나리오 11) */

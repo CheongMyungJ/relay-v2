@@ -698,6 +698,36 @@ export async function commitGitlinks(
   return headCommit(dir, opts)
 }
 
+/**
+ * gitlink만 바꾼 커밋을 HEAD 위에 만든다 (D481: [서브모듈 커밋 맞추기]). 서브모듈 worktree가 그 커밋에 있지 않아도 되도록
+ * 임시 index(GIT_INDEX_FILE)에서 HEAD의 tree를 읽어 gitlink만 바꾸고(read-tree, update-index --cacheinfo, write-tree)
+ * commit-tree로 커밋한 뒤 HEAD를 옮긴다. worktree의 index는 그 경로만 HEAD에 맞춘다. 다른 커밋 안 된 변경은 남는다.
+ * 커밋 훅은 돌지 않는다(앱의 커밋). 새 HEAD를 돌려준다
+ */
+export async function commitGitlinksAt(
+  dir: string,
+  links: readonly { path: string; sha: string }[],
+  message: string,
+  opts?: GitOptions,
+): Promise<string> {
+  const index = path.join(os.tmpdir(), `relay-index-${process.pid}-${Date.now()}`)
+  const withIndex = { ...opts, env: { ...(opts?.env ?? process.env), GIT_INDEX_FILE: index } }
+  try {
+    const head = await git(dir, ['rev-parse', 'HEAD'], opts)
+    await git(dir, ['read-tree', head], withIndex)
+    for (const l of links) {
+      await git(dir, ['update-index', '--cacheinfo', `160000,${l.sha},${l.path}`], withIndex)
+    }
+    const tree = await git(dir, ['write-tree'], withIndex)
+    const commit = await git(dir, ['commit-tree', tree, '-p', head, '-m', message], opts)
+    await git(dir, ['update-ref', '-m', message, 'HEAD', commit, head], opts)
+    await git(dir, ['reset', '-q', '--', ...links.map((l) => l.path)], opts)
+    return commit
+  } finally {
+    await fsp.rm(index, { force: true }).catch(() => {})
+  }
+}
+
 // ---------- 정리 (시나리오 8) ----------
 
 /**

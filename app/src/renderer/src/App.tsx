@@ -40,7 +40,7 @@ import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
 import { FilesView } from './Files'
 import { withOpened } from './opened'
-import { Panel, showsPr, wantsApproval } from './Panel'
+import { Panel, prCards, showsPr, wantsApproval } from './Panel'
 import { PanelResizer } from './PanelResizer'
 import { loadPanelWidths, panelStyle, savePanelWidths, type PanelWidths } from './panelWidth'
 import { TerminalView } from './TerminalView'
@@ -366,7 +366,10 @@ export function App() {
     )
   }
 
-  /** 사이드바의 프로젝트 묶음: 이름, Work, [새 Work]. 서브모듈 프로젝트는 그 안에 같은 모양으로 둔다 (D413) */
+  /**
+   * 사이드바의 프로젝트 묶음: 이름, Work, [새 Work]. 예전 서브모듈 프로젝트는 그 안에 같은 모양으로 두되 [새 Work]가 없다.
+   * 서브모듈은 메인 프로젝트의 새 Work에서 고른다 (D413, D483)
+   */
   const projectGroup = (p: ProjectView, subs: readonly ProjectView[]) => {
     const open = !collapsed.has(p.id)
     return (
@@ -388,9 +391,11 @@ export function App() {
         {open ? (
           <>
             {(groups.byProject.get(p.id) ?? []).map((w) => workItem(w, false))}
-            <button className="new-work" onClick={() => setDialog({ kind: 'work', project: p })}>
-              새 Work
-            </button>
+            {p.parent ? null : (
+              <button className="new-work" onClick={() => setDialog({ kind: 'work', project: p })}>
+                새 Work
+              </button>
+            )}
             {subs.map((s) => projectGroup(s, []))}
           </>
         ) : null}
@@ -424,10 +429,12 @@ export function App() {
   // 머지 뒤 정리 창 (D178, D200): 머지로 완료한 Work를 보고 있으면 한 번 연다. 앱에서 머지했거나 밖에서 머지된 것을
   // 읽었을 때, 다른 Work를 보고 있었으면 그 Work를 고를 때다. 연 것을 main에 알려 다시 열지 않는다
   useEffect(() => {
-    if (!work?.pr?.offerClean || dialog !== null || offered.current.has(work.key)) return
+    // PR 카드가 여럿이면 머지한 카드 하나로 연다 (D480). Work가 완료돼야 offerClean이다
+    const card = work ? prCards(work).find((c) => c.offerClean) : undefined
+    if (!work || !card || dialog !== null || offered.current.has(work.key)) return
     offered.current.add(work.key)
     setDialog({ kind: 'clean', workKey: work.key })
-    void call(() => window.relay.prCleanOffered(work.key))
+    void call(() => window.relay.prCleanOffered(work.key, card.repo || undefined))
   }, [work, dialog])
 
   const wide =
@@ -905,8 +912,8 @@ export function App() {
       ) : null}
       {dialog?.kind === 'work' ? (
         <NewWorkDialog
-          project={dialog.project}
-          projects={projects}
+          // 서브모듈 프로젝트의 Work에서 쓴 초안도 메인 프로젝트의 새 Work로 연다 (D483)
+          project={projects.find((p) => p.id === dialog.project.parent?.id) ?? dialog.project}
           {...(dialog.draft ? { draft: dialog.draft } : {})}
           {...(draftOrigin ? { origin: draftOrigin } : {})}
           onClose={() => setDialog(null)}

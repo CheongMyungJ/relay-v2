@@ -175,6 +175,11 @@ export interface RespondInput {
   /** 이번 라운드의 항목. [대응 시작]을 누른 때의 차례다 */
   items: readonly PrItem[]
   previous: readonly PreviousRound[]
+  /**
+   * 묶음 Work의 서브모듈 PR 카드 (D480): 그 서브모듈의 경로와 머지 대상. 메인 PR이면 없다. 이 라운드는 그 서브모듈만
+   * 고친다
+   */
+  repo?: { path: string; base: string }
 }
 
 export interface ContextInput {
@@ -570,6 +575,12 @@ function respondSection(r: RespondInput, base: string): [string, string] {
     [
       `PR #${r.pr.number}의 대응 라운드 ${r.round}다. 아래 항목과 사람 지시에 대응한다. 고친 것은 커밋하고, 코멘트 항목마다 ` +
         `\`${REPLIES_FILE}\`에 답글 초안을 쓰고, 항목별 결과를 \`${RESPONSE_FILE}\`에 쓴다. push와 답글 게시는 승인 뒤 앱이 한다.`,
+      ...(r.repo
+        ? [
+            '',
+            `이 PR은 서브모듈 \`${r.repo.path}\`의 PR이다(묶음 Work, D480). 지금 폴더 안의 \`${r.repo.path}/\`에서 고치고 그 레포에 커밋한다. git 명령(병합, 커밋)도 그 폴더에서 한다(\`git -C ${r.repo.path} …\`). 다른 레포는 고치지 않는다.`,
+          ]
+        : []),
       '',
       '### PR',
       '',
@@ -607,7 +618,9 @@ export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
   const type = workType(work)
-  const entry = input.respond ? respondSection(input.respond, targetBranch(work)) : null
+  const entry = input.respond
+    ? respondSection(input.respond, input.respond.repo?.base ?? targetBranch(work))
+    : null
   const custom = customTypeSection(work, task)
   const typeName =
     type === 'custom' && work.custom_type

@@ -36,6 +36,7 @@ import {
   respondStart,
   respondTasks,
 } from './respond'
+import { linkWaiting, linkWaitingReason, relinkReason } from './repos'
 import { TASK_STATUS_LABEL, taskLabel } from './review'
 
 const short = (commit: string) => commit.slice(0, 8)
@@ -777,11 +778,17 @@ export interface Gate {
 }
 
 export interface GateInput {
-  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'>
+  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks'> &
+    Partial<Pick<WorkState, 'repos' | 'lens'>>
   read: PrReadState | null
   items: readonly PrItem[]
   /** 로컬 Work 브랜치의 커밋. 읽지 못했으면 null */
   localHead: string | null
+  /**
+   * 묶음 Work의 메인 PR이 가리키는 서브모듈 커밋이 그 서브모듈의 머지 대상에 없는 서브모듈 (D481): 그 PR을 squash·rebase로
+   * 머지해 커밋 id가 바뀌었다. [서브모듈 커밋 맞추기]로 맞추기 전에는 머지하지 않는다. 없으면 빈 목록이다
+   */
+  relink?: readonly string[]
 }
 
 const CI_REASON: Readonly<Record<CiState, string | null>> = {
@@ -816,6 +823,11 @@ export function mergeGate(g: GateInput): Gate {
   if (work.operation) reasons.push('진행 중인 작업이 있음')
   if (pr.closed_at) reasons.push('PR이 닫혀 있음')
   if (pendingRespond(work)) reasons.push('돌거나 기다리는 PR 대응 task가 있음')
+  // 메인 PR은 메인이 새 커밋을 가리키게 한 서브모듈의 PR이 먼저 머지되고, 머지된 커밋을 가리켜야 머지한다 (D481)
+  if (!work.lens) {
+    for (const p of linkWaiting(work)) reasons.push(linkWaitingReason(p))
+    for (const p of g.relink ?? []) reasons.push(relinkReason(p))
+  }
   if (!read) {
     reasons.push('아직 PR을 읽지 못함')
     return { enabled: false, reasons }
@@ -1052,7 +1064,10 @@ const STATUS_ORDER: readonly PrItemStatus[] = [
 ]
 
 export interface PrViewInput {
-  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'>
+  work: Pick<WorkState, 'status' | 'operation' | 'pr' | 'tasks' | 'settings'> &
+    Partial<Pick<WorkState, 'repos' | 'lens'>>
+  /** 메인 PR이 머지된 서브모듈 커밋을 가리키지 않는 서브모듈 (D481, GateInput.relink) */
+  relink?: readonly string[]
   /** 앱 설정: 자동 대응의 상태 (D154, D169, D171) */
   config: Pick<AppConfig, 'respond_auto_start' | 'respond_auto_round_max' | 'auto_approve'> &
     Partial<Pick<AppConfig, 'agent_engine' | 'agent_steps'>>
@@ -1082,6 +1097,7 @@ export function prView(input: PrViewInput): PrView | null {
     read,
     items: input.file.items,
     localHead: input.localHead,
+    ...(input.relink ? { relink: input.relink } : {}),
   })
   const items = [...input.file.items]
     .sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status))
@@ -1089,6 +1105,8 @@ export function prView(input: PrViewInput): PrView | null {
   // 앱이 머지했으면 마지막으로 읽은 것(머지 전)보다 기록이 새것이다
   const state = pr.merged ? 'MERGED' : (read?.state ?? null)
   return {
+    repo: input.work.lens ?? '',
+    relink: [...(input.relink ?? [])],
     number: pr.number,
     url: pr.url,
     head: pr.head,

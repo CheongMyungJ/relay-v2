@@ -534,6 +534,12 @@ export class Relay {
       branchRule: p.branch_rule ?? DEFAULT_BRANCH_RULE,
       branchSlug: ruleHasSlug(p.branch_rule ?? DEFAULT_BRANCH_RULE),
       parent: p.parent ? { id: p.parent.project_id, path: p.parent.path } : null,
+      submodules: Object.fromEntries(
+        Object.entries(p.submodules ?? {}).map(([path, v]) => [
+          path,
+          { allowedBots: v.allowed_bots ?? [], mergeMethod: v.merge_method ?? null },
+        ]),
+      ),
     }))
   }
 
@@ -715,6 +721,11 @@ export class Relay {
         ...(r.value.branch_rule === undefined
           ? {}
           : { branch_rule: r.value.branch_rule || undefined }),
+        ...(r.value.submodules === undefined
+          ? {}
+          : {
+              submodules: Object.keys(r.value.submodules).length ? r.value.submodules : undefined,
+            }),
       }))
       await Promise.all(
         [...this.works.values()]
@@ -1604,19 +1615,19 @@ export class Relay {
   // ---------- PR 진행 (시나리오 10) ----------
 
   /** PR 패널의 [새로 고침] (D158) */
-  prRefresh(workKey: string): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.refreshPr())
+  prRefresh(workKey: string, repo = ''): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.refreshPr(repo))
   }
 
   /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170) */
-  prItem(workKey: string, itemId: string, action: PrItemAction): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.prItem(itemId, action))
+  prItem(workKey: string, itemId: string, action: PrItemAction, repo = ''): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prItem(itemId, action, repo))
   }
 
   /** 머지 창을 열 때 (D176, D177) */
-  async prMergeInfo(workKey: string): Promise<MergeInfoResult> {
+  async prMergeInfo(workKey: string, repo = ''): Promise<MergeInfoResult> {
     const runner = this.works.get(workKey)
-    return runner ? runner.prMergeInfo() : { ok: false, error: 'Work가 없습니다' }
+    return runner ? runner.prMergeInfo(repo) : { ok: false, error: 'Work가 없습니다' }
   }
 
   /** 머지 창의 [머지] (D176) */
@@ -1625,13 +1636,13 @@ export class Relay {
   }
 
   /** [머지 없이 끝내기] (D179) */
-  prEnd(workKey: string): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.prEnd())
+  prEnd(workKey: string, repo = ''): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prEnd(repo))
   }
 
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */
-  prCleanOffered(workKey: string): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.prCleanOffered())
+  prCleanOffered(workKey: string, repo = ''): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.prCleanOffered(repo))
   }
 
   /** PR 패널의 [대응 시작] (시나리오 10-3) */
@@ -1639,9 +1650,14 @@ export class Relay {
     return this.withWork(workKey, (w) => w.respond(input))
   }
 
+  /** 메인 PR 카드의 [서브모듈 커밋 맞추기] (D481) */
+  prRelink(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.relinkSubmodules())
+  }
+
   /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
-  prRerun(workKey: string): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.rerunChecks())
+  prRerun(workKey: string, repo = ''): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.rerunChecks(repo))
   }
 
   /** 이슈 기록의 [다시 시도] (D344): 남은 게시를 앞부터 다시 한다 */

@@ -187,21 +187,53 @@ export function ProjectSettingsDialog({
   const [method, setMethod] = useState<MergeMethod | null>(project.mergeMethod)
   const [issueLog, setIssueLog] = useState(project.issueLog)
   const [branchRule, setBranchRule] = useState(project.branchRule)
+  // 서브모듈마다의 받을 봇과 기본 머지 방식 (D483). 메인 프로젝트에서만 보인다. 비우면 메인의 값을 쓴다
+  const [subPaths, setSubPaths] = useState<string[]>([])
+  const [subs, setSubs] = useState<Record<string, { bots: string; method: MergeMethod | null }>>(
+    () =>
+      Object.fromEntries(
+        Object.entries(project.submodules).map(([p, v]) => [
+          p,
+          { bots: v.allowedBots.join(', '), method: v.mergeMethod },
+        ]),
+      ),
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (project.parent) return
+    let live = true
+    void window.relay.submodules(project.id).then((list) => {
+      if (live) setSubPaths(list.map((s) => s.path))
+    })
+    return () => {
+      live = false
+    }
+  }, [project.id, project.parent])
 
   const save = async () => {
     setBusy(true)
     setError(null)
     const r = await call(() =>
       window.relay.updateProjectSettings(project.id, {
-        allowed_bots: bots
-          .split(/[\n,]/)
-          .map((b) => b.trim())
-          .filter(Boolean),
+        allowed_bots: botList(bots),
         merge_method: method,
         issue_log: issueLog,
         branch_rule: branchRule,
+        ...(project.parent
+          ? {}
+          : {
+              submodules: Object.fromEntries(
+                Object.entries(subs).map(([p, v]) => [
+                  p,
+                  {
+                    allowed_bots: botList(v.bots),
+                    ...(v.method ? { merge_method: v.method } : {}),
+                  },
+                ]),
+              ),
+            }),
       }),
     )
     setBusy(false)
@@ -275,6 +307,60 @@ export function ProjectSettingsDialog({
         임의의 영문·숫자 4자를 붙입니다. 비우면 relay/{'{work-id}'}입니다. 바꾸면 다음에 만드는
         Work부터 따릅니다 (D426, D427).
       </div>
+      {subPaths.length ? (
+        <div className="form-col">
+          <span>서브모듈별 설정</span>
+          <table className="repo-table">
+            <thead>
+              <tr>
+                <th>서브모듈</th>
+                <th>받을 봇</th>
+                <th>기본 머지 방식</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subPaths.map((p) => {
+                const v = subs[p] ?? { bots: '', method: null }
+                const put = (next: Partial<typeof v>) =>
+                  setSubs((s) => ({ ...s, [p]: { ...v, ...next } }))
+                return (
+                  <tr key={p}>
+                    <td>{p}</td>
+                    <td>
+                      <input
+                        aria-label={`${p} 받을 봇`}
+                        value={v.bots}
+                        placeholder="메인과 같음"
+                        onChange={(e) => put({ bots: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`${p} 기본 머지 방식`}
+                        value={v.method ?? ''}
+                        onChange={(e) =>
+                          put({ method: (e.target.value || null) as MergeMethod | null })
+                        }
+                      >
+                        <option value="">메인과 같음</option>
+                        {(Object.keys(METHOD_LABEL) as MergeMethod[]).map((m) => (
+                          <option key={m} value={m}>
+                            {METHOD_LABEL[m]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <span className="dim">
+            Work에서 함께 고친 서브모듈의 PR 카드에 씁니다. 받을 봇은 쉼표로 나눠 적습니다. 비우면
+            위의 메인 값을 씁니다 (D483).
+          </span>
+        </div>
+      ) : null}
       <div className="dim">
         gh {project.ghVersion ?? '버전 모름'} · origin {project.origin ? '있음' : '없음'} · gh
         로그인 {project.gh ? '됨' : '안 됨'}
@@ -288,6 +374,14 @@ export function ProjectSettingsDialog({
       </div>
     </Modal>
   )
+}
+
+/** 받을 봇 칸: 줄이나 쉼표로 나눈 이름 */
+function botList(text: string): string[] {
+  return text
+    .split(/[\n,]/)
+    .map((b) => b.trim())
+    .filter(Boolean)
 }
 
 /** 이슈 번호 칸 (D338): 비었으면 null(새 이슈), 앞의 #은 뗀다. 1 이상의 정수가 아니면 undefined */
@@ -465,21 +559,18 @@ export interface DraftOrigin {
 }
 
 /**
- * 새 Work: 대상, 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
- * 서브모듈이 있는 레포는 대상으로 서브모듈 하나를 고를 수 있고, 그러면 메인 통합 검증 worktree를 고른다 (D413, D414)
+ * 새 Work: 유형, 요청, 기준 브랜치, 기준 위치 (시나리오 1). 유형을 고르기 전에는 [시작]이 꺼져 있다 (D236).
+ * 서브모듈이 있는 레포는 레포 표에서 고칠 레포를 고른다 (D470, D472). 서브모듈 프로젝트의 새 Work는 없다 (D483)
  */
 export function NewWorkDialog({
-  project,
-  projects,
+  project: target,
   draft,
   origin,
   onClose,
   onCreated,
 }: {
-  /** 연 프로젝트. 서브모듈 프로젝트면 그 서브모듈이 대상으로 골라져 있다 */
+  /** 연 프로젝트. 메인 프로젝트다 (D483) */
   project: ProjectView
-  /** 등록된 프로젝트. 대상의 메인 프로젝트와 서브모듈 프로젝트를 찾는다 */
-  projects: readonly ProjectView[]
   /**
    * 채울 Work 초안 (D404). 지식 정리 후보처럼 칸을 채우고(D393), 맞는 칸만 채운다. 만들면 main이 그 초안을 지운다
    */
@@ -489,21 +580,6 @@ export function NewWorkDialog({
   onClose: () => void
   onCreated: (workKey: string) => void
 }) {
-  const mainId = project.parent?.id ?? project.id
-  const main = projects.find((p) => p.id === mainId) ?? project
-  const [targetId, setTargetId] = useState(project.id)
-  // 고를 때 만든 서브모듈 프로젝트. 스냅샷의 프로젝트 목록보다 먼저 올 수 있다
-  const [prepared, setPrepared] = useState<ProjectView | null>(null)
-  const target =
-    projects.find((p) => p.id === targetId) ?? (prepared?.id === targetId ? prepared : project)
-  const [submodules, setSubmodules] = useState<SubmoduleView[]>([])
-  // 고른 서브모듈을 준비하는 중(받기, 서브모듈 프로젝트 만들기)이면 그 경로 (D413)
-  const [preparing, setPreparing] = useState<string | null>(null)
-  const [integrate, setIntegrate] = useState(true)
-  const [mainBranches, setMainBranches] = useState<string[]>([main.defaultBranch])
-  const [mainBranch, setMainBranch] = useState(main.defaultBranch)
-  // 메인 레포의 기준 위치. 메인 레포에 origin이 없을 수 있어 Work의 기준 위치와 따로 고른다 (D414)
-  const [mainLocation, setMainLocation] = useState<'local' | 'remote'>('local')
   const [type, setType] = useState<WorkType | null>(draft?.type ?? null)
   // 커스텀 유형의 id와 이 대상에서 고를 수 있는 유형 (D451, D460)
   const [customId, setCustomId] = useState<string | null>(draft?.customType ?? null)
@@ -517,8 +593,8 @@ export function NewWorkDialog({
     setCustomAuto({})
   }
   const [request, setRequest] = useState(draft?.request ?? '')
-  const [branches, setBranches] = useState<string[]>([project.defaultBranch])
-  const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? project.defaultBranch)
+  const [branches, setBranches] = useState<string[]>([target.defaultBranch])
+  const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? target.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
   // 머지 대상 (D428). null이면 기준 브랜치를 따른다
   const [mergeTarget, setMergeTarget] = useState<string | null>(null)
@@ -579,7 +655,6 @@ export function NewWorkDialog({
 
   // 레포 표 (D472): 메인 기준 브랜치의 커밋에 있는 서브모듈. 기준을 바꾸면 다시 읽고, 없어진 서브모듈은 고른 것에서 뺀다
   useEffect(() => {
-    if (target.parent) return
     let current = true
     void window.relay.bundleRepos(target.id, branch, location).then((list) => {
       if (!current) return
@@ -591,7 +666,7 @@ export function NewWorkDialog({
     return () => {
       current = false
     }
-  }, [target.id, target.parent, branch, location])
+  }, [target.id, branch, location])
 
   /** 레포 표의 [고침] (D472): 고르면 앱이 메인 체크아웃에 받고(받지 않았으면) 기준 브랜치를 읽는다 */
   const pickRepo = async (subPath: string, on: boolean) => {
@@ -624,14 +699,7 @@ export function NewWorkDialog({
   const pickedList = Object.entries(picked)
   const pickedBusy = pickedList.some(([, r]) => !r.view && !r.error)
   const pickedBad = pickedList.some(([, r]) => r.error !== null)
-  const bundle = !target.parent && (pickedList.length > 0 || !editMain)
-
-  useEffect(() => {
-    void window.relay.submodules(mainId).then(setSubmodules)
-    void window.relay.branches(mainId).then((list) => {
-      if (list.length) setMainBranches(list)
-    })
-  }, [mainId])
+  const bundle = pickedList.length > 0 || !editMain
 
   // 규칙으로 채운 작업 브랜치 이름 (D426). 유형을 고르기 전에는 {type}을 모르므로 채우지 않는다. main이 git과 Work
   // 폴더를 읽으므로 짧은 이름을 치는 동안은 기다렸다가 한 번 묻는다
@@ -653,43 +721,6 @@ export function NewWorkDialog({
       clearTimeout(timer)
     }
   }, [target.id, type, slug, customId])
-
-  // 대상을 바꾸면 기준 브랜치를 그 레포의 기본 브랜치로 되돌린다 (D413)
-  const pickTarget = (next: ProjectView) => {
-    if (next.id === target.id) return
-    setTargetId(next.id)
-    setBranches([next.defaultBranch])
-    setBranch(next.defaultBranch)
-    setMergeTarget(null)
-    // 브랜치 이름과 짧은 이름은 그 레포의 규칙과 work-id로 다시 채운다
-    setEdited(null)
-    setSlug('')
-    if (!next.origin) setLocation('local')
-    // 이슈 번호는 그 레포의 이슈다. 다른 레포로 옮기지 않는다
-    setIssue('')
-  }
-  const chooseTarget = async (value: string) => {
-    setError(null)
-    if (value === main.id) return pickTarget(main)
-    const sub = submodules.find((m) => m.path === value)
-    if (!sub) return
-    const known = sub.projectId ? projects.find((p) => p.id === sub.projectId) : undefined
-    if (known) return pickTarget(known)
-    setPreparing(sub.path)
-    const r = await call(() => window.relay.prepareSubmodule(mainId, sub.path))
-    setPreparing(null)
-    if (!r.ok) {
-      setError(r.error)
-      return
-    }
-    if (!r.project) return
-    const made = r.project
-    setSubmodules((list) =>
-      list.map((m) => (m.path === sub.path ? { ...m, initialized: true, projectId: made.id } : m)),
-    )
-    setPrepared(made)
-    pickTarget(made)
-  }
 
   // 기준이 바뀌면 그 기준의 지식 정리 후보를 다시 찾는다 (D393). 후보로 채운 요청을 고치지 않았으면 새 기준의 후보로
   // 바꾼다(앞 기준의 후보로 다른 브랜치에서 시작하지 않게)
@@ -747,9 +778,6 @@ export function NewWorkDialog({
         ...(edited !== null ? { branchName: edited } : {}),
         ...(hasSlug && slug.trim() ? { slug } : {}),
         ...(mergeTarget !== null ? { targetBranch: mergeTarget } : {}),
-        ...(target.parent && integrate
-          ? { integration: { baseBranch: mainBranch, baseLocation: mainLocation } }
-          : {}),
         // 묶음 Work (D470): 고른 서브모듈과 그 기준, 메인 레포를 고치지 않으면 editMain: false
         ...(bundle
           ? {
@@ -774,7 +802,6 @@ export function NewWorkDialog({
   }
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
-  const sub = target.parent ? target : null
   const hasSlug = target.branchSlug
   const shownTarget = mergeTarget ?? branch
   const chosenCustom =
@@ -783,7 +810,7 @@ export function NewWorkDialog({
       : undefined
 
   return (
-    <Modal title={`새 Work · ${sub ? `${main.name}/${sub.name}` : main.name}`} onClose={onClose}>
+    <Modal title={`새 Work · ${target.name}`} onClose={onClose}>
       {draft ? (
         <div className="notice">
           Work 초안 <code>{draft.ref.name}</code>으로 채웠습니다. 고친 뒤 [시작]을 누르면 Work를
@@ -800,90 +827,6 @@ export function NewWorkDialog({
           overwrites={request.trim() !== '' && request !== filledText}
           onUse={applyTidy}
         />
-      ) : null}
-      {sub ? (
-        <label className="field">
-          대상
-          <select
-            aria-label="대상"
-            value={preparing ?? sub?.parent?.path ?? main.id}
-            disabled={preparing !== null || busy}
-            onChange={(e) => void chooseTarget(e.target.value)}
-          >
-            <option value={main.id}>{main.name} (메인 레포)</option>
-            {submodules.map((m) => (
-              <option key={m.path} value={m.path}>
-                {m.path} (서브모듈{m.initialized ? '' : ', 고르면 메인 체크아웃에 받습니다'})
-              </option>
-            ))}
-          </select>
-          {preparing ? <span className="dim">서브모듈 {preparing} 준비 중…</span> : null}
-          {sub ? (
-            <span className="dim">
-              이 Work는 서브모듈 레포만 고치고 전달합니다(push, PR). 메인 레포는 고치지 않습니다.
-            </span>
-          ) : null}
-        </label>
-      ) : null}
-      {sub ? (
-        <div className="row">
-          <label className="toggle">
-            <input
-              type="checkbox"
-              aria-label="메인 레포에서 통합 검증"
-              checked={integrate}
-              onChange={(e) => setIntegrate(e.target.checked)}
-            />
-            메인 레포에서 통합 검증
-          </label>
-          {integrate ? (
-            <label className="field">
-              메인 기준 브랜치
-              <select
-                aria-label="메인 기준 브랜치"
-                value={mainBranch}
-                onChange={(e) => setMainBranch(e.target.value)}
-              >
-                {mainBranches.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {integrate ? (
-            <fieldset className="field">
-              <legend>메인 기준 위치</legend>
-              <label>
-                <input
-                  type="radio"
-                  checked={mainLocation === 'local'}
-                  onChange={() => setMainLocation('local')}
-                />
-                로컬
-              </label>
-              <label
-                title={
-                  main.origin ? 'git fetch 뒤 origin/<브랜치>' : '메인 레포에 origin 원격이 없음'
-                }
-              >
-                <input
-                  type="radio"
-                  disabled={!main.origin}
-                  checked={mainLocation === 'remote'}
-                  onChange={() => setMainLocation('remote')}
-                />
-                원격
-              </label>
-            </fieldset>
-          ) : null}
-          <span className="dim">
-            {integrate
-              ? '메인 레포의 worktree를 함께 만들고 그 안의 서브모듈 자리에서 일합니다. 메인 쪽 변경은 전달하지 않습니다.'
-              : '서브모듈 레포만으로 빌드하고 테스트합니다.'}
-          </span>
-        </div>
       ) : null}
       <div className="field">
         유형
@@ -947,9 +890,9 @@ export function NewWorkDialog({
           </label>
         </fieldset>
       </div>
-      {!sub && bundleSubs.length > 0 ? (
+      {bundleSubs.length > 0 ? (
         <RepoTable
-          main={main.name}
+          main={target.name}
           editMain={editMain}
           onEditMain={setEditMain}
           subs={bundleSubs}
@@ -1069,7 +1012,6 @@ export function NewWorkDialog({
           className="primary"
           disabled={
             busy ||
-            preparing !== null ||
             !type ||
             !request.trim() ||
             (type === 'custom' && !chosenCustom) ||

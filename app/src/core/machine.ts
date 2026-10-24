@@ -57,7 +57,7 @@ import {
 import { canClean } from './cleanup'
 import { mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
-import { repoTarget } from './repos'
+import { cardDone, focusLane, laneOf, prCards, repoTarget, unfocusLane } from './repos'
 import {
   NODE_INFO,
   RESPOND,
@@ -78,6 +78,7 @@ import {
   autoStartOn,
   deferredRounds,
   isRespondPending,
+  pendingRespond,
   nextRound,
   respondBlocked,
 } from './respond'
@@ -281,6 +282,11 @@ export interface Resume extends TaskEvent {
 
 interface WorkEvent {
   at: string
+  /**
+   * 묶음 Work의 서브모듈 PR 카드 (D480): PR 진행의 이벤트(pr.read, pr.merge, pr.end, pr.cleanOffered, pr.respond,
+   * pr.autoPaused, pr.checksRerun)면 그 레포의 경로다. 메인 PR이면 없다. 전이는 그 레포를 메인 자리에 둔 렌즈로 한다 (I174)
+   */
+  repo?: string
 }
 
 /** [이 단계 끝나면 멈춤]을 켜거나 끈다 (시나리오 3-4) */
@@ -304,7 +310,7 @@ export interface SetTarget extends WorkEvent {
  */
 export interface RepoAdded extends WorkEvent {
   type: 'repo.added'
-  repo: WorkRepo
+  added: WorkRepo
 }
 
 /** 보관된 Work를 사이드바의 공통 아카이브로 옮긴다. 기록과 산출물은 그대로 둔다 */
@@ -654,6 +660,16 @@ export interface PrChecksRerun extends WorkEvent {
   checks: readonly string[]
 }
 
+/**
+ * [서브모듈 커밋 맞추기] (D481): 메인이 squash·rebase로 머지된 서브모듈 PR의 머지 커밋을 가리키게 하는 커밋을 메인 작업
+ * 브랜치에 더하고 push했다. 기록만 남긴다: 메인 PR의 새 head는 다음 읽기가 적는다
+ */
+export interface PrRelinked extends WorkEvent {
+  type: 'pr.relinked'
+  links: { path: string; sha: string }[]
+  commit: string
+}
+
 // ---------- 이슈 기록 (설계 3.7, I97, I98) ----------
 
 /** 대기열 맨 앞(key)을 게시하려 한다 (D349). 결과를 모를 수 있어 다음 시도는 원격에서 표시를 먼저 찾는다 */
@@ -752,6 +768,7 @@ export type MachineEvent =
   | RespondDeferred
   | RespondFailed
   | PrChecksRerun
+  | PrRelinked
   | IssueAttempted
   | IssueCreated
   | IssuePosted
@@ -1326,9 +1343,56 @@ const BLOCKED_BY_OPERATION: readonly MachineEvent['type'][] = [
 ]
 
 export function transition(work: WorkState, event: MachineEvent, config: AppConfig): Transition {
-  return queueIssue(
-    withEngines(work, countdownEffects(work, dispatch(work, event, config)), config),
-  )
+  const lane = eventLane(work, event)
+  const run = (w: WorkState) =>
+    queueIssue(withEngines(w, countdownEffects(w, dispatch(w, event, config)), config))
+  if (!lane) return settleCards(work, run(work))
+  // 서브모듈 PR 카드는 그 레포를 메인 자리에 둔 렌즈로 메인 PR과 같은 전이를 한다 (D480, I174)
+  const r = run(focusLane(work, lane))
+  return settleCards(work, { ...r, work: unfocusLane(work, r.work, lane) })
+}
+
+/**
+ * 이벤트의 PR 카드 (D480, I174): PR 진행의 이벤트에 적힌 레포, 진행 중인 머지나 대응의 push·게시(그 다음 이벤트와 끊긴
+ * 작업의 [다시 시도]·[무시] 포함)의 레포, 서브모듈 카드의 대응 task에 오는 이벤트면 그 task의 레포다. 아니면 메인('')이다
+ */
+function eventLane(work: WorkState, event: MachineEvent): string {
+  if (!work.repos?.length) return ''
+  if ('repo' in event && event.repo) return event.repo
+  const op = work.operation
+  const opLane = op?.kind === 'merge' || op?.kind === 'respond' ? (op.repo ?? '') : ''
+  switch (event.type) {
+    case 'pr.merged':
+    case 'pr.mergeFailed':
+    case 'respond.pushed':
+    case 'respond.published':
+    case 'respond.deferred':
+    case 'respond.failed':
+    case 'operationRetry':
+    case 'operationIgnore':
+      return opLane
+  }
+  if ('taskId' in event) {
+    const task = work.tasks.find((t) => t.id === event.taskId)
+    if (task?.node === RESPOND) return laneOf(task)
+  }
+  return ''
+}
+
+/**
+ * PR 카드가 여럿인 Work의 상태 (D480): 카드 하나가 머지되거나 끝나도 다른 카드가 남았으면 PR 진행이다. 전이가 완료로 바꿨으면
+ * PR 진행으로 되돌리고 work.completed를 남기지 않는다. 마지막 카드가 끝나면 완료다
+ */
+function settleCards(before: WorkState, r: Transition): Transition {
+  const cards = prCards(r.work)
+  if (cards.length < 2 || r.work.status !== 'completed' || before.status !== 'pr') return r
+  if (cards.every((c) => cardDone(c.pr))) return r
+  const next: WorkState = { ...omit(r.work, 'completed_at'), status: 'pr' }
+  return {
+    ...r,
+    work: next,
+    effects: r.effects.filter((e) => !(e.type === 'log' && e.event.type === 'work.completed')),
+  }
 }
 
 /**
@@ -1434,6 +1498,18 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return respondFailed(work, event)
     case 'pr.checksRerun':
       return prChecksRerun(work, event)
+    case 'pr.relinked':
+      return work.status === 'pr' && work.pr
+        ? {
+            work,
+            effects: [
+              log(work, event.at, 'pr.relinked', {
+                links: event.links.map((l) => ({ ...l })),
+                commit: event.commit,
+              }),
+            ],
+          }
+        : unchanged(work)
     case 'issue.attempted':
     case 'issue.created':
     case 'issue.posted':
@@ -1488,6 +1564,7 @@ type TaskMachineEvent = Exclude<
   | RespondDeferred
   | RespondFailed
   | PrChecksRerun
+  | PrRelinked
   | IssueAttempted
   | IssueCreated
   | IssuePosted
@@ -2085,8 +2162,8 @@ function repoAdded(work: WorkState, e: RepoAdded): Transition {
     return unchanged(work, '진행 중이거나 멈춘 Work에만 레포를 더함')
   }
   if (work.integration) return unchanged(work, '서브모듈 Work에는 레포를 더하지 않음')
-  if (work.repos?.some((r) => r.path === e.repo.path)) return unchanged(work, '이미 고른 레포임')
-  const repo: WorkRepo = { ...e.repo, added_at: e.at }
+  if (work.repos?.some((r) => r.path === e.added.path)) return unchanged(work, '이미 고른 레포임')
+  const repo: WorkRepo = { ...e.added, added_at: e.at }
   const next: WorkState = { ...work, repos: [...(work.repos ?? []), repo] }
   return {
     work: next,
@@ -2447,7 +2524,17 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
     ...(e.draft === undefined ? {} : { draft: e.draft }),
     ...deliveryBackups(work.delivery, op),
   }
-  const rest = omit(work, 'operation', 'stop', 'stop_after_step')
+  const linked = main ? (op.link ?? []) : []
+  const restBase = omit(work, 'operation', 'stop', 'stop_after_step')
+  // 메인이 새 커밋을 가리키게 한 서브모듈을 적는다: 메인 PR의 [머지]가 그 PR을 기다린다 (D481)
+  const rest: typeof restBase = linked.length
+    ? {
+        ...restBase,
+        repos: (restBase.repos ?? []).map((r) =>
+          linked.includes(r.path) ? { ...r, linked: true as const } : r,
+        ),
+      }
+    : restBase
   const payload: Record<string, unknown> = { ...delivery }
   delete payload['status']
   delete payload['at']
@@ -2926,8 +3013,8 @@ function prRead(work: WorkState, e: PrRead): Transition {
   if (e.state === 'MERGED') {
     const merged: PrMerged = { at: e.at, head: e.head, method: null, outside: true }
     // 밖에서 머지됐으면 도는 PR 대응 task의 세션을 끝낸다: [머지]는 대응 task가 없을 때만 누른다 (D176, D179)
-    const task = currentTask(next)
-    const ended = task && isRespondPending(task) ? endTask(next, task, e.at, 'pr_merged') : null
+    const task = pendingRespond(next)
+    const ended = task ? endTask(next, task, e.at, 'pr_merged') : null
     if (ended) {
       next = withTask(next, ended.task)
       effects.push(...ended.effects)
@@ -2984,6 +3071,7 @@ function prMerge(work: WorkState, e: PrMerge): Transition {
     started_at: e.at,
     method: e.method,
     head: e.head,
+    ...(work.lens ? { repo: work.lens } : {}),
   }
   return {
     work: { ...work, operation },
@@ -3032,8 +3120,8 @@ function prMergeFailed(work: WorkState, e: PrMergeFailed): Transition {
 function prEnd(work: WorkState, e: PrEnd): Transition {
   const pr = work.pr
   if (work.status !== 'pr' || !pr) return unchanged(work, 'PR 진행인 Work가 아님')
-  const task = currentTask(work)
-  if (task && isRespondPending(task) && (task.session?.alive || task.status === 'queued')) {
+  const task = pendingRespond(work)
+  if (task && (task.session?.alive || task.status === 'queued')) {
     return unchanged(work, 'PR 대응 task가 돌고 있음: 먼저 [즉시 중단]하세요')
   }
   const next: WorkState = {
@@ -3094,7 +3182,12 @@ function prRespond(work: WorkState, e: PrRespond, config: AppConfig): Transition
   }
   // 자동 시작은 사람 손 없이 이어진 라운드를 하나 더 세고, 사람의 [대응 시작]은 다시 센다 (D171)
   next = withRounds(next, e.auto ? autoRounds(work) + 1 : 0)
-  const respond: RespondRound = { round: nextRound(work), items: [...e.items], instruction }
+  const respond: RespondRound = {
+    round: nextRound(work),
+    items: [...e.items],
+    instruction,
+    ...(work.lens ? { repo: work.lens } : {}),
+  }
   const reason = e.auto ? 'auto_respond' : 'respond'
   const created: TaskRecord = { ...newTask(next, RESPOND, e.at, reason), respond }
   next = { ...next, tasks: [...next.tasks, created] }
@@ -3200,6 +3293,7 @@ function respondApproveNow(
     from: pr.head,
     ...(a.ignored ? { ignored: a.ignored } : {}),
     ...(a.by === 'auto' ? { by: 'auto' as const } : {}),
+    ...(task.respond.repo ? { repo: task.respond.repo } : {}),
   }
   effects.push({ type: 'respond', taskId: task.id, rounds: [...operation.rounds] })
   const counted = a.by === 'human' ? withRounds(work, 0) : work

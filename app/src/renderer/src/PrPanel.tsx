@@ -45,12 +45,15 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
   const [merging, setMerging] = useState(false)
   const [ending, setEnding] = useState(false)
   const [instruction, setInstruction] = useState('')
-  const active = work.status === 'pr'
+  // PR 카드가 여럿이면 머지했거나 끝낸 카드는 Work가 PR 진행이어도 끝났다 (D480)
+  const active = work.status === 'pr' && pr.merged === null && pr.ended === null
   const cut = work.operation !== null
   // 도는 PR 대응 task가 있으면 [머지 없이 끝내기] 전에 [즉시 중단]한다
   const current = work.tasks.find((t) => t.id === work.current)
   const respondLive = current?.node === 'respond' && (current.live || current.status === 'queued')
   const respondCount = pr.respond.items.length
+  // 서브모듈 PR 카드 (D480). 메인 PR이면 undefined다
+  const repo = pr.repo || undefined
 
   const run = async (
     label: string,
@@ -68,7 +71,9 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
     <div className="pr-panel" aria-label="PR 패널">
       <section className="pr-summary" aria-label="PR 요약">
         <div className="pr-title">
-          <strong>PR #{pr.number}</strong>
+          <strong>
+            {pr.repo ? `${pr.repo} · ` : ''}PR #{pr.number}
+          </strong>
           {pr.labels.state ? (
             <span className={`pr-state${pr.state ? ` ps-${pr.state.toLowerCase()}` : ''}`}>
               {pr.labels.state}
@@ -125,7 +130,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
           {active ? (
             <button
               disabled={!!busy || pr.reading || cut}
-              onClick={() => void run('새로 고침', () => window.relay.prRefresh(work.key))}
+              onClick={() => void run('새로 고침', () => window.relay.prRefresh(work.key, repo))}
             >
               새로 고침
             </button>
@@ -165,7 +170,11 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
               disabled={!!busy || !pr.respond.enabled || (!respondCount && !instruction.trim())}
               onClick={() =>
                 void run('대응 시작', () =>
-                  window.relay.prRespond(work.key, { items: pr.respond.items, instruction }),
+                  window.relay.prRespond(work.key, {
+                    items: pr.respond.items,
+                    instruction,
+                    ...(repo ? { repo } : {}),
+                  }),
                 ).then((ok) => {
                   if (ok) setInstruction('')
                 })
@@ -186,7 +195,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
               <button
                 disabled={!!busy || !pr.rerun.enabled}
                 onClick={() =>
-                  void run('실패한 체크 다시 실행', () => window.relay.prRerun(work.key))
+                  void run('실패한 체크 다시 실행', () => window.relay.prRerun(work.key, repo))
                 }
               >
                 실패한 체크 다시 실행
@@ -219,6 +228,17 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             >
               머지 없이 끝내기
             </button>
+            {pr.relink.length ? (
+              <button
+                disabled={!!busy || cut}
+                title="머지된 서브모듈 PR의 머지 커밋을 메인이 가리키게 하는 커밋을 더하고 push합니다 (D481)"
+                onClick={() =>
+                  void run('서브모듈 커밋 맞추기', () => window.relay.prRelink(work.key))
+                }
+              >
+                서브모듈 커밋 맞추기 ({pr.relink.join(', ')})
+              </button>
+            ) : null}
             {busy ? <span className="dim">{busy}: 하는 중…</span> : null}
           </div>
           {!pr.gate.enabled && pr.gate.reasons.length ? (
@@ -250,7 +270,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
                     busy={!!busy || !active || cut}
                     onAction={(action) =>
                       void run(ITEM_ACTION[i.status]?.[1] ?? '항목', () =>
-                        window.relay.prItem(work.key, i.id, action),
+                        window.relay.prItem(work.key, i.id, action, repo),
                       )
                     }
                   />
@@ -288,14 +308,14 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
 
       {pr.ghVersion ? <div className="dim">PR 진행을 시작할 때의 gh {pr.ghVersion}</div> : null}
 
-      {merging ? <MergeDialog work={work} onClose={() => setMerging(false)} /> : null}
+      {merging ? <MergeDialog work={work} pr={pr} onClose={() => setMerging(false)} /> : null}
       {ending ? (
         <ConfirmDialog
           title="머지 없이 끝내기"
           confirm="머지 없이 끝내기"
           onConfirm={() => {
             setEnding(false)
-            void run('머지 없이 끝내기', () => window.relay.prEnd(work.key))
+            void run('머지 없이 끝내기', () => window.relay.prEnd(work.key, repo))
           }}
           onClose={() => setEnding(false)}
         >
@@ -408,7 +428,8 @@ function Item({
  * 대응 라운드가 커밋을 push했거나 앱이 원격 커밋을 받았으면 "판정표는 대응 전 코드 기준"을 경고하고 verify의 판정표를
  * 함께 보인다 (D180, D206)
  */
-function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
+function MergeDialog({ work, pr, onClose }: { work: WorkView; pr: PrView; onClose: () => void }) {
+  const repo = pr.repo || undefined
   const [info, setInfo] = useState<MergeInfo | null>(null)
   const [method, setMethod] = useState<MergeMethod | null>(null)
   const [busy, setBusy] = useState(false)
@@ -416,7 +437,7 @@ function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void })
 
   useEffect(() => {
     let stale = false
-    void call(() => window.relay.prMergeInfo(work.key)).then((r) => {
+    void call(() => window.relay.prMergeInfo(work.key, repo)).then((r) => {
       if (stale) return
       if (r.ok) {
         setInfo(r.info)
@@ -426,20 +447,22 @@ function MergeDialog({ work, onClose }: { work: WorkView; onClose: () => void })
     return () => {
       stale = true
     }
-  }, [work.key])
+  }, [work.key, repo])
 
   const merge = async () => {
     if (!info || !method) return
     setBusy(true)
     setError(null)
-    const r = await call(() => window.relay.prMerge(work.key, { method, head: info.head }))
+    const r = await call(() =>
+      window.relay.prMerge(work.key, { method, head: info.head, ...(repo ? { repo } : {}) }),
+    )
     setBusy(false)
     if (r.ok) onClose()
     else setError(r.error)
   }
 
   return (
-    <Modal title={`머지 · PR #${work.pr?.number ?? ''}`} onClose={onClose}>
+    <Modal title={`머지 · ${pr.repo ? `${pr.repo} ` : ''}PR #${pr.number}`} onClose={onClose}>
       {!info ? (
         <div className="dim">{error ? null : '레포의 머지 방식을 읽는 중…'}</div>
       ) : (

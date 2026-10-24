@@ -245,21 +245,28 @@ export interface RelayApi {
   /** 비교 URL이나 PR 주소를 브라우저에서 연다 (7-4). http(s) 주소만 연다 */
   openExternal(url: string): Promise<void>
   /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽는다 (D179) */
-  prRefresh(workKey: string): Promise<CommandResult>
+  prRefresh(workKey: string, repo?: string): Promise<CommandResult>
   /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170) */
-  prItem(workKey: string, itemId: string, action: PrItemAction): Promise<CommandResult>
+  prItem(
+    workKey: string,
+    itemId: string,
+    action: PrItemAction,
+    repo?: string,
+  ): Promise<CommandResult>
   /** 머지 창을 열 때: 레포가 허용하는 방식과 기본 선택, 머지할 head (D176, D177) */
-  prMergeInfo(workKey: string): Promise<MergeInfoResult>
+  prMergeInfo(workKey: string, repo?: string): Promise<MergeInfoResult>
   /** 머지 창의 [머지] (D176). 창에 보인 head가 아니면 머지하지 않는다 */
   prMerge(workKey: string, input: MergeInput): Promise<CommandResult>
   /** [머지 없이 끝내기] (D179). GitHub의 PR은 건드리지 않는다 */
-  prEnd(workKey: string): Promise<CommandResult>
+  prEnd(workKey: string, repo?: string): Promise<CommandResult>
   /** 머지 뒤 정리 창을 열었다 (D178, D200). 다시 열지 않는다 */
-  prCleanOffered(workKey: string): Promise<CommandResult>
+  prCleanOffered(workKey: string, repo?: string): Promise<CommandResult>
   /** PR 패널의 [대응 시작] (시나리오 10-3, D170, D182). 사람이 본 새 항목과 사람 지시를 보낸다 */
   prRespond(workKey: string, input: RespondStartInput): Promise<CommandResult>
+  /** 메인 PR 카드의 [서브모듈 커밋 맞추기] (D481) */
+  prRelink(workKey: string): Promise<CommandResult>
   /** PR 패널의 [실패한 체크 다시 실행] (D175, D203) */
-  prRerun(workKey: string): Promise<CommandResult>
+  prRerun(workKey: string, repo?: string): Promise<CommandResult>
   /** 이슈 기록의 [다시 시도] (설계 3.7, D344) */
   issueRetry(workKey: string): Promise<CommandResult>
   /** 프로젝트 설정 (5.1.2, D185): 받을 봇과 기본 머지 방식, 이슈 기록(D337) */
@@ -364,6 +371,7 @@ export const IPC = {
   prCleanOffered: 'pr:clean-offered',
   prRespond: 'pr:respond',
   prRerun: 'pr:rerun',
+  prRelink: 'pr:relink',
   issueRetry: 'issue:retry',
   projectSettings: 'project:settings',
   workSettings: 'work:settings',

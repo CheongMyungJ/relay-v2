@@ -238,6 +238,8 @@ export interface RespondRound {
   published_at?: string
   /** 마지막으로 실패한 push나 답글 게시 (D120과 같은 방식). 승인 대기로 남고 다시 승인하면 이어서 한다 */
   failure?: { at: string; stage: RespondStage; error: string }
+  /** 묶음 Work에서 이 라운드의 PR 카드: 서브모듈 경로 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /** task의 CLI 세션 (시나리오 2-5). task를 띄우면 main이 알린다 */
@@ -500,6 +502,8 @@ export interface MergeOperation extends OperationBase {
   head: string
   /** gh pr merge는 성공했지만 머지됐는지 읽지 못했다 (D330). 끊긴 작업으로 남고 [다시 시도]가 확인한다 */
   unconfirmed?: true
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /**
@@ -523,6 +527,8 @@ export interface RespondOperation extends OperationBase {
   ignored?: FormatIssue[]
   /** 승인 방식 (4.3, D169). 없으면 사람 승인이다(M11 전의 기록) */
   by?: ApprovalBy
+  /** 묶음 Work의 서브모듈 PR 카드 (D480). 메인 PR이면 없다 */
+  repo?: string
 }
 
 /** 진행 중인 여러 단계 작업 (D77): 되감기, 전달, 정리, 머지, PR 대응의 push와 게시 */
@@ -668,6 +674,8 @@ export interface WorkRepo {
   delivery?: DeliveryRecord
   /** 이 레포의 PR 진행 기록 (D480) */
   pr?: PullRequestRecord
+  /** 메인이 이 레포의 새 커밋을 가리키게 했다 (D478). 메인 PR의 [머지]는 이 레포의 PR이 머지된 뒤다 (D481) */
+  linked?: true
 }
 
 /** 이슈를 닫는 까닭 (D346): Work를 끝냈다(completed), 하지 않고 끝냈다(not_planned) */
@@ -771,6 +779,11 @@ export interface WorkState {
    * 전달하지 않는다
    */
   main_fixed?: true
+  /**
+   * 서브모듈 PR 카드의 렌즈 (D480, I174): 그 레포를 메인 자리(pr, 기준 브랜치·커밋, 머지 대상, 전달)에 둔 모양의 표시다.
+   * 앱 안에서만 쓰고 work.json에 쓰지 않는다(core/repos unfocusLane이 뗀다)
+   */
+  lens?: string
   /** 승인된 intent. 의도 승인 전에는 null */
   intent: ApprovedIntent | null
   /** Work별 설정 (D72) */
@@ -828,6 +841,7 @@ export type LifecycleEventType =
   | 'pr.pushed'
   | 'pr.replied'
   | 'pr.checks_rerun'
+  | 'pr.relinked'
   | 'pr.merged'
   | 'pr.merge_unconfirmed'
   | 'pr.closed'

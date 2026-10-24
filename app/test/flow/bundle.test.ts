@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { taskDirName } from '../../src/core/machine'
+import { linkWaitingReason, relinkReason } from '../../src/core/repos'
 import type { WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
 import {
@@ -18,6 +19,7 @@ import {
   type Harness,
   workBranchOf,
 } from '../support/harness'
+import { FakeGitHub } from '../support/github'
 import { REQUEST, scenario, steps, type Scenario, type Step } from '../support/scenarios'
 
 let h: Harness | undefined
@@ -373,6 +375,195 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
       delivery: { choice: 'pr', status: 'succeeded' },
       repos: [{ path: 'lib', delivery: { choice: 'pr', status: 'succeeded', pr_url: libPr?.url } }],
     })
+  })
+
+  it('PR 카드마다 읽고 머지한다. 메인 PR은 서브모듈 PR을 기다리고, squash 머지 뒤 [서브모듈 커밋 맞추기]로 맞춘 뒤 머지한다 (D480, D481)', async () => {
+    const s = await setup(bundleScenario())
+    const w = await create(s)
+    await toVerify(s, w)
+    expect(
+      await s.h.relay.deliver(w.key, {
+        choice: 'pr',
+        uncommitted: null,
+        repos: [
+          { path: '', choice: 'pr' },
+          { path: 'lib', choice: 'pr', link: true },
+        ],
+      }),
+    ).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    expect(work(w).repos?.[0]).toMatchObject({ linked: true })
+    const gh = new FakeGitHub(path.join(s.h.root, 'record'), s.mainRemote, s.h.root)
+    const mainNo = work(w).pr?.number ?? 0
+    const libNo = work(w).repos?.[0]?.pr?.number ?? 0
+    const green = (n: number, head: string) => {
+      gh.setChecks(n, head, [gh.checkRun(n, {})])
+      gh.setMergeable(n, 'MERGEABLE')
+    }
+    const libHead = work(w).repos?.[0]?.pr?.head ?? ''
+    green(mainNo, work(w).pr?.head ?? '')
+    green(libNo, libHead)
+    const card = (repo: string) => {
+      const v = s.h.ui.works.get(w.key)
+      return repo ? v?.prs?.find((p) => p.repo === repo) : v?.pr
+    }
+    expect(await s.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    expect(await s.h.relay.prRefresh(w.key, 'lib')).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    // 카드마다 읽는다. 메인 PR은 lib PR이 먼저 머지되어야 한다 (D481)
+    expect(card('lib')).toMatchObject({ number: libNo, gate: { enabled: true } })
+    expect(card('')?.gate.reasons).toEqual([linkWaitingReason('lib')])
+    expect(s.h.ui.works.get(w.key)?.badge.kind).toBe('mergeable')
+    // 머지 창의 기본 방식은 카드의 레포 설정이다. 서브모듈 칸이 비면 메인의 값이다 (D483)
+    expect(
+      await s.h.relay.updateProjectSettings(s.mainId, {
+        allowed_bots: [],
+        merge_method: 'rebase',
+        submodules: { lib: { merge_method: 'squash' } },
+      }),
+    ).toEqual({ ok: true })
+    const preferred = async (repo?: string) => {
+      const info = await s.h.relay.prMergeInfo(w.key, repo)
+      return info.ok ? info.info.preferred : info.error
+    }
+    expect(await preferred('lib')).toBe('squash')
+    expect(await preferred()).toBe('rebase')
+
+    // lib PR을 squash로 머지한다: Work는 메인 카드가 남아 PR 진행이다
+    expect(
+      await s.h.relay.prMerge(w.key, { method: 'squash', head: libHead, repo: 'lib' }),
+    ).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    expect(work(w)).toMatchObject({
+      status: 'pr',
+      repos: [{ pr: { merged: { method: 'squash', outside: false } } }],
+    })
+    expect(work(w).completed_at).toBeUndefined()
+    // GitHub의 squash 머지: lib의 기준 브랜치에 새 커밋이 생겨 메인이 가리키는 커밋은 거기 없다
+    git(s.libSource, 'merge', '--squash', '-q', w.branch)
+    git(s.libSource, 'commit', '-q', '-m', 'lib: squash')
+    const squash = git(s.libSource, 'rev-parse', 'HEAD')
+    const prs = gh.prs().map((p) => (p.number === libNo ? { ...p, merge_commit: squash } : p))
+    fs.writeFileSync(path.join(s.h.root, 'record', 'prs.json'), JSON.stringify(prs, null, 2))
+    expect(await s.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    expect(card('')?.relink).toEqual(['lib'])
+    expect(card('')?.gate.reasons).toEqual([relinkReason('lib')])
+
+    // [서브모듈 커밋 맞추기]: 메인 작업 브랜치에 squash 커밋을 가리키는 커밋을 더하고 push한다
+    expect(await s.h.relay.prRelink(w.key)).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    const pushed = git(s.mainRemote, 'rev-parse', `refs/heads/${w.branch}`)
+    expect(git(s.mainRemote, 'ls-tree', pushed, 'lib')).toContain(squash)
+    expect(git(w.root, 'status', '--porcelain', '--', 'lib')).toBe('M lib')
+    green(mainNo, pushed)
+    expect(await s.h.relay.prRefresh(w.key)).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    expect(card('')).toMatchObject({ relink: [], head: pushed, gate: { enabled: true } })
+
+    // 메인 PR을 머지하면 마지막 카드라 Work가 완료다
+    expect(await s.h.relay.prMerge(w.key, { method: 'merge', head: pushed })).toEqual({
+      ok: true,
+    })
+    await settle(s.h, w.key)
+    expect(work(w)).toMatchObject({ status: 'completed', pr: { merged: { method: 'merge' } } })
+    const events = read(path.join(w.dir, 'events.jsonl'))
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as { type: string; payload: Record<string, unknown> })
+    expect(events.filter((e) => e.type === 'work.completed')).toHaveLength(1)
+    expect(events.find((e) => e.type === 'pr.relinked')?.payload).toMatchObject({
+      links: [{ path: 'lib', sha: squash }],
+    })
+  })
+
+  it('서브모듈 PR 카드의 [대응 시작]은 그 레포만 고치고 그 PR에 push하고 답글을 단다 (D480)', async () => {
+    const respond: Step[] = [
+      { do: 'prompt' },
+      {
+        do: 'commit',
+        dir: 'lib',
+        files: { 'lib.txt': 'lib 리뷰 반영\n' },
+        message: 'fix: lib 리뷰 반영',
+      },
+      { do: 'respond', text: '{id}: 반영했습니다.' },
+      {
+        do: 'write',
+        file: 'handoff.md',
+        text: (
+          steps('verify').find((x) => x.do === 'write' && x.file === 'handoff.md') as Step & {
+            text: string
+          }
+        ).text,
+      },
+      { do: 'stop' },
+    ]
+    const base = bundleScenario()
+    const s = await setup({ ...base, tasks: { ...base.tasks, 'pr-respond': respond } })
+    const w = await create(s)
+    await toVerify(s, w)
+    expect(
+      await s.h.relay.deliver(w.key, {
+        choice: 'pr',
+        uncommitted: null,
+        repos: [
+          { path: '', choice: 'pr' },
+          { path: 'lib', choice: 'pr', link: false },
+        ],
+      }),
+    ).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    const gh = new FakeGitHub(path.join(s.h.root, 'record'), s.mainRemote, s.h.root)
+    const libNo = work(w).repos?.[0]?.pr?.number ?? 0
+    const comment = gh.convo(libNo, 'lib.txt 문구를 고쳐 주세요')
+    expect(await s.h.relay.prRefresh(w.key, 'lib')).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    const lib = s.h.ui.works.get(w.key)?.prs?.find((p) => p.repo === 'lib')
+    expect(lib?.respond).toMatchObject({ enabled: true, items: [`convo:${comment}`] })
+    expect(
+      await s.h.relay.prRespond(w.key, {
+        items: [`convo:${comment}`],
+        instruction: '',
+        repo: 'lib',
+      }),
+    ).toEqual({ ok: true })
+    await s.h.ui.until(
+      () => {
+        const v = s.h.ui.works.get(w.key)
+        const t = v?.tasks.find((x) => x.id === v.current)
+        return t?.node === 'respond' && t.status === 'awaiting_approval' ? t : null
+      },
+      '대응 task의 승인 대기',
+      30_000,
+    )
+    await settle(s.h, w.key)
+    const task = work(w).tasks.at(-1)
+    if (!task) throw new Error('대응 task가 없음')
+    expect(task.respond).toMatchObject({ repo: 'lib', items: [`convo:${comment}`] })
+    const ctx = read(path.join(w.dir, 'tasks', taskDirName(task), 'context.md'))
+    expect(ctx).toContain('이 PR은 서브모듈 `lib`의 PR이다')
+    // 메인 카드에서는 대응을 시작하지 못한다: 대응 task는 Work에 하나다
+    expect(s.h.ui.works.get(w.key)?.pr?.respond.enabled).toBe(false)
+    const mainBefore = git(s.mainRemote, 'rev-parse', `refs/heads/${w.branch}`)
+    expect(await s.h.relay.approve(w.key, task.id, {})).toEqual({ ok: true })
+    await settle(s.h, w.key)
+    expect(work(w).tasks.at(-1)?.respond?.published_at).toBeDefined()
+    // lib PR에만 push하고 답글을 단다
+    expect(git(s.libSource, 'rev-parse', `refs/heads/${w.branch}`)).toBe(
+      git(w.lib, 'rev-parse', 'HEAD'),
+    )
+    expect(git(s.mainRemote, 'rev-parse', `refs/heads/${w.branch}`)).toBe(mainBefore)
+    expect(
+      gh
+        .comments(libNo)
+        .map((c) => c.body)
+        .join('\n'),
+    ).toContain('반영했습니다.')
+    expect(fs.existsSync(path.join(w.dir, 'pr-items.lib.json'))).toBe(true)
+    const items = JSON.parse(read(path.join(w.dir, 'pr-items.lib.json'))) as {
+      rounds: { task_id: string }[]
+    }
+    expect(items.rounds.map((x) => x.task_id)).toEqual([task.id])
   })
 
   it('[레포 추가]는 진행 중인 Work에 서브모듈을 더하고 다음 task부터 알린다 (D473)', async () => {

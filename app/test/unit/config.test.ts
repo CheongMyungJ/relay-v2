@@ -8,6 +8,7 @@ import {
   normalizeConfig,
 } from '../../src/core/config'
 import { ALL_NODES, NODE_INFO, PIPELINES, RESPOND } from '../../src/core/pipeline'
+import { repoSettings } from '../../src/shared/project'
 import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
@@ -413,6 +414,58 @@ describe('PR 진행의 설정 (D158, D185, 5.1.2)', () => {
     ]) {
       expect(checkProjectSettings(bad).ok, JSON.stringify(bad)).toBe(false)
     }
+  })
+})
+
+describe('[단위] 서브모듈마다의 PR 설정 (D483)', () => {
+  it('서브모듈 칸은 경로마다 받을 봇과 기본 머지 방식이다. 빈 봇 목록과 둘 다 빈 칸은 적지 않는다', () => {
+    expect(
+      checkProjectSettings({
+        allowed_bots: ['github-actions'],
+        merge_method: 'merge',
+        submodules: {
+          lib: { allowed_bots: [' renovate ', 'renovate'], merge_method: 'squash' },
+          'pkg/ui': { allowed_bots: [] },
+          vendor: { allowed_bots: [], merge_method: 'rebase' },
+        },
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        allowed_bots: ['github-actions'],
+        merge_method: 'merge',
+        submodules: {
+          lib: { allowed_bots: ['renovate'], merge_method: 'squash' },
+          vendor: { merge_method: 'rebase' },
+        },
+      },
+    })
+    for (const bad of [
+      { allowed_bots: [], merge_method: null, submodules: [] },
+      { allowed_bots: [], merge_method: null, submodules: { lib: 'x' } },
+      { allowed_bots: [], merge_method: null, submodules: { lib: { allowed_bots: 'a' } } },
+      { allowed_bots: [], merge_method: null, submodules: { lib: { merge_method: null } } },
+    ]) {
+      expect(checkProjectSettings(bad).ok, JSON.stringify(bad)).toBe(false)
+    }
+  })
+
+  it('서브모듈 카드는 그 칸을 쓰고 없는 키는 메인의 값이다. 메인 카드는 메인의 값이다', () => {
+    const project = {
+      allowed_bots: ['github-actions'],
+      merge_method: 'merge' as const,
+      submodules: { lib: { merge_method: 'squash' as const }, vendor: { allowed_bots: ['bot'] } },
+    }
+    expect(repoSettings(project, '')).toEqual({
+      allowedBots: ['github-actions'],
+      mergeMethod: 'merge',
+    })
+    expect(repoSettings(project, 'lib')).toEqual({
+      allowedBots: ['github-actions'],
+      mergeMethod: 'squash',
+    })
+    expect(repoSettings(project, 'vendor')).toEqual({ allowedBots: ['bot'], mergeMethod: 'merge' })
+    expect(repoSettings({}, 'pkg/ui')).toEqual({ allowedBots: [], mergeMethod: null })
   })
 })
 

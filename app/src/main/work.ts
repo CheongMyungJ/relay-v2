@@ -54,6 +54,7 @@ import {
   checkedOutSubmodules,
   commitAll,
   commitGitlinks,
+  commitGitlinksAt,
   gitlinkAt,
   commitInfo,
   commitsOnlyIn,
@@ -263,6 +264,7 @@ import {
   autoPlan,
   autoStartNotice,
   autoStartOn,
+  anyPendingRespond,
   deferredRounds,
   existingTestChanges,
   isAppReply,
@@ -306,10 +308,15 @@ import {
   type PrRound,
   type PrSynced,
 } from '../shared/pr'
-import { projectName, type ProjectChecks, type ProjectState } from '../shared/project'
+import { projectName, repoSettings, type ProjectChecks, type ProjectState } from '../shared/project'
 import { mainSideChanges, submoduleGuardEnv } from '../core/submodule'
 import {
   bundlePlan,
+  relinkMessage,
+  cardDone,
+  focusLane,
+  laneOf,
+  prCards,
   isBundle,
   linkMessage,
   repoDraftFile,
@@ -593,6 +600,61 @@ export { workTitle } from './drafts'
 const MERGE_CONFIRM_MS = 30_000
 const MERGE_CONFIRM_TRIES = 5
 
+/** PR 카드 배지의 차례 (core/pr prBadgeKind의 차례와 같다) */
+const CARD_BADGE_ORDER: readonly BadgeKind[] = [
+  'auto_paused',
+  'pr_items',
+  'pr_closed',
+  'mergeable',
+  'pr_waiting',
+]
+
+/** task가 그 PR 카드의 레포에서 시작한 커밋 (D475, D480): 메인은 start_commit, 서브모듈은 repo_starts다 */
+function laneStart(task: TaskRecord, lane: string): string | undefined {
+  return lane ? task.repo_starts?.[lane] : task.start_commit
+}
+
+/** PR 카드 하나의 메모리 상태 (D480, I175). 메인 PR은 '', 서브모듈 PR은 그 경로의 카드다 */
+interface Lane {
+  /** pr-items.json의 내용 (D191). 처음 쓸 때 읽는다 */
+  file: PrItemsFile | null
+  /** 마지막으로 읽은 PR (D159: 메모리에만 두고 앱을 켜면 다시 읽는다) */
+  read: PrReadState | null
+  /** 마지막 읽기 때의 로컬 Work 브랜치 커밋 */
+  local: string | null
+  /** 마지막 읽기의 오류나 경고 */
+  error: string | null
+  /** 읽는 중인 읽기. 한 카드의 읽기는 한 번에 하나다 (I51) */
+  reading: Promise<CommandResult> | null
+  /** 주기 읽기의 타이머 (D158) */
+  timer: NodeJS.Timeout | null
+  /** head를 처음 읽은 때 (D196). 메모리에만 두어 앱을 다시 켜면 다시 잰다 */
+  readonly headSeen: Map<string, number>
+  /**
+   * Actions 실행 id → 이벤트 (D201, I52). 실행의 이벤트는 바뀌지 않아 메모리에 두고 처음 보는 실행만 읽는다. 앱을 다시
+   * 켜면 CI 실패 항목에 적힌 것부터 채운다
+   */
+  readonly runEvents: Map<number, string>
+  /**
+   * 자동 대응을 바란다 (D210): 읽기가 받은 새 항목이 있을 때 대응 자동 시작이 켜져 있었다. 시작하거나 상한에서 멈추거나
+   * 넣을 새 항목이 없어지거나 자동 시작이 꺼지면 버린다. 도는 대응 task, 진행 중 작업, 닫힌 PR로 막히면 남겨 두고 풀리면
+   * 시작한다. 메모리에만 둔다: 앱을 다시 켜면 쌓인 항목만으로는 시작하지 않는다 (D159)
+   */
+  autoWanted: boolean
+  /** 자동 대응을 판정하고 시작하는 중. 한 번에 하나다 */
+  autoRunning: Promise<void> | null
+  /**
+   * 앱을 켤 때의 읽기를 아직 반영하지 못했다 (D159). 켤 때의 읽기가 실패하거나 끊긴 작업 때문에 읽지 못하면, 반영에 성공한
+   * 첫 읽기가 켤 때의 읽기다: 그 읽기까지는 알리지 않고 자동 대응을 바라지 않는다. 꺼져 있던 동안 쌓인 항목으로는 자동
+   * 시작하지 않는다
+   */
+  startRead: boolean
+  /** 결과를 모르는 머지를 앱이 다시 확인한 횟수 (D330) */
+  mergeConfirms: number
+  /** 메인 PR이 머지된 커밋을 가리키지 않는 서브모듈 (D481). 메인 카드의 읽기가 정한다 */
+  relink: string[]
+}
+
 export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
@@ -615,8 +677,6 @@ export class WorkRunner {
   private readonly drafts: DraftFolder
   /** 이번 명령의 전달이나 정리가 실패한 이유. 명령의 결과로 돌려준다 */
   private opError: string | null = null
-  /** 결과를 모르는 머지를 앱이 다시 확인한 횟수 (D330) */
-  private mergeConfirms = 0
   /** 정리 세션 ([AI 세션 열기], 7-5) */
   private cleanup: CleanupSession | null = null
   private cleanupSeq = 0
@@ -639,25 +699,8 @@ export class WorkRunner {
     endsAt: number
     timer: NodeJS.Timeout
   } | null = null
-  /** pr-items.json의 내용 (D191). 처음 쓸 때 읽는다 */
-  private prFile: PrItemsFile | null = null
-  /** 마지막으로 읽은 PR (D159: 메모리에만 두고 앱을 켜면 다시 읽는다) */
-  private prRead: PrReadState | null = null
-  /** 마지막 읽기 때의 로컬 Work 브랜치 커밋 */
-  private prLocal: string | null = null
-  /** 마지막 읽기의 오류나 경고 */
-  private prError: string | null = null
-  /** 읽는 중인 읽기. 한 Work의 읽기는 한 번에 하나다 (I51) */
-  private prReading: Promise<CommandResult> | null = null
-  /** 주기 읽기의 타이머 (D158) */
-  private prTimer: NodeJS.Timeout | null = null
-  /** head를 처음 읽은 때 (D196). 메모리에만 두어 앱을 다시 켜면 다시 잰다 */
-  private readonly headSeen = new Map<string, number>()
-  /**
-   * Actions 실행 id → 이벤트 (D201, I52). 실행의 이벤트는 바뀌지 않아 메모리에 두고 처음 보는 실행만 읽는다. 앱을 다시
-   * 켜면 CI 실패 항목에 적힌 것부터 채운다
-   */
-  private readonly runEvents = new Map<number, string>()
+  /** PR 카드마다 읽은 상태 (D480). 메인 PR은 '', 서브모듈 PR은 그 경로다 */
+  private readonly laneStates = new Map<string, Lane>()
   /** 앱을 끝낸다. 읽기를 더 걸지 않는다 */
   private closing = false
   /** 앱을 끝내라고 했다 (shutdown). 지우기가 실패해 closing을 되돌릴 때 이것을 따른다 */
@@ -668,20 +711,6 @@ export class WorkRunner {
   private readonly submoduleRepaired = new Set<string>()
   /** 묶음 Work의 서브모듈마다 origin·gh 점검 (D477). verify를 시작할 때와 [다시 점검]에서 새로 한다 */
   private readonly repoCheckMap = new Map<string, ProjectChecks>()
-  /**
-   * 자동 대응을 바란다 (D210): 읽기가 받은 새 항목이 있을 때 대응 자동 시작이 켜져 있었다. 시작하거나 상한에서 멈추거나
-   * 넣을 새 항목이 없어지거나 자동 시작이 꺼지면 버린다. 도는 대응 task, 진행 중 작업, 닫힌 PR로 막히면 남겨 두고 풀리면
-   * 시작한다. 메모리에만 둔다: 앱을 다시 켜면 쌓인 항목만으로는 시작하지 않는다 (D159)
-   */
-  private autoWanted = false
-  /** 자동 대응을 판정하고 시작하는 중. 한 번에 하나다 */
-  private autoRunning: Promise<void> | null = null
-  /**
-   * 앱을 켤 때의 읽기를 아직 반영하지 못했다 (D159). 켤 때의 읽기가 실패하거나 끊긴 작업 때문에 읽지 못하면, 반영에 성공한
-   * 첫 읽기가 켤 때의 읽기다: 그 읽기까지는 알리지 않고 자동 대응을 바라지 않는다. 꺼져 있던 동안 쌓인 항목으로는 자동
-   * 시작하지 않는다
-   */
-  private prStartRead = false
   /** 이슈 기록의 게시 줄 (I98). 한 번에 하나이고 Work의 처리 줄 밖에서 돈다 */
   private issueRunning: Promise<void> | null = null
   /** 게시 줄이 도는 동안 다시 게시하라는 요청이 왔다. 줄이 끝나면 한 번 더 돈다 */
@@ -917,7 +946,7 @@ export class WorkRunner {
       }
     }
     // 바라 둔 자동 대응을 막던 것(도는 대응 task, 진행 중 작업, 닫힌 PR)이 이 전이로 풀렸을 수 있다 (D170, D210)
-    this.autoRespondSoon()
+    for (const lane of this.laneStates.keys()) this.autoRespondSoon(lane)
     return reply
   }
 
@@ -986,10 +1015,10 @@ export class WorkRunner {
         this.stopCountdown(e.taskId)
         return
       case 'merge':
-        await this.mergeCode(e)
+        await this.mergeCode(this.opLane(), e)
         return
       case 'respond':
-        await this.respondCode(e)
+        await this.respondCode(this.opLane(), e)
         return
       case 'publishIssue':
         this.publishIssueSoon()
@@ -1824,14 +1853,16 @@ export class WorkRunner {
    */
   private async respondInput(task: TaskRecord): Promise<RespondInput | null> {
     const r = task.respond
-    const pr = this.work.pr
+    const lane = laneOf(task)
+    const w = this.laneWork(lane)
+    const pr = w.pr
     if (task.node !== RESPOND || !r || !pr) return null
-    const file = await this.prItems()
+    const file = await this.prItems(lane)
     const items = r.items
       .map((id) => file.items.find((i) => i.id === id))
       .filter((i): i is PrItem => i !== undefined)
     const previous: PreviousRound[] = []
-    for (const t of respondTasks(this.work)) {
+    for (const t of respondTasks(w)) {
       if (t.seq >= task.seq || t.status !== 'approved') continue
       const handoff = await this.handoffOf(t)
       previous.push({
@@ -1843,7 +1874,7 @@ export class WorkRunner {
       })
     }
     const opts = { env: this.ctx.env }
-    const repo = this.project.repo_path
+    const repo = this.laneRepo(lane)
     const branch = workBranch(this.work)
     return {
       round: r.round,
@@ -1852,11 +1883,12 @@ export class WorkRunner {
       pr: { number: pr.number, url: pr.url, head: pr.head },
       branch,
       remote: {
-        base: await refCommit(repo, `refs/remotes/origin/${targetBranch(this.work)}`, opts),
+        base: await refCommit(repo, `refs/remotes/origin/${targetBranch(w)}`, opts),
         branch: await refCommit(repo, `refs/remotes/origin/${branch}`, opts),
       },
       items,
       previous,
+      ...(lane ? { repo: { path: lane, base: targetBranch(w) } } : {}),
     }
   }
 
@@ -2496,7 +2528,7 @@ export class WorkRunner {
       await this.feed({ type: 'config.updated', at: this.ctx.at() })
       if (this.revision === before) this.changed()
       // PR 읽기 주기(D158)를 바꿨으면 다음 읽기부터 쓴다
-      if (this.prTimer) this.schedulePr()
+      for (const [lane, L] of this.laneStates) if (L.timer) this.schedulePr(lane)
     })
   }
 
@@ -2620,7 +2652,7 @@ export class WorkRunner {
       } catch (e) {
         return { ok: false, error: `${repo.path}의 worktree를 만들지 못함: ${message(e)}` }
       }
-      const r = await this.command({ type: 'repo.added', at: this.ctx.at(), repo })
+      const r = await this.command({ type: 'repo.added', at: this.ctx.at(), added: repo })
       if (!r.ok) {
         await removeWorktree(dir, tree, { ...opts, force: true })
           .then(() => deleteBranches(dir, [name], opts))
@@ -3980,8 +4012,8 @@ export class WorkRunner {
       // 결과를 모르는 머지는 다시 켠 뒤에도 앱이 다시 확인한다 (D330)
       const op = cutOperation(this.work)
       if (op?.kind === 'merge' && op.unconfirmed) {
-        this.mergeConfirms = 0
-        this.scheduleMergeConfirm()
+        this.laneState(op.repo ?? '').mergeConfirms = 0
+        this.scheduleMergeConfirm(op.repo ?? '')
       }
       if (killed.length) {
         this.orphans = [...killed]
@@ -4141,8 +4173,7 @@ export class WorkRunner {
     this.quitting = true
     this.closing = true
     this.drafts.stop()
-    if (this.prTimer) clearTimeout(this.prTimer)
-    this.prTimer = null
+    this.stopPrTimers()
     return this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
@@ -4174,8 +4205,7 @@ export class WorkRunner {
     if (this.removed) return { ok: false, error: '지운 Work임' }
     if (this.work.status !== 'archived') return { ok: false, error: '보관된 Work만 지움' }
     this.closing = true
-    if (this.prTimer) clearTimeout(this.prTimer)
-    this.prTimer = null
+    this.stopPrTimers()
     await this.prIdle()
     await this.issueIdle()
     return this.enqueue(async () => {
@@ -4568,9 +4598,12 @@ export class WorkRunner {
   ): Promise<{ view: RespondReview; tests: string[] } | null> {
     const r = task.respond
     if (!r) return null
-    const file = await this.prItems()
+    const lane = laneOf(task)
+    const w = this.laneWork(lane)
+    const file = await this.prItems(lane)
     const prior = file.rounds.find((x) => x.task_id === task.id)
-    const pending = pendingRespond(this.work)?.id === task.id
+    const pending = pendingRespond(w)?.id === task.id
+    const start = laneStart(task, lane)
     const round: PrRound =
       !pending && prior
         ? prior
@@ -4583,16 +4616,16 @@ export class WorkRunner {
             prior,
           })
     let tests: string[] = []
-    if (pending && task.start_commit) {
+    if (pending && start) {
       try {
         tests = existingTestChanges(
-          await changedPaths(this.worktree, task.start_commit, { env: this.ctx.env }),
+          await changedPaths(this.laneTree(lane), start, { env: this.ctx.env }),
         )
       } catch (e) {
         this.problem(`기존 테스트 변경을 읽지 못함: ${message(e)}`)
       }
     }
-    const rules = this.prRules()
+    const rules = this.prRules(lane)
     return {
       tests,
       view: {
@@ -4608,68 +4641,144 @@ export class WorkRunner {
           url: x.url ?? null,
           skipped: x.skipped ?? null,
         })),
-        deferred: pending ? deferredRounds(this.work).map((t) => taskLabel(t)) : [],
+        deferred: pending ? deferredRounds(w).map((t) => taskLabel(t)) : [],
         failure: respondFailureView(r.failure),
-        blocked: pending && this.work.pr?.closed_at ? PR_CLOSED : null,
+        blocked: pending && w.pr?.closed_at ? PR_CLOSED : null,
       },
     }
   }
 
   // ---------- PR 진행 (시나리오 10, D152~D200) ----------
 
+  /** PR 카드의 메모리 상태 (D480). 처음 쓸 때 만든다 */
+  private laneState(lane: string): Lane {
+    let l = this.laneStates.get(lane)
+    if (!l) {
+      l = {
+        file: null,
+        read: null,
+        local: null,
+        error: null,
+        reading: null,
+        timer: null,
+        headSeen: new Map(),
+        runEvents: new Map(),
+        autoWanted: false,
+        autoRunning: null,
+        startRead: false,
+        mergeConfirms: 0,
+        relink: [],
+      }
+      this.laneStates.set(lane, l)
+    }
+    return l
+  }
+
+  /** PR 카드의 렌즈 (D480, I174): 서브모듈 카드는 그 레포를 메인 자리에 둔 Work다. 판정에만 쓰고 쓰지 않는다 */
+  private laneWork(lane: string): WorkState {
+    return focusLane(this.work, lane)
+  }
+
+  /** PR 카드의 worktree: 메인은 메인 worktree, 서브모듈은 그 서브모듈 worktree다 */
+  private laneTree(lane: string): string {
+    return lane ? this.repoTree(lane) : this.worktree
+  }
+
+  /** PR 카드의 저장소: 메인은 메인 체크아웃, 서브모듈은 그 서브모듈 저장소다. 브랜치와 원격, gh의 작업 폴더다 */
+  private laneRepo(lane: string): string {
+    return lane ? this.repoDir(lane) : this.project.repo_path
+  }
+
+  /** 진행 중인 머지나 대응의 push·게시의 PR 카드 (D480) */
+  private opLane(): string {
+    const op = this.work.operation
+    return op?.kind === 'merge' || op?.kind === 'respond' ? (op.repo ?? '') : ''
+  }
+
+  /** PR 카드의 이벤트에 붙이는 레포 (D480). 메인 카드는 없다 */
+  private laneTag(lane: string): { repo?: string } {
+    return lane ? { repo: lane } : {}
+  }
+
+  /** 지금 있는 PR 카드 (D480): 메인 PR이 맨 앞이다 */
+  private cardLanes(): string[] {
+    return prCards(this.work).map((c) => c.lane)
+  }
+
   /** 지금 프로젝트. 프로젝트 설정은 실행 중에 바뀐다 (D185) */
   private projectNow(): ProjectState {
     return this.ctx.project(this.project.project_id) ?? this.project
   }
 
-  /** 코멘트의 거르기 규칙: 프로젝트 설정의 받을 봇 (D161, D197) */
-  private prRules(): ItemRules {
-    return { allowedBots: this.projectNow().allowed_bots ?? [] }
+  /** 코멘트의 거르기 규칙: 프로젝트 설정의 받을 봇 (D161, D197). 서브모듈 카드는 그 서브모듈의 칸이다 (D483) */
+  private prRules(lane: string): ItemRules {
+    return { allowedBots: repoSettings(this.projectNow(), lane).allowedBots }
   }
 
   /** pr-items.json. 처음 쓸 때 읽는다. 읽지 못하면 알리고 빈 목록으로 둔다 */
-  private async prItems(): Promise<PrItemsFile> {
-    if (!this.prFile) {
+  private async prItems(lane: string): Promise<PrItemsFile> {
+    const L = this.laneState(lane)
+    if (!L.file) {
       try {
-        this.prFile = await this.files.readPrItems()
+        L.file = await this.files.readPrItems(lane)
       } catch (e) {
         this.problem(`pr-items.json을 읽지 못함: ${message(e)}`)
-        this.prFile = { ...EMPTY_PR_ITEMS, items: [], synced: [], rounds: [] }
+        L.file = { ...EMPTY_PR_ITEMS, items: [], synced: [], rounds: [] }
       }
     }
-    return this.prFile
+    return L.file
   }
 
-  /** 머지 조건 (D176, D196) */
-  private prGate(): Gate {
+  /** 머지 조건 (D176, D196, D481) */
+  private prGate(lane: string): Gate {
+    const L = this.laneState(lane)
     return mergeGate({
-      work: this.work,
-      read: this.prRead,
-      items: this.prFile?.items ?? [],
-      localHead: this.prLocal,
+      work: this.laneWork(lane),
+      read: L.read,
+      items: L.file?.items ?? [],
+      localHead: L.local,
+      ...(lane ? {} : { relink: L.relink }),
     })
   }
 
   /** PR 진행인 Work의 배지 (D183) */
-  private prBadge(): BadgeKind | undefined {
-    if (this.work.status !== 'pr') return undefined
-    const items = this.prFile?.items ?? []
+  private prBadge(lane: string): BadgeKind | undefined {
+    const L = this.laneState(lane)
+    if (this.laneWork(lane).status !== 'pr') return undefined
+    const items = L.file?.items ?? []
     // 상한에 닿아 자동 시작을 멈췄으면 "자동 대응 멈춤"이 앞선다 (D171, D183)
-    const paused = autoPlan(this.work, items, this.ctx.config()).kind === 'paused'
-    return prBadgeKind(items, this.work.pr?.closed_at !== undefined, this.prGate(), paused)
+    const paused = autoPlan(this.laneWork(lane), items, this.ctx.config()).kind === 'paused'
+    return prBadgeKind(
+      items,
+      this.laneWork(lane).pr?.closed_at !== undefined,
+      this.prGate(lane),
+      paused,
+    )
+  }
+
+  /**
+   * PR 카드가 여럿인 Work의 배지 (D183, D480): 끝나지 않은 카드의 배지 가운데 사람이 먼저 볼 것이다 (prBadgeKind의 차례)
+   */
+  private cardBadge(): BadgeKind | undefined {
+    const kinds = prCards(this.work)
+      .filter((c) => !cardDone(c.pr))
+      .map((c) => this.prBadge(c.lane))
+    return CARD_BADGE_ORDER.find((k) => kinds.includes(k)) ?? kinds[0]
   }
 
   /** PR 패널 (시나리오 10, D183) */
-  private prPanel(): PrView | null {
+  private prPanel(lane: string): PrView | null {
+    const L = this.laneState(lane)
     return prView({
-      work: this.work,
+      work: this.laneWork(lane),
       config: this.ctx.config(),
-      read: this.prRead,
-      file: this.prFile ?? EMPTY_PR_ITEMS,
-      rules: this.prRules(),
-      localHead: this.prLocal,
-      reading: this.prReading !== null,
-      error: this.prError,
+      read: L.read,
+      file: L.file ?? EMPTY_PR_ITEMS,
+      rules: this.prRules(lane),
+      localHead: L.local,
+      reading: L.reading !== null,
+      error: L.error,
+      ...(lane ? {} : { relink: L.relink }),
     })
   }
 
@@ -4679,25 +4788,33 @@ export class WorkRunner {
    * 않고 자동 대응을 바라지 않는다 (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
    */
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
-    if (!this.work.pr) return
-    if (opts.quiet) this.prStartRead = true
-    await this.prItems()
+    // PR 카드마다 한다 (D480)
+    for (const lane of this.cardLanes()) await this.startLane(lane, opts)
+  }
+
+  private async startLane(lane: string, opts: { quiet?: boolean }): Promise<void> {
+    const L = this.laneState(lane)
+    const pr = this.laneWork(lane).pr
+    if (!pr) return
+    if (opts.quiet) L.startRead = true
+    await this.prItems(lane)
     // 항목의 대응 중·처리됨을 대응 task의 기록(work.json)에 맞춘다: 앱이 둘 사이에 꺼졌을 수 있다 (D189)
-    await this.syncItemStatus()
+    await this.syncItemStatus(lane)
     this.changed()
-    if (this.work.status !== 'pr' || this.work.pr.closed_at) return
-    void this.readPrNow()
+    if (this.work.status !== 'pr' || pr.closed_at || pr.merged || pr.ended_at) return
+    void this.readPrNow(lane)
   }
 
   /** 주기 읽기를 건다 (D158). PR 진행이 아니거나 닫혔거나 앱을 끝내면 걸지 않는다 */
-  private schedulePr(): void {
-    if (this.prTimer) clearTimeout(this.prTimer)
-    this.prTimer = null
-    const w = this.work
+  private schedulePr(lane: string): void {
+    const L = this.laneState(lane)
+    if (L.timer) clearTimeout(L.timer)
+    L.timer = null
+    const w = this.laneWork(lane)
     if (this.closing || w.status !== 'pr' || !w.pr || w.pr.closed_at) return
-    this.prTimer = setTimeout(() => {
-      this.prTimer = null
-      void this.readPrNow()
+    L.timer = setTimeout(() => {
+      L.timer = null
+      void this.readPrNow(lane)
     }, this.ctx.config().pr_poll_interval_sec * 1000)
   }
 
@@ -4707,53 +4824,65 @@ export class WorkRunner {
    * 못한다
    */
   async prIdle(): Promise<void> {
-    while (this.prReading) await this.prReading
+    for (const L of this.laneStates.values()) while (L.reading) await L.reading
   }
 
-  /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽어 다시 열렸는지 본다 (D179) */
-  refreshPr(): Promise<CommandResult> {
-    return this.readPrNow()
+  /** 모든 PR 카드의 주기 읽기를 멈춘다: 앱을 끝내거나 기록을 지운다 */
+  private stopPrTimers(): void {
+    for (const L of this.laneStates.values()) {
+      if (L.timer) clearTimeout(L.timer)
+      L.timer = null
+    }
+  }
+
+  /** PR 패널의 [새로 고침] (D158). 닫힌 PR도 읽어 다시 열렸는지 본다 (D179). repo는 서브모듈 PR 카드다 (D480) */
+  refreshPr(lane = ''): Promise<CommandResult> {
+    return this.readPrNow(lane)
   }
 
   /**
    * PR을 한 번 읽는다 (시나리오 10-2, I51). 네트워크 부분은 처리 줄 밖에서 하고 반영은 줄에서 한다. 읽는 중이면 그
    * 읽기가 끝난 뒤 다시 읽는다. 끝나면 다음 주기 읽기를 건다
    */
-  private async readPrNow(): Promise<CommandResult> {
-    while (this.prReading) await this.prReading
+  private async readPrNow(lane: string): Promise<CommandResult> {
+    const L = this.laneState(lane)
+    while (L.reading) await L.reading
     if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
-    const run = this.readPrOnce().catch((e: unknown): CommandResult =>
-      this.prFailed(`PR을 읽지 못함: ${message(e)}`),
+    const run = this.readPrOnce(lane).catch((e: unknown): CommandResult =>
+      this.prFailed(lane, `PR을 읽지 못함: ${message(e)}`),
     )
-    this.prReading = run
+    L.reading = run
     this.changed()
     try {
       return await run
     } finally {
-      this.prReading = null
+      L.reading = null
       this.changed()
-      this.schedulePr()
+      this.schedulePr(lane)
     }
   }
 
-  private prFailed(error: string): CommandResult {
-    this.prError = error
+  private prFailed(lane: string, error: string): CommandResult {
+    const L = this.laneState(lane)
+    L.error = error
     console.error(`[${this.key}] ${error}`)
     return { ok: false, error }
   }
 
-  private async readPrOnce(): Promise<CommandResult> {
-    const pr = this.work.pr
-    if (this.work.status !== 'pr' || !pr) return { ok: false, error: 'PR 진행인 Work가 아님' }
+  private async readPrOnce(lane: string): Promise<CommandResult> {
+    const L = this.laneState(lane)
+    const pr = this.laneWork(lane).pr
+    if (this.laneWork(lane).status !== 'pr' || !pr)
+      return { ok: false, error: 'PR 진행인 Work가 아님' }
     // 끊긴 작업의 기록이 있는 동안은 읽지 않는다 (I51, D122). 진행 중인 머지는 처리 줄이 끝나야 읽는다
-    if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
+    if (cutOperation(this.laneWork(lane))) return { ok: false, error: OPERATION_BLOCKS }
     const location = prLocation(pr.url)
-    if (!location) return this.prFailed(`PR 주소를 읽지 못함: ${pr.url}`)
-    const file = await this.prItems()
+    if (!location) return this.prFailed(lane, `PR 주소를 읽지 못함: ${pr.url}`)
+    const file = await this.prItems(lane)
     // CI 실패 항목에 적힌 이벤트를 다시 읽지 않는다. 읽기에 실패해도 항목의 id가 바뀌지 않는다 (I52)
     for (const item of file.items) {
       const c = item.check
-      if (c && c.run !== null && c.event) this.runEvents.set(c.run, c.event)
+      if (c && c.run !== null && c.event) L.runEvents.set(c.run, c.event)
     }
     let fetched: PrFetched
     try {
@@ -4761,18 +4890,105 @@ export class WorkRunner {
         {
           ghBin: this.ctx.ghBin,
           env: this.ctx.env,
-          repo: this.project.repo_path,
-          worktree: this.worktree,
-          branch: workBranch(this.work),
+          repo: this.laneRepo(lane),
+          worktree: this.laneTree(lane),
+          branch: workBranch(this.laneWork(lane)),
           location,
-          runEvents: this.runEvents,
+          runEvents: L.runEvents,
         },
         (id, job) => ciLogRead(file.items, id, job),
       )
     } catch (e) {
-      return this.prFailed(`PR을 읽지 못함: ${message(e)}`)
+      return this.prFailed(lane, `PR을 읽지 못함: ${message(e)}`)
     }
-    return this.enqueue(() => this.applyRead(pr.number, fetched))
+    // 메인 PR은 머지된 서브모듈 커밋을 가리키는지도 본다 (D481)
+    L.relink = lane ? [] : await this.relinkNeeded()
+    return this.enqueue(() => this.applyRead(lane, pr.number, fetched))
+  }
+
+  /**
+   * 메인이 머지된 커밋을 가리키지 않는 서브모듈 (D481): 메인이 새 커밋을 가리키게 한 서브모듈 가운데 PR이 머지됐는데, 메인
+   * 작업 브랜치가 가리키는 그 서브모듈 커밋이 그 서브모듈의 머지 대상(원격)에 없는 것. squash·rebase 머지는 커밋 id를
+   * 바꾼다. 머지 대상은 받아서 본다(네트워크라 처리 줄 밖). 읽지 못한 것은 넣지 않는다
+   */
+  private async relinkNeeded(): Promise<string[]> {
+    const opts = { env: this.ctx.env }
+    const out: string[] = []
+    for (const r of workRepos(this.work)) {
+      if (!r.linked || !r.pr?.merged) continue
+      try {
+        const dir = this.repoDir(r.path)
+        const sha = await gitlinkAt(this.worktree, 'HEAD', r.path, opts)
+        const tip = await fetchTip({ repo: dir, env: this.ctx.env }, repoTarget(r))
+        if (sha && tip && !(await isAncestor(dir, sha, tip, opts).catch(() => false))) {
+          out.push(r.path)
+        }
+      } catch (e) {
+        this.problem(`${r.path}: 머지된 서브모듈 커밋을 확인하지 못함: ${message(e)}`)
+      }
+    }
+    return out
+  }
+
+  /**
+   * 메인 PR 카드의 [서브모듈 커밋 맞추기] (D481): 머지된 서브모듈 PR의 머지 커밋을 gh로 읽어, 메인 작업 브랜치에 그 커밋을
+   * 가리키는 커밋을 더하고 push한다. 사람이 누른 push다 (D15). 곧 메인 PR을 다시 읽는다
+   */
+  relinkSubmodules(): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
+      const pr = this.work.pr
+      if (this.work.status !== 'pr' || !pr || pr.merged || pr.ended_at)
+        return { ok: false, error: '메인 PR이 진행 중인 Work가 아님' }
+      if (anyPendingRespond(this.work))
+        return { ok: false, error: '돌거나 기다리는 PR 대응 task가 있음' }
+      const paths = this.laneState('').relink
+      if (!paths.length) return { ok: false, error: '맞출 서브모듈이 없음' }
+      const opts = { env: this.ctx.env }
+      const links: { path: string; sha: string }[] = []
+      try {
+        for (const p of paths) {
+          const sub = workRepos(this.work).find((r) => r.path === p)
+          const location = sub?.pr ? prLocation(sub.pr.url) : null
+          if (!sub?.pr || !location) throw new Error(`${p}: PR 주소를 읽지 못함`)
+          const view = await ghPrView(
+            this.ctx.ghBin,
+            {
+              repo: repoArg(location),
+              number: sub.pr.number,
+              cwd: this.repoDir(p),
+              env: this.ctx.env,
+            },
+            ['mergeCommit'],
+          )
+          const merged = view['mergeCommit']
+          const sha =
+            merged && typeof merged === 'object'
+              ? (merged as Record<string, unknown>)['oid']
+              : undefined
+          if (typeof sha !== 'string' || !sha) throw new Error(`${p}: 머지 커밋을 읽지 못함`)
+          if (!(await hasCommit(this.repoDir(p), sha, opts))) {
+            await fetchTip({ repo: this.repoDir(p), env: this.ctx.env }, repoTarget(sub))
+          }
+          links.push({ path: p, sha })
+        }
+        const off = offWorkBranch(workBranch(this.work), await currentBranch(this.worktree, opts))
+        if (off) throw new Error(off)
+        const commit = await commitGitlinksAt(
+          this.worktree,
+          links,
+          relinkMessage(this.work.work_id, links),
+          opts,
+        )
+        await pushBranch(this.worktree, workBranch(this.work), 'origin', opts)
+        await this.feed({ type: 'pr.relinked', at: this.ctx.at(), links, commit })
+      } catch (e) {
+        return { ok: false, error: `서브모듈 커밋을 맞추지 못함: ${message(e)}` }
+      }
+      this.laneState('').relink = []
+      setTimeout(() => void this.readPrNow(''), 0)
+      return { ok: true }
+    })
   }
 
   /**
@@ -4781,28 +4997,35 @@ export class WorkRunner {
    * 읽은 결과를 machine에 넣는다. 사람이 움직여야 하면 알린다(D184): 대응 거리가 들어옴, 머지할 수 있음, 닫힘,
    * 밖에서 머지됨. 앱을 켤 때의 읽기(반영에 성공한 첫 읽기)는 알리지 않는다(D159)
    */
-  private async applyRead(number: number, f: PrFetched): Promise<CommandResult> {
-    const pr = this.work.pr
+  private async applyRead(lane: string, number: number, f: PrFetched): Promise<CommandResult> {
+    const L = this.laneState(lane)
+    const pr = this.laneWork(lane).pr
     // 앱을 끝내는 동안 끝난 읽기는 반영하지 않는다. 다음에 켤 때 다시 읽는다 (D159)
     if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
-    if (this.work.status !== 'pr' || !pr || pr.number !== number || this.work.operation) {
+    if (
+      this.laneWork(lane).status !== 'pr' ||
+      !pr ||
+      pr.number !== number ||
+      this.laneWork(lane).operation
+    ) {
       return { ok: false, error: '읽는 동안 Work가 바뀌어 반영하지 않음' }
     }
     const at = this.ctx.at()
     const now = Date.now()
-    const mergeableBefore = this.prGate().enabled
+    const mergeableBefore = this.prGate(lane).enabled
     const closedBefore = pr.closed_at !== undefined
     // D196: 새 head를 처음 읽은 때부터 60초는 체크가 없어도 통과로 보지 않는다
-    const seen = this.headSeen.get(f.view.head) ?? now
-    this.headSeen.set(f.view.head, seen)
+    const seen = L.headSeen.get(f.view.head) ?? now
+    L.headSeen.set(f.view.head, seen)
     const warnings = [...f.warnings]
     let local = f.local
     let sync = f.sync
     let synced: PrSynced | null = null
     // PR 대응 task가 끝나기 전에는 fast-forward하지 않는다 (D193): 대응 task가 코드를 바꾸는 중이다
-    if (sync === 'ff' && local && !pendingRespond(this.work)) {
+    // 다른 PR 카드의 대응 task가 도는 동안에도 받지 않는다: 에이전트가 같은 작업 공간에서 일한다 (D480)
+    if (sync === 'ff' && local && !anyPendingRespond(this.work)) {
       try {
-        synced = await this.fastForward(local, f.view.head, f.view.baseRef, at)
+        synced = await this.fastForward(lane, local, f.view.head, f.view.baseRef, at)
         local = f.view.head
         sync = 'same'
       } catch (e) {
@@ -4810,9 +5033,9 @@ export class WorkRunner {
         sync = null
       }
     }
-    const file = await this.prItems()
+    const file = await this.prItems(lane)
     // 앱이 게시한 답글은 항목으로 보지 않는다: 적어 둔 코멘트 id와 보이지 않는 표시로 가린다 (D194)
-    const comments = f.comments.filter((c) => !isAppReply(c, this.work.work_id, file))
+    const comments = f.comments.filter((c) => !isAppReply(c, this.laneWork(lane).work_id, file))
     const gathered = gatherItems(
       file.items,
       {
@@ -4824,7 +5047,7 @@ export class WorkRunner {
         diverged: sync === null || !local ? undefined : divergedFact(sync, f.view.head, local),
         logs: f.logs,
       },
-      this.prRules(),
+      this.prRules(lane),
     )
     const next: PrItemsFile = {
       ...file,
@@ -4832,13 +5055,13 @@ export class WorkRunner {
       synced: synced ? [...file.synced, synced] : file.synced,
     }
     try {
-      await this.files.writePrItems(next)
+      await this.files.writePrItems(next, lane)
     } catch (e) {
-      return this.prFailed(`pr-items.json을 쓰지 못함: ${message(e)}`)
+      return this.prFailed(lane, `pr-items.json을 쓰지 못함: ${message(e)}`)
     }
-    this.prFile = next
-    this.prLocal = local
-    this.prRead = {
+    L.file = next
+    L.local = local
+    L.read = {
       at,
       state: f.view.state,
       head: f.view.head,
@@ -4852,11 +5075,12 @@ export class WorkRunner {
       ci: ciState(f.checks, now - seen >= CHECK_WAIT_MS),
       sync,
     }
-    this.prError = warnings.length ? warnings.join(' / ') : null
-    const quiet = this.prStartRead
+    L.error = warnings.length ? warnings.join(' / ') : null
+    const quiet = L.startRead
     await this.feed(
       {
         type: 'pr.read',
+        ...this.laneTag(lane),
         at,
         number,
         state: f.view.state,
@@ -4875,13 +5099,13 @@ export class WorkRunner {
       },
       { quiet: true },
     )
-    this.prStartRead = false
+    L.startRead = false
     // 받은 새 항목으로 자동 대응을 바란다. 앱을 켤 때의 읽기는 보이기만 한다 (D159, D210)
-    const autoOn = autoStartOn(this.ctx.config(), this.work.settings)
+    const autoOn = autoStartOn(this.ctx.config(), this.laneWork(lane).settings)
     const wanted = wantsAutoStart({ quiet, received: gathered.received.length, on: autoOn })
-    if (wanted) this.autoWanted = true
+    if (wanted) L.autoWanted = true
     if (!quiet) {
-      const w = this.work
+      const w = this.laneWork(lane)
       const notes: string[] = []
       if (w.status === 'completed' && w.pr?.merged?.outside) {
         // 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
@@ -4897,12 +5121,12 @@ export class WorkRunner {
         if (gathered.received.length && receivedNeedsNotice(w, next.items, this.ctx.config())) {
           notes.push(`대응 거리 ${gathered.received.length}개가 들어옴`)
         }
-        if (!mergeableBefore && this.prGate().enabled) notes.push('머지할 수 있음')
+        if (!mergeableBefore && this.prGate(lane).enabled) notes.push('머지할 수 있음')
       }
       if (notes.length) this.notify(`PR #${number}: ${notes.join(' · ')}`)
     }
     this.changed()
-    if (wanted) this.autoRespondSoon()
+    if (wanted) this.autoRespondSoon(lane)
     return { ok: true }
   }
 
@@ -4911,31 +5135,32 @@ export class WorkRunner {
    * 브랜치를 다시 본다. 받은 커밋에 기준 브랜치 병합이 있으면 기준 브랜치를 fetch해 옮길 기준 커밋을 정한다 (D181)
    */
   private async fastForward(
+    lane: string,
     local: string,
     remote: string,
     baseRef: string,
     at: string,
   ): Promise<PrSynced> {
     const opts = { env: this.ctx.env }
-    const repo = this.project.repo_path
-    const branch = workBranch(this.work)
+    const repo = this.laneRepo(lane)
+    const branch = workBranch(this.laneWork(lane))
     if ((await refCommit(repo, `refs/heads/${branch}`, opts)) !== local) {
       throw new Error('읽은 뒤 로컬 Work 브랜치가 바뀜')
     }
-    if ((await statusLines(this.worktree, opts)).length) {
+    if ((await statusLines(this.laneTree(lane), opts)).length) {
       throw new Error('읽은 뒤 worktree에 커밋 안 된 변경이 생김')
     }
-    if ((await currentBranch(this.worktree, opts)) !== branch) {
+    if ((await currentBranch(this.laneTree(lane), opts)) !== branch) {
       throw new Error('worktree가 Work 브랜치에 있지 않음')
     }
-    await mergeFastForward(this.worktree, remote, opts)
+    await mergeFastForward(this.laneTree(lane), remote, opts)
     const ctx = { repo, env: this.ctx.env }
     const { received, base } = await receivedCommits(
       ctx,
       local,
       remote,
-      this.work.base_commit,
-      () => fetchTip(ctx, baseRef || targetBranch(this.work)),
+      this.laneWork(lane).base_commit,
+      () => fetchTip(ctx, baseRef || targetBranch(this.laneWork(lane))),
     )
     return { at, from: local, commits: received, ...(base ? { base_commit: base } : {}) }
   }
@@ -4946,14 +5171,16 @@ export class WorkRunner {
    */
   projectSettingsChanged(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.work.status === 'pr' && this.work.pr) {
-        const file = await this.prItems()
-        const r = reapplyRules(file.items, this.prRules())
+      // PR 카드마다 한다 (D480)
+      for (const lane of this.work.status === 'pr' ? this.cardLanes() : []) {
+        const L = this.laneState(lane)
+        const file = await this.prItems(lane)
+        const r = reapplyRules(file.items, this.prRules(lane))
         if (r.changed.length) {
           const next: PrItemsFile = { ...file, items: r.items }
           try {
-            await this.files.writePrItems(next)
-            this.prFile = next
+            await this.files.writePrItems(next, lane)
+            L.file = next
           } catch (e) {
             this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
           }
@@ -4964,20 +5191,21 @@ export class WorkRunner {
   }
 
   /** PR 패널의 [제외], [다시 넣기], [받기] (D160, D161, D170, D189). PR 진행인 Work만 받는다 */
-  prItem(id: string, action: PrItemAction): Promise<CommandResult> {
+  prItem(id: string, action: PrItemAction, lane = ''): Promise<CommandResult> {
+    const L = this.laneState(lane)
     return this.enqueue(async () => {
-      if (this.work.status !== 'pr') return { ok: false, error: 'PR 진행인 Work가 아님' }
-      if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
-      const file = await this.prItems()
+      if (this.laneWork(lane).status !== 'pr') return { ok: false, error: 'PR 진행인 Work가 아님' }
+      if (cutOperation(this.laneWork(lane))) return { ok: false, error: OPERATION_BLOCKS }
+      const file = await this.prItems(lane)
       const r = applyItemAction(file.items, id, action)
       if (!r.ok) return r
       const next: PrItemsFile = { ...file, items: r.items }
       try {
-        await this.files.writePrItems(next)
+        await this.files.writePrItems(next, lane)
       } catch (e) {
         return { ok: false, error: `pr-items.json을 쓰지 못함: ${message(e)}` }
       }
-      this.prFile = next
+      L.file = next
       this.changed()
       return { ok: true }
     })
@@ -4987,9 +5215,10 @@ export class WorkRunner {
    * 머지 창 (D176, D177): 레포가 허용하는 방식을 gh로 읽고(S7 관찰 6), 기본 선택(프로젝트 설정이 허용되면 그것,
    * 아니면 허용하는 첫 방식)과 머지할 head, 지금 머지 조건을 준다
    */
-  async prMergeInfo(): Promise<MergeInfoResult> {
-    const pr = this.work.pr
-    if (this.work.status !== 'pr' || !pr) return { ok: false, error: 'PR 진행인 Work가 아님' }
+  async prMergeInfo(lane = ''): Promise<MergeInfoResult> {
+    const pr = this.laneWork(lane).pr
+    if (this.laneWork(lane).status !== 'pr' || !pr)
+      return { ok: false, error: 'PR 진행인 Work가 아님' }
     const location = prLocation(pr.url)
     if (!location) return { ok: false, error: `PR 주소를 읽지 못함: ${pr.url}` }
     let methods: MergeMethod[]
@@ -4997,7 +5226,7 @@ export class WorkRunner {
       methods = allowedMethods(
         await ghMergeSettings(this.ctx.ghBin, {
           repo: repoArg(location),
-          cwd: this.project.repo_path,
+          cwd: this.laneRepo(lane),
           env: this.ctx.env,
         }),
       )
@@ -5006,7 +5235,7 @@ export class WorkRunner {
     }
     if (!methods.length) return { ok: false, error: '레포가 허용하는 머지 방식이 없음' }
     // 대응 라운드가 push했거나 원격 커밋을 받았으면 판정표가 대응 전 코드 기준이다 (D180, D206)
-    const verify = [...this.work.tasks].reverse().find((t) => t.node === 'verify')
+    const verify = [...this.laneWork(lane).tasks].reverse().find((t) => t.node === 'verify')
     const table = verify
       ? verdicts((await this.files.taskFiles(verify))[VERIFICATION_FILE] ?? '')
       : []
@@ -5015,9 +5244,9 @@ export class WorkRunner {
       info: {
         head: pr.head,
         methods,
-        preferred: preferredMethod(methods, this.projectNow().merge_method),
-        gate: this.prGate(),
-        stale: staleVerdicts(await this.prItems()),
+        preferred: preferredMethod(methods, repoSettings(this.projectNow(), lane).mergeMethod),
+        gate: this.prGate(lane),
+        stale: staleVerdicts(await this.prItems(lane)),
         verdicts: table,
       },
     }
@@ -5025,16 +5254,19 @@ export class WorkRunner {
 
   /** 머지 창의 [머지] (D176). 창에 보인 head와 지금 머지 조건을 machine이 본다. 실패하면 GitHub의 오류를 돌려준다 */
   prMerge(input: MergeInput): Promise<CommandResult> {
+    const lane = input.repo ?? ''
+    const L = this.laneState(lane)
     return this.enqueue(async () => {
       this.opError = null
       // 새 머지는 결과 다시 확인(D330)의 횟수를 처음부터 센다
-      this.mergeConfirms = 0
+      L.mergeConfirms = 0
       const r = await this.command({
         type: 'pr.merge',
         at: this.ctx.at(),
         method: input.method,
         head: input.head,
-        gate: this.prGate(),
+        gate: this.prGate(lane),
+        ...this.laneTag(lane),
       })
       const failed = this.opError
       this.opError = null
@@ -5048,8 +5280,9 @@ export class WorkRunner {
    * state로 판정한다(S7 관찰 6). 끊긴 머지를 다시 하면(resume) 먼저 읽어 이미 머지됐으면 성공으로 둔다 (D123).
    * 그사이 새 커밋이 생겨 GitHub가 거절하면 알리고 다시 읽는다
    */
-  private async mergeCode(e: Extract<Effect, { type: 'merge' }>): Promise<void> {
-    const pr = this.work.pr
+  private async mergeCode(lane: string, e: Extract<Effect, { type: 'merge' }>): Promise<void> {
+    const L = this.laneState(lane)
+    const pr = this.laneWork(lane).pr
     const location = pr ? prLocation(pr.url) : null
     const fail = async (error: string) => {
       this.opError = error
@@ -5062,7 +5295,7 @@ export class WorkRunner {
     const gh = {
       repo: repoArg(location),
       number: pr.number,
-      cwd: this.project.repo_path,
+      cwd: this.laneRepo(lane),
       env: this.ctx.env,
     }
     const state = async () => (await ghPrView(this.ctx.ghBin, gh, ['state']))['state']
@@ -5075,7 +5308,7 @@ export class WorkRunner {
         error: message(err),
         unconfirmed: true,
       })
-      this.scheduleMergeConfirm()
+      this.scheduleMergeConfirm(lane)
     }
     try {
       if (e.resume) {
@@ -5084,14 +5317,15 @@ export class WorkRunner {
           before = await state()
         } catch (err) {
           // 결과를 모르는 머지를 확인하다 또 못 읽었으면 그대로 기다린다. 끊긴 머지는 지금처럼 실패다
-          if (this.work.operation?.kind === 'merge' && this.work.operation.unconfirmed) {
+          const op = this.work.operation
+          if (op?.kind === 'merge' && op.unconfirmed) {
             await unconfirmed(err)
             return
           }
           throw err
         }
         if (before === 'MERGED') {
-          this.mergeConfirms = 0
+          L.mergeConfirms = 0
           await this.feed({ type: 'pr.merged', at: this.ctx.at() })
           return
         }
@@ -5107,7 +5341,7 @@ export class WorkRunner {
             : `머지 실패: ${r.error}`,
         )
         // 머지가 거절되면 PR이 바뀌었을 수 있어 곧 다시 읽는다
-        setTimeout(() => void this.readPrNow(), 0)
+        setTimeout(() => void this.readPrNow(lane), 0)
         return
       }
       // 성공 문구는 TTY일 때만 찍으므로 다시 읽어 머지됐는지 본다 (S7 관찰 6, 3절)
@@ -5118,7 +5352,7 @@ export class WorkRunner {
         await unconfirmed(err)
         return
       }
-      this.mergeConfirms = 0
+      L.mergeConfirms = 0
       if (now !== 'MERGED') {
         await fail(`gh pr merge는 성공했지만 PR이 머지되지 않음 (state: ${String(now)})`)
         return
@@ -5133,12 +5367,13 @@ export class WorkRunner {
    * 결과를 모르는 머지를 잠시 뒤 다시 확인한다 (D330): 끊긴 작업의 [다시 시도]와 같다. 몇 번 해도 못 읽으면 사람의
    * [다시 시도]를 기다린다
    */
-  private scheduleMergeConfirm(): void {
-    if (this.mergeConfirms >= MERGE_CONFIRM_TRIES) return
-    this.mergeConfirms++
+  private scheduleMergeConfirm(lane: string): void {
+    const L = this.laneState(lane)
+    if (L.mergeConfirms >= MERGE_CONFIRM_TRIES) return
+    L.mergeConfirms++
     setTimeout(
       () => {
-        const op = cutOperation(this.work)
+        const op = cutOperation(this.laneWork(lane))
         if (this.closing || op?.kind !== 'merge' || !op.unconfirmed) return
         void this.retryOperation()
       },
@@ -5160,11 +5395,11 @@ export class WorkRunner {
    * PR이 열려 있는지 다시 읽는다 (D208): 닫혔거나 머지됐거나 읽지 못하면 던진다. 대응의 push와 답글 게시 바로 전에 부른다.
    * 앱이 마지막으로 읽은 것은 읽기 주기만큼 늦을 수 있다
    */
-  private async ensureOpen(number: number, location: PrLocation): Promise<void> {
+  private async ensureOpen(lane: string, number: number, location: PrLocation): Promise<void> {
     const gh = {
       repo: repoArg(location),
       number,
-      cwd: this.project.repo_path,
+      cwd: this.laneRepo(lane),
       env: this.ctx.env,
     }
     let state: unknown
@@ -5182,30 +5417,35 @@ export class WorkRunner {
   }
 
   /** [머지 없이 끝내기] (D179). 확인 창은 화면이 띄운다. GitHub의 PR은 건드리지 않는다 */
-  prEnd(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'pr.end', at: this.ctx.at() }))
+  prEnd(lane = ''): Promise<CommandResult> {
+    return this.enqueue(() =>
+      this.command({ type: 'pr.end', at: this.ctx.at(), ...this.laneTag(lane) }),
+    )
   }
 
   /** 머지 뒤 정리 창을 열었다 (D178, D200) */
-  prCleanOffered(): Promise<CommandResult> {
-    return this.enqueue(() => this.command({ type: 'pr.cleanOffered', at: this.ctx.at() }))
+  prCleanOffered(lane = ''): Promise<CommandResult> {
+    return this.enqueue(() =>
+      this.command({ type: 'pr.cleanOffered', at: this.ctx.at(), ...this.laneTag(lane) }),
+    )
   }
 
   // ---------- PR 대응 (시나리오 10-3~10-7, D168~D207) ----------
 
   /** pr-items.json을 쓰고 메모리에 둔다. 쓰지 못하면 던진다 */
-  private async writePr(next: PrItemsFile): Promise<void> {
-    await this.files.writePrItems(next)
-    this.prFile = next
+  private async writePr(lane: string, next: PrItemsFile): Promise<void> {
+    const L = this.laneState(lane)
+    await this.files.writePrItems(next, lane)
+    L.file = next
   }
 
   /** 항목의 대응 중·처리됨을 대응 task의 기록(work.json)에 맞춘다 (D189). 쓰지 못하면 알리고 다음에 다시 맞춘다 */
-  private async syncItemStatus(): Promise<void> {
-    const file = await this.prItems()
-    const r = reconcileItems(file.items, this.work)
+  private async syncItemStatus(lane: string): Promise<void> {
+    const file = await this.prItems(lane)
+    const r = reconcileItems(file.items, this.laneWork(lane))
     if (!r.changed.length) return
     try {
-      await this.writePr({ ...file, items: r.items })
+      await this.writePr(lane, { ...file, items: r.items })
     } catch (e) {
       this.problem(`pr-items.json을 쓰지 못함: ${message(e)}`)
     }
@@ -5218,19 +5458,21 @@ export class WorkRunner {
    * 보고, 원격만 앞섰으면 받은 뒤(D181, D193) 대응 task를 시작한다. 넣은 항목은 대응 중이 된다 (D189)
    */
   async respond(input: RespondStartInput): Promise<CommandResult> {
-    const pre = respondStart(this.work, this.prFile?.items ?? [])
+    const lane = input.repo ?? ''
+    const L = this.laneState(lane)
+    const pre = respondStart(this.laneWork(lane), L.file?.items ?? [])
     if (!pre.enabled) return { ok: false, error: pre.reason ?? '대응을 시작할 수 없음' }
     if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
-    const remote = await this.fetchForRound()
+    const remote = await this.fetchForRound(lane)
     return this.enqueue(async () => {
-      const file = await this.prItems()
+      const file = await this.prItems(lane)
       const error = respondInputError(
-        respondStart(this.work, file.items),
+        respondStart(this.laneWork(lane), file.items),
         input.items,
         input.instruction,
       )
       if (error) return { ok: false, error }
-      return this.startRound({ items: input.items, instruction: input.instruction }, remote)
+      return this.startRound(lane, { items: input.items, instruction: input.instruction }, remote)
     })
   }
 
@@ -5238,10 +5480,10 @@ export class WorkRunner {
    * 대응 라운드 전에 기준 브랜치와 PR 브랜치를 fetch한다 (시나리오 10-3). 네트워크라 처리 줄 밖에서 한다(I51). 실패해도
    * 시작한다: 대응 task는 앱이 가진 원격 추적 브랜치로 한다. PR 브랜치의 원격 끝이고, 읽지 못하면 null이다
    */
-  private async fetchForRound(): Promise<string | null> {
-    const ctx = { repo: this.project.repo_path, env: this.ctx.env }
-    await fetchTip(ctx, targetBranch(this.work))
-    return fetchTip(ctx, workBranch(this.work))
+  private async fetchForRound(lane: string): Promise<string | null> {
+    const ctx = { repo: this.laneRepo(lane), env: this.ctx.env }
+    await fetchTip(ctx, targetBranch(this.laneWork(lane)))
+    return fetchTip(ctx, workBranch(this.laneWork(lane)))
   }
 
   /**
@@ -5251,6 +5493,7 @@ export class WorkRunner {
    * 대응 task를 넣은 뒤 받은 커밋과 대응 중이 된 항목을 적는다 (D189)
    */
   private async startRound(
+    lane: string,
     input: { items: readonly string[]; instruction: string; auto?: boolean },
     remote: string | null,
   ): Promise<CommandResult> {
@@ -5258,12 +5501,13 @@ export class WorkRunner {
     const at = this.ctx.at()
     let synced: PrSynced | null
     try {
-      synced = remote ? await this.syncForRespond(remote, at) : null
+      synced = remote ? await this.syncForRespond(lane, remote, at) : null
     } catch (e) {
       return { ok: false, error: `원격 PR 브랜치의 새 커밋을 받지 못함: ${message(e)}` }
     }
     const r = await this.command({
       type: 'pr.respond',
+      ...this.laneTag(lane),
       at,
       items: [...input.items],
       instruction: input.instruction,
@@ -5279,11 +5523,11 @@ export class WorkRunner {
         : {}),
     })
     // 상태의 기준은 work.json이라 쓰지 못하면 켤 때 맞춘다 (D189)
-    const now = await this.prItems()
+    const now = await this.prItems(lane)
     try {
-      await this.writePr({
+      await this.writePr(lane, {
         ...now,
-        items: reconcileItems(now.items, this.work).items,
+        items: reconcileItems(now.items, this.laneWork(lane)).items,
         synced: synced ? [...now.synced, synced] : now.synced,
       })
     } catch (e) {
@@ -5298,19 +5542,19 @@ export class WorkRunner {
    * Work 브랜치가 원격의 조상이고 worktree가 깨끗하고 Work 브랜치에 있을 때만 받는다. 아니면 받지 않고 시작한다: 갈라짐은
    * 항목이 되고, 승인 뒤 push가 거절되면 라운드를 미룬다
    */
-  private async syncForRespond(remote: string, at: string): Promise<PrSynced | null> {
+  private async syncForRespond(lane: string, remote: string, at: string): Promise<PrSynced | null> {
     const opts = { env: this.ctx.env }
-    const repo = this.project.repo_path
-    const branch = workBranch(this.work)
+    const repo = this.laneRepo(lane)
+    const branch = workBranch(this.laneWork(lane))
     const local = await refCommit(repo, `refs/heads/${branch}`, opts)
     if (!local || local === remote) return null
     const localInRemote = await isAncestor(repo, local, remote, opts)
     if (!localInRemote) return null
-    const clean = (await statusLines(this.worktree, opts)).length === 0
-    const onBranch = (await currentBranch(this.worktree, opts)) === branch
+    const clean = (await statusLines(this.laneTree(lane), opts)).length === 0
+    const onBranch = (await currentBranch(this.laneTree(lane), opts)) === branch
     const kind = syncKind({ local, remote, localInRemote, remoteInLocal: false, clean, onBranch })
     if (kind !== 'ff') return null
-    return this.fastForward(local, remote, targetBranch(this.work), at)
+    return this.fastForward(lane, local, remote, targetBranch(this.laneWork(lane)), at)
   }
 
   // ---------- 자동 대응 (D154, D159, D171, D184, D210) ----------
@@ -5319,41 +5563,52 @@ export class WorkRunner {
    * 바라 둔 자동 대응을 판정한다. 바람이 없거나 판정하는 중이거나 앱을 끝내는 중이면 아무것도 하지 않는다. 기다리지
    * 않는다: 네트워크(fetch)는 처리 줄 밖에서 하고 시작은 줄에서 한다 (I51)
    */
-  private autoRespondSoon(): void {
-    if (!this.autoWanted || this.autoRunning || this.closing) return
-    this.autoRunning = this.autoRespond()
+  private autoRespondSoon(lane: string): void {
+    const L = this.laneState(lane)
+    if (!L.autoWanted || L.autoRunning || this.closing) return
+    L.autoRunning = this.autoRespond(lane)
       .catch((e: unknown) => this.problem(`자동 대응을 시작하지 못함: ${message(e)}`))
       .finally(() => {
-        this.autoRunning = null
+        L.autoRunning = null
       })
   }
 
   /** 자동 대응 (D154, D170, D171, D184, D210): 판정을 따라 시작하거나, 상한에서 멈추고 알리거나, 막힘이 풀리기를 기다린다 */
-  private async autoRespond(): Promise<void> {
-    const pre = autoPlan(this.work, this.prFile?.items ?? [], this.ctx.config())
+  private async autoRespond(lane: string): Promise<void> {
+    const L = this.laneState(lane)
+    const pre = autoPlan(this.laneWork(lane), L.file?.items ?? [], this.ctx.config())
     if (pre.kind === 'wait') return
     if (pre.kind === 'off' || pre.kind === 'none') {
-      this.autoWanted = false
+      L.autoWanted = false
       return
     }
     // [대응 시작]처럼 시작하기 전에 기준 브랜치와 PR 브랜치를 fetch한다 (시나리오 10-3). 실패해도 시작한다
-    const remote = pre.kind === 'start' ? await this.fetchForRound() : null
+    const remote = pre.kind === 'start' ? await this.fetchForRound(lane) : null
     await this.enqueue(async () => {
       if (this.closing) return
-      const file = await this.prItems()
+      const file = await this.prItems(lane)
       // fetch하는 동안 바뀌었을 수 있어 줄에서 다시 판정한다
-      const plan = autoPlan(this.work, file.items, this.ctx.config())
+      const plan = autoPlan(this.laneWork(lane), file.items, this.ctx.config())
       if (plan.kind === 'wait') return
-      this.autoWanted = false
-      const pr = this.work.pr
+      L.autoWanted = false
+      const pr = this.laneWork(lane).pr
       if (!pr) return
       if (plan.kind === 'paused') {
-        await this.feed({ type: 'pr.autoPaused', at: this.ctx.at(), items: plan.items })
+        await this.feed({
+          type: 'pr.autoPaused',
+          at: this.ctx.at(),
+          items: plan.items,
+          ...this.laneTag(lane),
+        })
         this.notify(autoPausedNotice(pr.number, plan.max, plan.items.length))
         return
       }
       if (plan.kind !== 'start') return
-      const r = await this.startRound({ items: plan.items, instruction: '', auto: true }, remote)
+      const r = await this.startRound(
+        lane,
+        { items: plan.items, instruction: '', auto: true },
+        remote,
+      )
       if (!r.ok) {
         // 사람이 누르지 않았는데 사람이 필요해졌다: 새 항목은 남아 [대응 시작]할 수 있다
         const error = `자동 대응을 시작하지 못함: ${r.error}`
@@ -5370,29 +5625,29 @@ export class WorkRunner {
    * push를 미룬 앞 라운드와 함께 push하고, 답글을 하나씩 게시하며 게시할 때마다 코멘트 id를 적는다. 원격의 새 커밋 때문에
    * push가 거절되면 라운드를 미룬다. 실패하면 오류를 남기고 대응 task는 승인 대기로 남는다. 어느 쪽이든 곧 PR을 다시 읽는다
    */
-  private async respondCode(e: Extract<Effect, { type: 'respond' }>): Promise<void> {
-    const op = this.work.operation
+  private async respondCode(lane: string, e: Extract<Effect, { type: 'respond' }>): Promise<void> {
+    const op = this.laneWork(lane).operation
     if (op?.kind !== 'respond') return
-    const pr = this.work.pr
+    const pr = this.laneWork(lane).pr
     const location = pr ? prLocation(pr.url) : null
     try {
       if (!pr || !location) throw new Error(`PR 주소를 읽지 못함: ${pr?.url ?? ''}`)
       // 닫히거나 머지된 PR에는 push하지도 답글을 게시하지도 않는다. 앱이 닫힘을 읽기 전의 승인과 끊긴 작업의
       // [다시 시도]도 막는다 (D179, D208)
-      await this.ensureOpen(pr.number, location)
-      await this.planReplies(op, e.resume === true)
+      await this.ensureOpen(lane, pr.number, location)
+      await this.planReplies(lane, op, e.resume === true)
       if (op.stage === 'push') {
-        const pushed = await this.respondPush(op)
+        const pushed = await this.respondPush(lane, op)
         if (!pushed) {
           const check = (await this.checkNow(op.task_id)) ?? null
           await this.feed({ type: 'respond.deferred', at: this.ctx.at(), check })
-          setTimeout(() => void this.readPrNow(), 0)
+          setTimeout(() => void this.readPrNow(lane), 0)
           return
         }
         await this.feed({ type: 'respond.pushed', at: this.ctx.at(), ...pushed })
       }
-      const replies = await this.postReplies(op, location)
-      const base = (await this.prItems()).rounds.find((r) => r.task_id === op.task_id)?.pushed
+      const replies = await this.postReplies(lane, op, location)
+      const base = (await this.prItems(lane)).rounds.find((r) => r.task_id === op.task_id)?.pushed
         ?.base_commit
       const check = (await this.checkNow(op.task_id)) ?? null
       await this.feed({
@@ -5400,11 +5655,11 @@ export class WorkRunner {
         at: this.ctx.at(),
         check,
         replies,
-        ...(base && base !== this.work.base_commit ? { baseCommit: base } : {}),
+        ...(base && base !== this.laneWork(lane).base_commit ? { baseCommit: base } : {}),
       })
-      await this.syncItemStatus()
+      await this.syncItemStatus(lane)
     } catch (err) {
-      const now = this.work.operation
+      const now = this.laneWork(lane).operation
       const stage = now?.kind === 'respond' ? now.stage : op.stage
       this.opError = `PR 대응의 ${RESPOND_STAGE_LABEL[stage]} 실패: ${message(err)}`
       console.error(`[${this.key}] ${this.opError}`)
@@ -5419,7 +5674,7 @@ export class WorkRunner {
       }
     }
     // push나 게시로 PR이 바뀌었다: 새 head의 체크, 게시한 답글 거르기
-    setTimeout(() => void this.readPrNow(), 0)
+    setTimeout(() => void this.readPrNow(lane), 0)
   }
 
   /**
@@ -5427,8 +5682,8 @@ export class WorkRunner {
    * 고친 초안을 쓴다. 게시했거나 건너뛴 답글은 그대로다. push를 미룬 앞 라운드와, 끊긴 작업을 잇는 경우(resume)는 적어 둔
    * 것을 쓴다: 사람이 승인한 본문이다. 적어 둔 것이 없는 라운드만 정한다
    */
-  private async planReplies(op: RespondOperation, resume: boolean): Promise<void> {
-    const file = await this.prItems()
+  private async planReplies(lane: string, op: RespondOperation, resume: boolean): Promise<void> {
+    const file = await this.prItems(lane)
     const rounds = [...file.rounds]
     let changed = false
     for (const id of op.rounds) {
@@ -5439,7 +5694,7 @@ export class WorkRunner {
       if (prior && (resume || id !== op.task_id)) continue
       const files = await this.files.taskFiles(task)
       const next = planRound({
-        workId: this.work.work_id,
+        workId: this.laneWork(lane).work_id,
         task: { id, respond: task.respond },
         items: file.items,
         replies: files[REPLIES_FILE],
@@ -5450,7 +5705,7 @@ export class WorkRunner {
       else rounds.push(next)
       changed = true
     }
-    if (changed) await this.writePr({ ...file, rounds })
+    if (changed) await this.writePr(lane, { ...file, rounds })
   }
 
   /**
@@ -5460,24 +5715,25 @@ export class WorkRunner {
    * 있으면 push한 것으로 본다. 거절 문구에 기대지 않는다(M9의 머지와 같은 까닭, S7 관찰 8)
    */
   private async respondPush(
+    lane: string,
     op: RespondOperation,
   ): Promise<{ head: string; commits: string[] } | null> {
     const opts = { env: this.ctx.env }
-    const repo = this.project.repo_path
+    const repo = this.laneRepo(lane)
     const ctx = { repo, env: this.ctx.env }
-    const branch = workBranch(this.work)
-    const off = await this.offBranch()
-    if (off) throw new Error(off)
-    const head = await headCommit(this.worktree, opts)
+    const branch = workBranch(this.laneWork(lane))
+    const off = offWorkBranch(branch, await currentBranch(this.laneTree(lane), opts))
+    if (off) throw new Error(lane ? `${lane}: ${off}` : off)
+    const head = await headCommit(this.laneTree(lane), opts)
     const inRemote = async (remote: string | null) =>
       remote !== null && (remote === head || (await isAncestor(repo, head, remote, opts)))
     const tip = await fetchTip(ctx, branch)
     // 실패한 뒤 다시 승인했고 그때 push한 head 그대로면 다시 적지 않는다: 이번에 올라간 커밋이 없다
-    const pushed = (await this.prItems()).rounds.find((r) => r.task_id === op.task_id)?.pushed
+    const pushed = (await this.prItems(lane)).rounds.find((r) => r.task_id === op.task_id)?.pushed
     if (pushed?.head === head && (await inRemote(tip))) return { head, commits: [] }
     if (!(await inRemote(tip))) {
       try {
-        await pushBranch(this.worktree, branch, 'origin', opts)
+        await pushBranch(this.laneTree(lane), branch, 'origin', opts)
       } catch (err) {
         const after = await fetchTip(ctx, branch)
         if (!(await inRemote(after))) {
@@ -5486,7 +5742,7 @@ export class WorkRunner {
         }
       }
     }
-    return this.recordPush(op, head)
+    return this.recordPush(lane, op, head)
   }
 
   /**
@@ -5495,25 +5751,27 @@ export class WorkRunner {
    * 함께 push한 라운드를 적는다 (D193)
    */
   private async recordPush(
+    lane: string,
     op: RespondOperation,
     head: string,
   ): Promise<{ head: string; commits: string[] }> {
     const opts = { env: this.ctx.env }
-    const repo = this.project.repo_path
+    const repo = this.laneRepo(lane)
     const ctx = { repo, env: this.ctx.env }
-    const first = this.task(op.rounds[0] ?? op.task_id)?.start_commit
+    const firstTask = this.task(op.rounds[0] ?? op.task_id)
+    const first = firstTask ? laneStart(firstTask, lane) : undefined
     const from = (await hasCommit(repo, op.from, opts)) ? op.from : first
     const commits = from
       ? (await commitsWithParents(repo, from, head, opts)).map((c) => c.commit)
       : []
     const base = first
       ? (
-          await receivedCommits(ctx, first, head, this.work.base_commit, () =>
-            fetchTip(ctx, targetBranch(this.work)),
+          await receivedCommits(ctx, first, head, this.laneWork(lane).base_commit, () =>
+            fetchTip(ctx, targetBranch(this.laneWork(lane))),
           )
         ).base
       : null
-    const file = await this.prItems()
+    const file = await this.prItems(lane)
     const at = this.ctx.at()
     const rounds = file.rounds.map((r): PrRound =>
       r.task_id === op.task_id
@@ -5522,7 +5780,7 @@ export class WorkRunner {
           ? { ...r, pushed_with: op.task_id }
           : r,
     )
-    await this.writePr({ ...file, rounds })
+    await this.writePr(lane, { ...file, rounds })
     return { head, commits }
   }
 
@@ -5531,6 +5789,7 @@ export class WorkRunner {
    * (5.5 pr.replied). 끊긴 뒤 이었으면 앞서 게시한 답글도 넣는다
    */
   private async postReplies(
+    lane: string,
     op: RespondOperation,
     location: PrLocation,
   ): Promise<{ item: string; commentId?: number; skipped?: string }[]> {
@@ -5538,11 +5797,12 @@ export class WorkRunner {
     // 원래 코멘트만 본다. 실패하면 그 자리에서 멈추고 [다시 시도]가 새로 받는다
     const lists: ReplyLists = new Map()
     for (const id of op.rounds) {
-      const round = (await this.prItems()).rounds.find((r) => r.task_id === id)
+      const round = (await this.prItems(lane)).rounds.find((r) => r.task_id === id)
       if (!round) continue
-      for (const reply of unpostedReplies(round)) await this.postReply(id, reply, location, lists)
+      for (const reply of unpostedReplies(round))
+        await this.postReply(lane, id, reply, location, lists)
     }
-    return (await this.prItems()).rounds
+    return (await this.prItems(lane)).rounds
       .filter((r) => op.rounds.includes(r.task_id))
       .flatMap((r) => r.replies)
       .flatMap((x): { item: string; commentId?: number; skipped?: string }[] =>
@@ -5560,21 +5820,22 @@ export class WorkRunner {
    * 바로 적는다. 인라인 답글이 GitHub의 오류로 실패했는데 다시 읽어도 그 코멘트가 없으면 건너뛴다
    */
   private async postReply(
+    lane: string,
     taskId: string,
     reply: PrReply,
     location: PrLocation,
     lists: ReplyLists,
   ): Promise<void> {
-    const file = await this.prItems()
+    const file = await this.prItems(lane)
     const item = file.items.find((i) => i.id === reply.item)
     if (item?.gone) {
-      await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+      await this.updateReply(lane, taskId, reply.item, { skipped: GONE_SKIP })
       return
     }
     if (reply.attempted_at) {
-      const found = await this.findReply(reply, location, lists)
+      const found = await this.findReply(lane, reply, location, lists)
       if (found) {
-        await this.updateReply(taskId, reply.item, {
+        await this.updateReply(lane, taskId, reply.item, {
           comment_id: found.id,
           ...(found.url ? { url: found.url } : {}),
           posted_at: this.ctx.at(),
@@ -5582,7 +5843,7 @@ export class WorkRunner {
         return
       }
     }
-    await this.updateReply(taskId, reply.item, { attempted_at: this.ctx.at() })
+    await this.updateReply(lane, taskId, reply.item, { attempted_at: this.ctx.at() })
     const rest = restRepo(location)
     const n = location.number
     const path =
@@ -5595,7 +5856,7 @@ export class WorkRunner {
         host: location.host,
         path,
         body: { body: reply.body },
-        cwd: this.project.repo_path,
+        cwd: this.laneRepo(lane),
         env: this.ctx.env,
       })
     } catch (err) {
@@ -5603,7 +5864,7 @@ export class WorkRunner {
       if (reply.thread !== null && answered) {
         let gone: boolean
         try {
-          gone = await this.inlineGone(reply, location, lists)
+          gone = await this.inlineGone(lane, reply, location, lists)
         } catch (listErr) {
           // 목록을 읽지 못해도 사람이 볼 것은 게시가 실패한 원래 까닭이다
           throw new Error(`${message(err)} (코멘트 목록도 읽지 못함: ${message(listErr)})`, {
@@ -5611,8 +5872,8 @@ export class WorkRunner {
           })
         }
         if (gone) {
-          await this.markGone(reply.item)
-          await this.updateReply(taskId, reply.item, { skipped: GONE_SKIP })
+          await this.markGone(lane, reply.item)
+          await this.updateReply(lane, taskId, reply.item, { skipped: GONE_SKIP })
           return
         }
       }
@@ -5621,7 +5882,7 @@ export class WorkRunner {
     const id = typeof res['id'] === 'number' ? res['id'] : null
     if (id === null) throw new Error(`게시한 답글의 id를 읽지 못함 (${reply.item})`)
     const url = typeof res['html_url'] === 'string' ? res['html_url'] : undefined
-    await this.updateReply(taskId, reply.item, {
+    await this.updateReply(lane, taskId, reply.item, {
       comment_id: id,
       ...(url ? { url } : {}),
       posted_at: this.ctx.at(),
@@ -5629,12 +5890,17 @@ export class WorkRunner {
   }
 
   /** 답글이 올라갈 REST 목록 (스레드에 단 답글은 인라인 코멘트, 아니면 대화 코멘트). 한 번의 게시에서 종류마다 한 번 받는다 */
-  private replyList(reply: PrReply, location: PrLocation, lists: ReplyLists): Promise<unknown[]> {
+  private replyList(
+    lane: string,
+    reply: PrReply,
+    location: PrLocation,
+    lists: ReplyLists,
+  ): Promise<unknown[]> {
     const kind = reply.thread === null ? 'convo' : 'inline'
     let list = lists.get(kind)
     if (!list) {
       list = listPrComments(
-        { ghBin: this.ctx.ghBin, env: this.ctx.env, repo: this.project.repo_path, location },
+        { ghBin: this.ctx.ghBin, env: this.ctx.env, repo: this.laneRepo(lane), location },
         kind,
       )
       lists.set(kind, list)
@@ -5644,11 +5910,12 @@ export class WorkRunner {
 
   /** 게시 결과를 모르는 답글을 원격에서 보이지 않는 표시로 찾는다 (D194). 없으면 null */
   private async findReply(
+    lane: string,
     reply: PrReply,
     location: PrLocation,
     lists: ReplyLists,
   ): Promise<{ id: number; url: string | null } | null> {
-    for (const raw of await this.replyList(reply, location, lists)) {
+    for (const raw of await this.replyList(lane, reply, location, lists)) {
       const c = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
       const body = typeof c['body'] === 'string' ? c['body'] : ''
       if (typeof c['id'] === 'number' && body.includes(reply.marker)) {
@@ -5660,12 +5927,13 @@ export class WorkRunner {
 
   /** 인라인 답글이 달릴 코멘트(항목의 코멘트나 스레드 첫 코멘트)가 GitHub에서 없어졌는가 (D205) */
   private async inlineGone(
+    lane: string,
     reply: PrReply,
     location: PrLocation,
     lists: ReplyLists,
   ): Promise<boolean> {
     const ids = new Set(
-      (await this.replyList(reply, location, lists)).map((raw) =>
+      (await this.replyList(lane, reply, location, lists)).map((raw) =>
         raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['id'] : null,
       ),
     )
@@ -5674,9 +5942,9 @@ export class WorkRunner {
   }
 
   /** 없어진 코멘트를 적는다 (D205). 항목은 그 라운드를 게시하면 처리됨이다 */
-  private async markGone(itemId: string): Promise<void> {
-    const file = await this.prItems()
-    await this.writePr({
+  private async markGone(lane: string, itemId: string): Promise<void> {
+    const file = await this.prItems(lane)
+    await this.writePr(lane, {
       ...file,
       items: file.items.map((i) => (i.id === itemId ? { ...i, gone: true } : i)),
     })
@@ -5684,17 +5952,18 @@ export class WorkRunner {
 
   /** 라운드 기록의 답글 하나를 고쳐 바로 쓴다 (D194: 게시할 때마다 적음) */
   private async updateReply(
+    lane: string,
     taskId: string,
     itemId: string,
     patch: Partial<PrReply>,
   ): Promise<void> {
-    const file = await this.prItems()
+    const file = await this.prItems(lane)
     const rounds = file.rounds.map((r): PrRound =>
       r.task_id !== taskId
         ? r
         : { ...r, replies: r.replies.map((x) => (x.item === itemId ? { ...x, ...patch } : x)) },
     )
-    await this.writePr({ ...file, rounds })
+    await this.writePr(lane, { ...file, rounds })
     this.changed()
   }
 
@@ -5702,12 +5971,13 @@ export class WorkRunner {
    * PR 패널의 [실패한 체크 다시 실행] (D175, D203): 마지막으로 읽은 head에서 실패한 Actions 체크의 실행을 --failed로 다시
    * 돌린다. 실행 하나가 실패해도 나머지는 한다. 다시 실행한 것을 남기고 곧 PR을 다시 읽는다
    */
-  rerunChecks(): Promise<CommandResult> {
+  rerunChecks(lane = ''): Promise<CommandResult> {
+    const L = this.laneState(lane)
     return this.enqueue(async () => {
-      const view = this.prPanel()?.rerun
+      const view = this.prPanel(lane)?.rerun
       if (!view) return { ok: false, error: '다시 실행할 실패한 Actions 체크가 없음' }
       if (!view.enabled) return { ok: false, error: view.reason ?? '다시 실행할 수 없음' }
-      const pr = this.work.pr
+      const pr = this.laneWork(lane).pr
       const location = pr ? prLocation(pr.url) : null
       if (!location) return { ok: false, error: `PR 주소를 읽지 못함: ${pr?.url ?? ''}` }
       const done: number[] = []
@@ -5716,19 +5986,25 @@ export class WorkRunner {
         const r = await ghRerunFailed(this.ctx.ghBin, {
           repo: repoArg(location),
           run,
-          cwd: this.project.repo_path,
+          cwd: this.laneRepo(lane),
           env: this.ctx.env,
         })
         if (r.ok) done.push(run)
         else errors.push(`실행 ${run}: ${r.error}`)
       }
       if (done.length) {
-        const checks = (this.prRead?.checks ?? [])
+        const checks = (L.read?.checks ?? [])
           .filter((c) => c.bucket === 'fail' && c.run !== null && done.includes(c.run))
           .map((c) => c.label)
-        await this.feed({ type: 'pr.checksRerun', at: this.ctx.at(), runs: done, checks })
+        await this.feed({
+          type: 'pr.checksRerun',
+          at: this.ctx.at(),
+          runs: done,
+          checks,
+          ...this.laneTag(lane),
+        })
       }
-      setTimeout(() => void this.readPrNow(), 0)
+      setTimeout(() => void this.readPrNow(lane), 0)
       return errors.length
         ? { ok: false, error: `다시 실행하지 못함: ${errors.join(' / ')}` }
         : { ok: true }
@@ -6045,7 +6321,7 @@ export class WorkRunner {
       shelved: w.shelved_at !== undefined,
       canShelve: canShelve(w),
       canDelete: canDelete(w),
-      badge: badge(w, this.prBadge()),
+      badge: badge(w, this.cardBadge()),
       actions: this.cleanupOpen() ? cleanupActions(actions(w)) : actions(w),
       stopAfterStep: w.stop_after_step === true,
       settings: w.settings,
@@ -6082,7 +6358,11 @@ export class WorkRunner {
       stopNotice: stopNotice(w),
       stopHint: resumeHint(w),
       delivery: deliveryView(w.delivery),
-      pr: this.prPanel(),
+      pr: this.prPanel(''),
+      prs: workRepos(w).flatMap((r) => {
+        const view = r.pr ? this.prPanel(r.path) : null
+        return view ? [view] : []
+      }),
       cleanup: this.cleanupView(),
       side: this.sideView(),
       drafts: this.drafts.list,

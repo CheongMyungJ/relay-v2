@@ -4,9 +4,16 @@ import { describe, expect, it } from 'vitest'
 import { cleanPreview, planClean, type CleanFacts } from '../../src/core/cleanup'
 import { buildContext } from '../../src/core/context'
 import { createWork, currentTask, transition, type MachineEvent } from '../../src/core/machine'
+import { mergeGate } from '../../src/core/pr'
 import {
   bundlePlan,
+  focusLane,
   isBundle,
+  linkWaiting,
+  linkWaitingReason,
+  prCards,
+  relinkReason,
+  unfocusLane,
   linkMessage,
   mainEditable,
   repoDraftFile,
@@ -402,16 +409,16 @@ describe('상태 기계의 묶음 Work (D470~D482)', () => {
       baseCommit: 'm',
       at: at(),
     }).work
-    const r = apply(plain, { type: 'repo.added', at: '2026-10-24T11:00:00+09:00', repo: LIB })
+    const r = apply(plain, { type: 'repo.added', at: '2026-10-24T11:00:00+09:00', added: LIB })
     expect(r.work.repos).toEqual([{ ...LIB, added_at: '2026-10-24T11:00:00+09:00' }])
     expect(r.effects.map((e) => (e.type === 'log' ? e.event.type : e.type))).toEqual([
       'work.repo_added',
     ])
-    expect(apply(r.work, { type: 'repo.added', at: at(), repo: LIB }).rejected).toBe(
+    expect(apply(r.work, { type: 'repo.added', at: at(), added: LIB }).rejected).toBe(
       '이미 고른 레포임',
     )
     expect(
-      apply({ ...plain, status: 'completed' }, { type: 'repo.added', at: at(), repo: LIB })
+      apply({ ...plain, status: 'completed' }, { type: 'repo.added', at: at(), added: LIB })
         .rejected,
     ).toBe('진행 중이거나 멈춘 Work에만 레포를 더함')
   })
@@ -589,5 +596,165 @@ describe('승인 화면의 묶음 Work 사실 (D471, D475)', () => {
       'lib: 작업 브랜치 relay/w에 있지 않습니다 (지금: 분리된 HEAD)',
     )
     expect(shown[1]?.lines).toEqual([' M README.md'])
+  })
+})
+
+describe('PR 카드의 렌즈 (D480, D481, I174)', () => {
+  const PR = (n: number) => ({
+    number: n,
+    url: `https://github.com/o/r${n}/pull/${n}`,
+    head: `h${n}`,
+    gh_version: null,
+    started_at: at(),
+  })
+  /** 메인 PR과 lib PR이 있는 PR 진행 Work. lib는 메인이 가리킨다 */
+  function prWork(): WorkState {
+    const w = atVerify()
+    return {
+      ...w,
+      status: 'pr',
+      tasks: w.tasks.map((t) => ({ ...t, status: 'approved' as const })),
+      pr: PR(1),
+      repos: [{ ...LIB, target_branch: 'release', pr: PR(2), linked: true }],
+    }
+  }
+
+  it('렌즈는 그 레포를 메인 자리에 두고, 되돌리면 그 레포에 적고 메인은 그대로다', () => {
+    const w = prWork()
+    const f = focusLane(w, 'lib')
+    expect(f).toMatchObject({
+      lens: 'lib',
+      base_branch: 'main',
+      base_commit: 'lib0001',
+      target_branch: 'release',
+      pr: { number: 2 },
+    })
+    expect(focusLane(w, '')).toBe(w)
+    const changed = { ...f, base_commit: 'lib0002', pr: { ...PR(2), read_at: 'x' } }
+    const back = unfocusLane(w, changed, 'lib')
+    expect(back.lens).toBeUndefined()
+    expect(back).toMatchObject({ base_commit: 'main0001', pr: { number: 1 } })
+    expect(back.repos?.[0]).toMatchObject({
+      base_commit: 'lib0002',
+      target_branch: 'release',
+      pr: { read_at: 'x' },
+      linked: true,
+    })
+    expect(prCards(back).map((c) => c.lane)).toEqual(['', 'lib'])
+  })
+
+  it('서브모듈 카드의 이벤트는 그 PR에 적고, 카드 하나가 머지돼도 다른 카드가 남으면 PR 진행이다', () => {
+    const w = prWork()
+    const read = apply(w, {
+      type: 'pr.read',
+      at: at(),
+      repo: 'lib',
+      number: 2,
+      state: 'OPEN',
+      head: 'h2b',
+      baseRef: 'release',
+      received: [],
+      notAccepted: [],
+    })
+    expect(read.work.repos?.[0]?.pr).toMatchObject({ head: 'h2b', read_at: expect.any(String) })
+    expect(read.work.pr?.head).toBe('h1')
+    const merged = apply(read.work, {
+      type: 'pr.read',
+      at: at(),
+      repo: 'lib',
+      number: 2,
+      state: 'MERGED',
+      head: 'h2b',
+      baseRef: 'release',
+      received: [],
+      notAccepted: [],
+    })
+    expect(merged.work.status).toBe('pr')
+    expect(merged.work.completed_at).toBeUndefined()
+    expect(merged.work.repos?.[0]?.pr?.merged).toMatchObject({ outside: true })
+    const logs = merged.effects.flatMap((e) => (e.type === 'log' ? [e.event.type] : []))
+    expect(logs).toEqual(['pr.merged'])
+    // 마지막 카드(메인)를 끝내면 완료다
+    const ended = apply(merged.work, { type: 'pr.end', at: at() })
+    expect(ended.work.status).toBe('completed')
+    expect(ended.effects.flatMap((e) => (e.type === 'log' ? [e.event.type] : []))).toEqual([
+      'work.completed',
+    ])
+  })
+
+  it('서브모듈 카드의 [대응 시작]은 그 레포를 적고, 대응 task는 Work에 하나다', () => {
+    const w = prWork()
+    const r = apply(w, {
+      type: 'pr.respond',
+      at: at(),
+      repo: 'lib',
+      items: ['convo:1'],
+      instruction: '',
+    })
+    expect(r.rejected).toBeUndefined()
+    expect(r.work.tasks.at(-1)?.respond).toMatchObject({ repo: 'lib', round: 1 })
+    // 메인 카드도 다른 카드도 대응을 시작하지 않는다
+    expect(
+      apply(r.work, { type: 'pr.respond', at: at(), items: ['convo:9'], instruction: '' }).rejected,
+    ).toContain('끝나지 않은 PR 대응 task가 있음')
+    // 메인 PR이 밖에서 머지돼도 lib 카드의 대응 task는 끝내지 않는다
+    const mainMerged = apply(r.work, {
+      type: 'pr.read',
+      at: at(),
+      number: 1,
+      state: 'MERGED',
+      head: 'h1',
+      baseRef: 'main',
+      received: [],
+      notAccepted: [],
+    })
+    expect(mainMerged.work.status).toBe('pr')
+    expect(mainMerged.work.tasks.at(-1)?.status).not.toBe('interrupted')
+  })
+
+  it('메인 PR의 [머지]는 가리키는 서브모듈의 PR이 머지되고 머지된 커밋을 가리켜야 켜진다 (D481)', () => {
+    const w = prWork()
+    expect(linkWaiting(w)).toEqual(['lib'])
+    const read = {
+      at: at(),
+      state: 'OPEN' as const,
+      head: 'h1',
+      headRef: 'b',
+      baseRef: 'main',
+      isDraft: false,
+      mergeable: 'MERGEABLE',
+      mergeStateStatus: 'CLEAN',
+      reviewDecision: null,
+      checks: [],
+      ci: 'pass' as const,
+      sync: 'same' as const,
+    }
+    const gate = mergeGate({ work: w, read, items: [], localHead: 'h1' })
+    expect(gate).toEqual({ enabled: false, reasons: [linkWaitingReason('lib')] })
+    const done: WorkState = {
+      ...w,
+      repos: (w.repos ?? []).map((r) =>
+        r.pr
+          ? {
+              ...r,
+              pr: { ...r.pr, merged: { at: at(), head: 'h2', method: 'squash', outside: false } },
+            }
+          : r,
+      ),
+    }
+    expect(mergeGate({ work: done, read, items: [], localHead: 'h1' }).enabled).toBe(true)
+    expect(mergeGate({ work: done, read, items: [], localHead: 'h1', relink: ['lib'] })).toEqual({
+      enabled: false,
+      reasons: [relinkReason('lib')],
+    })
+    // 서브모듈 카드에는 이 조건이 없다
+    expect(
+      mergeGate({
+        work: focusLane(w, 'lib'),
+        read: { ...read, head: 'h2' },
+        items: [],
+        localHead: 'h2',
+      }).enabled,
+    ).toBe(true)
   })
 })

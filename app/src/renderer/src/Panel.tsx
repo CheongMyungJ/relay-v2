@@ -51,7 +51,12 @@ interface Props {
 
 /** PR 패널을 보일 때인가: PR 진행을 시작한 Work의 지금 task(verify)를 보고 있다 (시나리오 10) */
 export function showsPr(work: WorkView, taskId: string | undefined): boolean {
-  return work.pr !== null && taskId === work.current
+  return prCards(work).length > 0 && taskId === work.current
+}
+
+/** PR 카드 (D480): 메인 PR이 맨 앞이고 서브모듈 PR이 뒤다 */
+export function prCards(work: WorkView): PrView[] {
+  return [...(work.pr ? [work.pr] : []), ...(work.prs ?? [])]
 }
 
 /**
@@ -134,12 +139,12 @@ export function Panel({
       task.id === work.current ? (
         <TaskNotice task={task} pr={work.status === 'pr'} />
       ) : null}
-      {showsPr(work, task.id) && work.pr ? (
+      {showsPr(work, task.id) ? (
         <PrSection
           key={`${work.key}|${review.taskId}|${wantsApproval(review) ? 'approve' : ''}`}
           work={work}
           task={task}
-          pr={work.pr}
+          cards={prCards(work)}
           review={review}
           onApproved={onApproved}
         />
@@ -808,19 +813,22 @@ const DELIVERY_BUTTON: Readonly<Record<DeliveryChoice, string>> = {
 function PrSection({
   work,
   task,
-  pr,
+  cards,
   review,
   onApproved,
 }: {
   work: WorkView
   task: TaskView
-  pr: PrView
+  /** PR 카드 (D480). 하나 이상이다 */
+  cards: PrView[]
   review: ReviewView
   onApproved: () => void
 }) {
   const respond = review.respond !== null
   const approving = respond && work.status === 'pr' && wantsApproval(review)
-  const [tab, setTab] = useState<'pr' | 'task'>(approving ? 'task' : 'pr')
+  // 탭: PR 카드마다(`pr:<레포>`, 메인은 `pr:`)와 task
+  const [tab, setTab] = useState<string>(approving ? 'task' : `pr:${cards[0]?.repo ?? ''}`)
+  const pr = tab.startsWith('pr:') ? cards.find((c) => `pr:${c.repo}` === tab) : undefined
   const body = !respond ? (
     <Review review={review} readOnly />
   ) : approving ? (
@@ -835,14 +843,17 @@ function PrSection({
   return (
     <>
       <div className="review-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === 'pr'}
-          className={tab === 'pr' ? 'active' : ''}
-          onClick={() => setTab('pr')}
-        >
-          PR
-        </button>
+        {cards.map((c) => (
+          <button
+            key={c.repo}
+            role="tab"
+            aria-selected={tab === `pr:${c.repo}`}
+            className={tab === `pr:${c.repo}` ? 'active' : ''}
+            onClick={() => setTab(`pr:${c.repo}`)}
+          >
+            {cards.length > 1 ? `${c.repo || '메인'} PR #${c.number}` : 'PR'}
+          </button>
+        ))}
         <button
           role="tab"
           aria-selected={tab === 'task'}
@@ -852,7 +863,7 @@ function PrSection({
           {respond ? task.label : '리뷰와 검증 결과'}
         </button>
       </div>
-      {tab === 'pr' ? <PrPanel work={work} pr={pr} /> : body}
+      {pr ? <PrPanel key={pr.repo} work={work} pr={pr} /> : body}
     </>
   )
 }
