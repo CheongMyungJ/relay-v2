@@ -58,6 +58,15 @@ Review in this order:
    가능성 is the default. Do not mark a candidate 틀림 for being speculative or for depending on runtime state when that state is realistic: a race, a missing value on a rare but reachable path (an error handler, an empty cache, a missing optional field), zero or empty treated as missing, off-by-one on a boundary the code does not exclude, a partial failure or retry, a pattern or allowlist that lost an anchor. Mark it 틀림 only when the code shows it: factually wrong (quote the line), impossible by a type, constant or invariant (show it), already handled in this diff (cite the guard), or pure style with no observable effect. Drop 틀림.
 5. **Write** the 확인됨 and 가능성 findings under `## 리뷰 지적` (see `## Order`), each with a severity.
 
+**Subagents:** if you can start subagents, give steps 1–4 to two of them, one after the other, and wait for each result before you go on:
+
+- **Finder** (steps 1–3): give it the path of `context.md`, the paths of this Work's artifacts, the base commit, the whole text of `## What to review` and the whole text of step 2. Copy them as they are: subagents do not see these instructions. It returns the deduplicated candidates, and the out-of-scope problems apart.
+- **Checker** (step 4): a new subagent, not the finder. Give it the base commit, the finder's whole list of candidates and the whole text of step 4. It returns each candidate with its mark and the quoted line.
+
+Both only read: they change no files, ask the human nothing, and return only the list. Do step 5 yourself with the list the checker returns. When you apply a picked finding, read the code it points to yourself.
+
+If you cannot start subagents, do steps 1–5 yourself, one after another, and write "한 세션에서 리뷰함(확인이 찾은 쪽과 같은 컨텍스트)" in `남은 위험`.
+
 <!-- /type -->
 ## What to review
 
