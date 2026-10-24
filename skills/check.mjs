@@ -8,7 +8,7 @@
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
 
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TYPES, assemble, stripFrontMatter } from './assemble.mjs';
@@ -569,6 +569,20 @@ for (const [name, items] of Object.entries(spec)) {
     }
   }
 }
+
+// verify의 코드 리뷰 방법은 내장 code-review high에서 들였다. 출처와 판단은 따로 둔 문서에 있다 (D470~D475)
+console.log('\n[4] 설계 대조: 리뷰 방법 문서 (D470~D475)');
+const reviewMethodPath = join(root, 'docs/review-method.md');
+const reviewMethod = existsSync(reviewMethodPath) ? read('docs/review-method.md') : '';
+check(reviewMethod !== '', 'docs/review-method.md 있음');
+const REVIEW_METHOD_SECTIONS = ['## 1. 참고 대상', '## 2. 내장 code-review high의 구성과 순서', '## 3. 들인 것', '## 4. 들이지 않은 것', '## 5. 서브에이전트에게 맡길지', '## 6. relay 지침에 둔 곳'];
+const rmMissing = REVIEW_METHOD_SECTIONS.filter((h) => !headings(reviewMethod).includes(h));
+check(rmMissing.length === 0, `docs/review-method.md: 필수 절 ${REVIEW_METHOD_SECTIONS.length}개${rmMissing.length ? ` (빠짐: ${rmMissing.join(', ')})` : ''}`);
+const rmSub = reviewMethod.split('## 5. 서브에이전트에게 맡길지')[1]?.split('\n## ')[0] ?? '';
+check(/찾기[\s\S]*확인[\s\S]*메인/.test(rmSub), 'docs/review-method.md: 서브에이전트 판단에 찾기·확인·메인 세션에 두는 것');
+const dMissing = ['D470', 'D471', 'D472', 'D473', 'D474', 'D475'].filter((d) => !design.includes(`\n| ${d} |`));
+check(dMissing.length === 0, `design.md: 결정 D470~D475${dMissing.length ? ` (빠짐: ${dMissing.join(', ')})` : ''}`);
+check(/\n\| D474 \|[^\n]*서브에이전트[^\n]*review-method\.md/.test(design), 'design.md: D474는 서브에이전트 판단이고 review-method.md를 가리킴');
 
 console.log('\n[5] 유형별 조립 (D279)');
 for (const v of variants) {

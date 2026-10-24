@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 verify 코드 리뷰 방법(M33, I169)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -182,6 +182,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I166 | 명령은 `workFiles(workKey, rel)`, `readWorkFile(workKey, rel)`, `saveWorkFile(workKey, rel, text, hash)`이고 IPC는 `files:list`·`files:read`·`files:save`다. 보는 폴더는 `WorkRunner.filesRoot()`(보관된 Work는 null)다. 바뀐 파일 판정은 열 때 읽은 바이트의 sha256(`hash`)과 저장 직전의 파일을 견준다. `hash`가 null이면 [덮어쓰기]다. 쓰기는 `fs.writeFile`로 그 자리에 쓴다(원자적 쓰기가 아님). 링크 수(`nlink`)가 2 이상이면 쓰지 않는다 | mtime은 해상도가 거친 파일 시스템에서 같은 때의 두 번 쓰기를 놓친다. 이름 바꾸기로 하는 원자적 쓰기는 링크를 보통 파일로 바꾸고 권한을 잃는다 | |
 | I167 | 화면은 `renderer/src/Files.tsx`의 `FilesView`다. 탭 id는 `@files`(정리 세션 `@cleanup`, 곁 세션 `@side`와 같은 자리)이고, 한 번 연 Work의 `FilesView`는 숨겨 두고 다시 쓴다. 탭을 보일 때마다 `setTimeout` 뒤에 펼친 폴더와 연 파일을 다시 읽는다(effect에서 바로 상태를 바꾸지 않는 react-hooks 규칙). 마크다운은 `Markdown`(markdown-it, `html: false`)을 그대로 쓴다. 렌더러는 core를 부르지 못해(tsconfig.web) 마크다운 확장자 판정은 화면에 둔다. 늦게 온 읽기 응답은 버린다: 열기는 차례 번호(`openSeq`)로, 다시 읽기는 읽기 전의 `file`과 같은지로 본다(저장하면 바뀐다). 고친 것이 없으면 저장하지 않는다. Ctrl+S는 `e.code === 'KeyS'`로도 본다(한글 자판의 `e.key`는 `ㄴ`). 폴더를 접으면 그 아래 펼친 폴더도 접는다 | 터미널(D143)처럼 연 적 있는 Work만 만든다. 고치던 글이 탭을 옮겨도 남는다(D464) | |
 | I168 | 패널 너비(D469)의 범위, 패널 열, 저장은 `renderer/src/panelWidth.ts`의 순수 함수이고 손잡이는 `PanelResizer`다(`panel.ts`는 Windows에서 `Panel.tsx`와 겹친다). styles.css의 `.layout`·`.layout.wide`는 패널 열만 CSS 변수로 받는다: 끄는 중의 `--panel-drag`, 지금 쪽의 정한 너비 `--panel-col`(`clamp(280px, <너비>, calc(100vw - 660px))`), 넓을 때의 기본 `max(440px, 45%, var(--panel-normal))`. `panelStyle(widths, wide)`가 `--panel-col`과 `--panel-normal`을 고르고 App이 `.layout`의 인라인 스타일로 준다. 창 크기에 따른 범위는 CSS `clamp`가 맡아 창 크기 이벤트로 다시 그리지 않는다. 끄는 동안은 손잡이가 `--panel-drag`만 DOM에 써 App을 다시 그리지 않고 저장도 하지 않으며, 놓을 때(`lostpointercapture`) 끌기 시작 때 잡은 `onResize`로 그 쪽 너비를 한 번 정한다(`flushSync`로 그린 뒤 `--panel-drag`를 지운다). 3px 넘게 움직여야 끌기로 본다(두 번 누를 때의 떨림). 패널(`aside`)은 스크롤되므로 손잡이는 같은 grid 칸(3열 1행)에 겹쳐 둔다. `aria-valuenow`는 ResizeObserver로 잰 그려진 너비다. 저장 키는 `relay.panel.width`(`{ normal, wide }`)이고 userData에 남아, [스모크]는 끝에 지운다 | 판정과 쪽 고르기를 [단위]에서 보고 손잡이는 [스모크]가 이어지는 것만 본다(CLAUDE.md의 층). 렌더러 순수 함수라 `tsconfig.node.json`에 넣어 시험이 타입 검사를 지난다(`sidebar.ts`와 같음) | |
+| I169 | verify의 코드 리뷰 방법(D470~D475)은 스킬 글(`skills/verify/SKILL.md`의 코드를 바꾸는 유형 블록)만 바꾸고 앱 코드는 바꾸지 않는다. `skills/check.mjs`가 [4]의 verify 명세 항목(D470~D474, 도구 이름에 기대지 않음), 리뷰 방법 문서(`docs/review-method.md`의 필수 절, design.md의 D470~D475)를 보고, [5]에서 설계 유형 verify의 조립 결과를 들이기 전(3df9b94)의 SHA-256 상수와 비교한다. 바뀐 지적 모양을 읽는 곳(`core/review`의 `stageLead`, [실제] 판정의 `findings`)은 그대로이고 [단위]가 새 모양으로 본다 | 지침은 모델이 따르는 글이라 정적 검사로 문구를 지킨다. 설계 verify가 그대로인지는 문구 몇 개보다 조립 결과 전체를 비교하는 편이 빠짐이 없다. 설계 verify를 일부러 바꾸면 상수를 함께 고친다 | |
 
 ## 3. 확인한 사실
 
@@ -1390,6 +1391,18 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[단위]** `test/unit/panel-width.test.ts`: 너비의 범위(가운데 400px 남김, 280px 아래로 줄지 않음, 아주 좁은 창), 정한 너비의 열, 지금 쪽(보통·넓음)의 너비 고르기와 넓을 때 보통 쪽 너비 넘기기, 보통·넓음 따로 저장, 깨진 값과 쓸 수 없는 저장소.
 - **[스모크]** `test/smoke/panel.spec.ts`: 손잡이를 끌면 그만큼 넓어지고, ←·→ 키로 바뀌며, 다시 켜도 남고, 두 번 누르면 기본 너비다. 손잡이가 그려진 너비를 알린다(`aria-valuenow`).
 - **[어댑터]**, **[흐름]**, **[계약]**, **[실제]** 바뀌지 않았다: 화면만 바뀐다.
+
+### M33. verify의 코드 리뷰 방법 (D470~D475)
+
+사람이 리뷰와 검증 단계의 코드 리뷰 지침을 Claude Code 내장 `code-review` high 본문을 참고해 보완하고, 리뷰를 서브에이전트에게 맡기는 것이 relay에 맞는지 판단해 달라고 했다(찾기 하나 + 확인 하나를 고름). 설계 v0.28, 출처와 판단은 [review-method.md](review-method.md).
+
+- 스킬: `skills/verify/SKILL.md`의 코드를 바꾸는 유형 블록에 `## How to review`(순서, 후보 형식, 확인 규칙, 서브에이전트), `## What to review`의 여덟 각도, 지적 모양(`## Order` 1번, 템플릿, `## Done when`). 설계 유형은 그대로다(I169).
+
+**시험**
+
+- **스킬 정적 검사** `skills/check.mjs`: verify 명세 항목 D470~D475, 도구 이름 없음, 리뷰 방법 문서의 절과 design.md 결정, 설계 유형 verify 조립 결과의 해시.
+- **[단위]** `test/unit/review.test.ts`: 확인 결과와 들여쓴 실패 시나리오가 붙은 `verification.md`도 [요약] 맨 위에 리뷰 지적과 반영 절이 그 글 그대로 보인다. `test/unit/claude-review.test.ts`: [실제] 판정이 들여쓴 실패 시나리오 줄을 지적으로 세지 않는다.
+- **[어댑터]**, **[흐름]**, **[계약]**, **[실제]** 바뀌지 않았다: 앱 코드와 [실제] 판정 도구는 그대로다. 서브에이전트를 실제로 띄우는지는 모델 동작이라 [실제] verify가 깨졌나만 본다.
 
 ## 8. 테스트 전략
 
