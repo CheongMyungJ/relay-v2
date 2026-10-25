@@ -1,5 +1,7 @@
 // [스모크] 커스텀 유형 (M30, D459, D460): 업무 유형 화면에서 전역 유형을 만들면 새 Work 대화상자의 기본 다섯 뒤에 보이고,
-// 고르면 설명과 단계 목록이 보인다. 시작해 의도를 승인하면 첫 커스텀 단계가 그 이름의 탭으로 돈다(시작만 하고 기다린다).
+// 고르면 설명과 단계 목록이 보인다. 시작해 의도를 승인하면 첫 커스텀 단계가 그 이름의 탭으로 돈다. 첫 단계는 유형에서
+// 자동 승인을 켜 두어 승인 화면에 카운트다운과 [취소]가 보이고(4.3, D83, D457), [취소]하면 까닭이 보이며 사람이 [승인]하면
+// 마지막 단계(적용, 시작만 하고 기다린다)로 간다. 마지막 단계는 Work를 마무리해 단계 줄에 리뷰와 검증이 없다 (D493).
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,6 +10,7 @@ import { makeRepo } from '../support/repo'
 import {
   GENERAL_REQUEST,
   REPO_FILES,
+  customSteps,
   generalIntentDraft,
   steps,
   type Scenario,
@@ -22,7 +25,7 @@ const FAKE = path.resolve(
   isWin ? 'fake-claude.cmd' : 'fake-claude.mjs',
 )
 
-/** 시작만 하는 커스텀 단계: 도구 하나를 쓰고 기다린다 */
+/** 시작만 하는 마지막 커스텀 단계: 도구 하나를 쓰고 기다린다 */
 const WAITING: Step[] = [
   { do: 'prompt' },
   { do: 'tool', name: 'Read', input: { file_path: 'src/avg.js' } },
@@ -40,8 +43,21 @@ test.beforeAll(async () => {
   const intake = steps('intake').map((st) =>
     st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: generalIntentDraft() } : st,
   )
-  const s: Scenario = { tasks: { 'work-start': intake, 't-02': WAITING } }
+  // 조사는 산출물과 handoff를 쓰고 멈춘다(자동 승인 카운트다운). 적용은 시작만 한다
+  const s: Scenario = {
+    tasks: {
+      'work-start': intake,
+      't-02': customSteps('survey', { commit: false }),
+      't-03': WAITING,
+    },
+  }
   fs.writeFileSync(scenarioFile, JSON.stringify(s))
+  // 카운트다운이 끝나기 전에 [취소]를 누를 수 있게 길게 둔다
+  fs.mkdirSync(path.join(root, 'home'), { recursive: true })
+  fs.writeFileSync(
+    path.join(root, 'home', 'config.json'),
+    JSON.stringify({ auto_approve_countdown_sec: 600 }),
+  )
   const env = {
     ...process.env,
     CLAUDE_BIN: FAKE,
@@ -88,6 +104,7 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await win.getByLabel('단계 1 id').fill('survey')
   await win.getByLabel('단계 1 이름').fill('조사')
   await win.getByLabel('단계 1 절차').fill('바꿀 곳을 모두 찾는다.')
+  await win.getByLabel('단계 1 자동 승인').check()
   await win.getByLabel('시작점').selectOption('execute')
   await win.getByRole('button', { name: '단계 더하기' }).click()
   await expect(win.getByLabel('단계 2 절차')).toHaveValue(/^# relay: execute/)
@@ -96,7 +113,8 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await win.screenshot({ path: 'test-results/custom-editor.png' })
   await win.getByRole('button', { name: '저장' }).click()
   const row = win.getByRole('listitem', { name: '유형 survey-apply' })
-  await expect(row).toContainText('단계: 의도 정리 → 조사 → 적용 → 리뷰와 검증')
+  await expect(row).toContainText('단계: 의도 정리 → 조사 → 적용')
+  await expect(row).not.toContainText('리뷰와 검증')
   expect(fs.readdirSync(path.join(root, 'home', 'types', 'survey-apply')).sort()).toEqual([
     'apply.md',
     'survey.md',
@@ -111,9 +129,8 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await expect(types.getByRole('radio')).toHaveCount(6)
   await types.getByRole('radio', { name: '조사 후 적용' }).click()
   await expect(win.locator('.work-type-hint')).toContainText('먼저 조사하고 그대로 적용하는 일')
-  await expect(win.locator('.work-type-hint')).toContainText(
-    '단계: 의도 정리 → 조사 → 적용 → 리뷰와 검증',
-  )
+  await expect(win.locator('.work-type-hint')).toContainText('단계: 의도 정리 → 조사 → 적용')
+  await expect(win.locator('.work-type-hint')).not.toContainText('리뷰와 검증')
   await win.screenshot({ path: 'test-results/custom-new-work.png' })
   await win.getByRole('button', { name: '시작' }).click()
 
@@ -123,4 +140,20 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await expect(win.getByRole('tab', { name: /02 조사/ })).toBeVisible({ timeout: 60_000 })
   await expect(win.locator('.band')).toContainText('02 조사', { timeout: 60_000 })
   await win.screenshot({ path: 'test-results/custom-running.png' })
+
+  // 자동 승인을 켠 가운데 단계는 승인 화면에 카운트다운과 [취소]가 보인다 (4.3, D83, D457)
+  const countdown = win.getByRole('status', { name: '자동 승인 카운트다운' })
+  await expect(countdown).toContainText('자동 승인까지', { timeout: 60_000 })
+  await win.screenshot({ path: 'test-results/countdown.png' })
+  await countdown.getByRole('button', { name: '취소', exact: true }).click()
+  await expect(countdown).toBeHidden({ timeout: 30_000 })
+  await expect(win.locator('.notice.auto-hold')).toContainText(
+    '자동 승인하지 않음: [취소]를 누름',
+    { timeout: 30_000 },
+  )
+  await win.screenshot({ path: 'test-results/countdown-cancelled.png' })
+  const approveSurvey = win.getByRole('button', { name: '승인', exact: true })
+  await expect(approveSurvey).toBeEnabled()
+  await approveSurvey.click()
+  await expect(win.locator('.band')).toContainText('03 적용', { timeout: 60_000 })
 })

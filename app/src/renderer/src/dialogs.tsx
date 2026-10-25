@@ -402,9 +402,9 @@ const WORK_TYPE_HINT: Readonly<Partial<Record<WorkType, string>>> = {
   general: '다른 유형에 맞지 않는 일',
 }
 
-/** 커스텀 유형의 단계 줄: 의도 정리 → … → 리뷰와 검증 (D460) */
+/** 커스텀 유형의 단계 줄: 의도 정리 → 단계들 (D460). 마지막 단계가 독립 리뷰를 받아 Work를 마무리한다 (D493) */
 export function customStages(steps: readonly { title: string }[]): string {
-  return ['의도 정리', ...steps.map((s) => s.title), '리뷰와 검증'].join(' → ')
+  return ['의도 정리', ...steps.map((s) => s.title)].join(' → ')
 }
 
 /**
