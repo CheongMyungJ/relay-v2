@@ -1958,7 +1958,20 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
   const check = summarize(e.check)
   const bounces = e.stopHookActive ? task.bounce_count : 0
   const found = handoffStatus(check)
-  // 마무리 단계가 판정표를 쓰고 독립 리뷰를 요청했다: 세션을 닫고 리뷰를 돌린다 (D494, D496)
+  // 마무리 단계가 판정표를 쓰고 독립 리뷰를 요청했다: 세션을 닫고 리뷰를 돌린다 (D494, D496). 세션이 백그라운드 작업이나
+  // 예약된 깨우기를 기다리면(D129) 닫지 않고 대기로 둔다: 닫으면 그 작업을 끝낸다. 작업이 끝나 다음 턴의 Stop이 오면
+  // (또는 세션이 끝나면) 그때 리뷰를 요청받는다
+  if (
+    found === 'review_requested' &&
+    e.background === true &&
+    !task.review &&
+    finishesWork(work, task)
+  ) {
+    return {
+      work: withTask(work, { ...task, status: 'idle', bounce_count: 0, check }),
+      effects: [],
+    }
+  }
   const requested =
     found === 'review_requested' ? requestReview(work, task, e.at, check, config, true) : null
   if (requested) return requested
@@ -2246,7 +2259,11 @@ function resume(work: WorkState, task: TaskRecord): Transition {
   // 대화 ID를 받지 못한 Codex는 임의의 ID로 재개하지 않는다. 쓸 수 없는 세션 기록을 지우고 이 단계를 새 세션으로
   // 시작한다: main은 세션 기록이 있으면 --resume으로 연다 (D423, I154)
   if (unidentifiedCodex(task)) {
-    return { work: withTask(work, { ...task, session: null }), effects: [start] }
+    // 끝난 독립 리뷰(D496)도 지운다: 새 세션은 리뷰 결과를 받지 못하므로 이 단계를 처음부터 하고 리뷰를 다시 요청한다
+    return {
+      work: withTask(work, { ...omit(task, 'review'), session: null }),
+      effects: [start],
+    }
   }
   if (task.session?.id === '')
     return unchanged(work, 'Codex 대화 ID를 받지 못해 다시 열 수 없습니다.')

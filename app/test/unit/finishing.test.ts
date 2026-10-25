@@ -1,14 +1,16 @@
 // 마무리 단계와 독립 리뷰의 순수 함수 (5.6.14, D493~D500): 리뷰 요청의 형식 검사, 독립 리뷰의 브리프·결과 읽기·결과 글,
 // code_review 설정, Work 완료 화면의 리뷰 표시, 독립 리뷰 호출의 진행 표시(D502)
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
 import {
   checkWorkSettings,
   codeReviewOn,
   mergeWorkSettings,
   normalizeConfig,
 } from '../../src/core/config'
-import { jsonLines } from '../../src/adapters/claude'
+import { FINAL_FILE, jsonLines } from '../../src/adapters/claude'
 import {
   CHECK_SCHEMA,
   FIND_SCHEMA,
@@ -89,6 +91,21 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
     ).toEqual(['`## 테스트 파일 변경` 절 없음: 리뷰 요청의 필수 절'])
   })
 
+  it('마무리할 때(awaiting_approval)도 판정표의 절이 남아 있어야 한다: 리뷰 지적을 옮기며 다시 써도 지운 절은 되돌린다 (D499)', () => {
+    const base = { 'handoff.md': handoff('awaiting_approval'), 'fix.md': '', 'pr.md': '# 제목\n' }
+    expect(
+      errors(check({ ...base, 'verification.md': `${VERDICTS}\n${TESTS}` }, { requested: true })),
+    ).toEqual([])
+    expect(
+      errors(
+        check(
+          { ...base, 'verification.md': `## 리뷰 지적\n없음\n\n${TESTS}` },
+          { requested: true },
+        ),
+      ),
+    ).toEqual(['`## 완료조건 판정` 절 없음: 마무리 때 판정표의 필수 절'])
+  })
+
   it('설계 Work는 테스트 파일 변경 대신 문서 밖 파일 변경 절을 본다 (D374)', () => {
     expect(reviewRequestSections('spec')).toEqual(['완료조건 판정', '문서 밖 파일 변경'])
     const r = check(
@@ -146,7 +163,7 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
       {
         'handoff.md': handoff('awaiting_approval'),
         'fix.md': '',
-        'verification.md': '',
+        'verification.md': `${VERDICTS}\n${TESTS}`,
         'pr.md': '제목 없음\n',
       },
       { requested: true },
@@ -509,5 +526,20 @@ describe('독립 리뷰 호출의 진행 표시 (D502)', () => {
     lines.end()
     expect(got).toEqual(['assistant', 'user', 'result', 'result'])
     expect(lines.result()).toEqual({ type: 'result', n: 2 })
+  })
+})
+
+describe('배포한 앱의 스킬 파일 (D493, D495)', () => {
+  it('앱이 읽는 맨 위의 공용 스킬(_로 시작하는 .md)을 설치 파일이 모두 담는다', () => {
+    const skills = path.resolve(__dirname, '../../../skills')
+    const top = fs.readdirSync(skills).filter((n) => n.endsWith('.md'))
+    expect(top).toEqual(expect.arrayContaining(['_common.md', FINAL_FILE, '_review.md']))
+    // 맨 위의 .md는 모두 _로 시작해 '_*.md' 거르기에 든다
+    expect(top.filter((n) => !n.startsWith('_'))).toEqual([])
+    const builder = parse(
+      fs.readFileSync(path.resolve(__dirname, '../../electron-builder.yml'), 'utf8'),
+    ) as { extraResources: { from: string; filter?: string[] }[] }
+    const entry = builder.extraResources.find((r) => r.from === '../skills')
+    expect(entry?.filter).toEqual(expect.arrayContaining(['_*.md', '*/**']))
   })
 })

@@ -1325,17 +1325,87 @@ export class WorkRunner {
     if (this.reviews.has(taskId) || this.closing) return
     const controller = new AbortController()
     this.reviews.set(taskId, controller)
+    const started = Date.now()
     void ended
       .then(() =>
         controller.signal.aborted
           ? undefined
           : this.runReview(taskId, codeReview, controller.signal),
       )
-      .catch((e: unknown) => this.problem(`독립 리뷰를 하지 못함: ${message(e)}`))
+      .catch(async (e: unknown) => {
+        // 리뷰를 돌리지 못해도(지침을 읽지 못함, 변경 파일을 쓰지 못함 등) 끝난 것으로 넣는다: 독립 리뷰 중에 머물지 않고
+        // 실패한 결과 글로 같은 대화를 다시 연다 (D495의 "실패하면 결과 글에 까닭을 쓰고 이어 간다")
+        const error = `독립 리뷰를 하지 못함: ${message(e)}`
+        this.problem(error)
+        await this.failReview(taskId, codeReview, error, started, controller.signal)
+      })
+      .catch((e: unknown) => this.problem(`독립 리뷰의 실패를 넣지 못함: ${message(e)}`))
       .finally(() => {
         if (this.reviews.get(taskId) === controller) this.reviews.delete(taskId)
         this.reviewProgress.delete(taskId)
+        // 아직 독립 리뷰 중이면 남은 진행 표시를 지운다: 상태가 바뀌지 않아 스냅샷이 지우지 않는다. 바뀌었으면(다시 엶,
+        // 중단됨) 그 스냅샷이 지운다
+        const t = this.task(taskId)
+        if (t?.status === 'reviewing')
+          this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(t) })
       })
+  }
+
+  /** 돌리지 못한 독립 리뷰를 실패한 결과로 끝낸다 (D495): 결과 글에 까닭을 쓰고 review.finished를 넣는다 */
+  private async failReview(
+    taskId: string,
+    codeReview: boolean,
+    error: string,
+    started: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const task = this.task(taskId)
+    if (!task || signal.aborted || this.closing) return
+    const result: ReviewResult = {
+      codeReview,
+      findError: codeReview ? error : null,
+      checkError: error,
+      findings: [],
+      later: [],
+      objections: [],
+    }
+    try {
+      await writeFileAtomic(
+        path.join(this.files.taskDir(task), REVIEW_RESULT_FILE),
+        reviewMarkdown(result),
+      )
+    } catch (e) {
+      this.problem(`독립 리뷰 결과 글을 쓰지 못함: ${message(e)}`)
+    }
+    await this.feedReviewFinished(taskId, signal, {
+      error,
+      findings: 0,
+      objections: 0,
+      ms: Date.now() - started,
+    })
+  }
+
+  /**
+   * review.finished를 넣는다. 그사이 [Work 포기]나 앱 종료로 끊겼으면 넣지 않는다: 끝내는 앱이 같은 대화를 다시 열지 않는다
+   * (D496. 다음 실행 때 처음부터 다시 돌린다)
+   */
+  private feedReviewFinished(
+    taskId: string,
+    signal: AbortSignal,
+    r: { error?: string; findings: number; objections: number; ms: number },
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      if (signal.aborted || this.closing) return
+      await this.feed({
+        type: 'review.finished',
+        taskId,
+        at: this.ctx.at(),
+        ...(r.error ? { error: r.error } : {}),
+        findings: r.findings,
+        objections: r.objections,
+        ms: r.ms,
+      })
+    })
   }
 
   /**
@@ -1484,17 +1554,12 @@ export class WorkRunner {
       `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
     )
     const error = reviewError(result)
-    await this.enqueue(() =>
-      this.feed({
-        type: 'review.finished',
-        taskId,
-        at: this.ctx.at(),
-        ...(error ? { error } : {}),
-        findings: result.findings.length,
-        objections: result.objections.length,
-        ms: Date.now() - started,
-      }),
-    )
+    await this.feedReviewFinished(taskId, signal, {
+      ...(error ? { error } : {}),
+      findings: result.findings.length,
+      objections: result.objections.length,
+      ms: Date.now() - started,
+    })
   }
 
   /**

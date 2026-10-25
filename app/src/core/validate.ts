@@ -842,6 +842,19 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         })
       }
     }
+    // 마무리할 때도 판정표의 절이 남아 있어야 한다: 리뷰 지적을 옮기며 판정표를 다시 써도 Work 완료 화면과 머지 전 확인이
+    // 그 절을 읽는다 (D494, D499)
+    const verification = finishing ? files[VERIFICATION_FILE] : undefined
+    if (verification !== undefined) {
+      errors.push(
+        ...missingSections(
+          VERIFICATION_FILE,
+          verification,
+          reviewRequestSections(input.type),
+          '마무리 때 판정표',
+        ),
+      )
+    }
   } else if (node === 'intake' && handoff && handoff.status === null && draftText === undefined) {
     // status를 읽지 못한 handoff는 [오류 무시하고 승인]할 수 있으므로 초안 없음을 넘길 수 없는 오류로 남긴다 (D134)
     errors.push({

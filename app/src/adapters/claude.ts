@@ -69,7 +69,7 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
 const SKILL_FILE = 'SKILL.md'
 const COMMON_FILE = '_common.md'
 /** 마무리 절차 (5.6.14, D493). 마무리 단계 task에만 스킬 본문과 공통 규칙 사이에 붙인다 */
-const FINAL_FILE = '_final.md'
+export const FINAL_FILE = '_final.md'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.

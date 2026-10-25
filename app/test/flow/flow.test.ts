@@ -1,6 +1,7 @@
 // [흐름] 가짜 claude로 Work가 intake부터 Work 완료까지 간다 (docs/implementation.md M2, I25, I26).
 // main의 조립 코드(Relay)를 Electron 없이 불러 쓰고, 실제 node-pty, 훅 서버, git, 파일을 지난다.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { skillText } from '../../src/adapters/claude'
@@ -15,6 +16,7 @@ import {
   makeRepo,
   register,
   settle,
+  SKILLS,
   workBranchOf,
   type Harness,
 } from '../support/harness'
@@ -842,6 +844,56 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       ['task.first_hook', expect.anything()],
       ['task.interrupted', { reason: 'session_ended' }],
     ])
+  })
+})
+
+describe('[흐름] 독립 리뷰를 돌리지 못할 때 (D495)', () => {
+  it('리뷰를 돌리다 앱 쪽에서 실패해도 독립 리뷰 중에 머물지 않고, 실패한 결과 글로 같은 대화를 다시 열어 마무리한다', async () => {
+    // 독립 리뷰 지침(_review.md)이 없는 스킬 폴더: 리뷰 호출 전에 지침을 읽다 실패한다
+    const skills = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-skills-'))
+    fs.cpSync(SKILLS, skills, {
+      recursive: true,
+      filter: (src) => !src.includes(`${path.sep}node_modules`),
+    })
+    fs.rmSync(path.join(skills, '_review.md'))
+    try {
+      h = await harness({ scenario: scenario(), skills })
+      const { repo } = makeRepo(h.root, 'sample', REPO_FILES)
+      const projectId = await register(h, repo)
+      const created = await h.relay.createWork(projectId, {
+        request: REQUEST,
+        baseBranch: 'main',
+        type: 'bugfix',
+        baseLocation: 'local',
+      })
+      if (!created.ok) throw new Error(created.error)
+      const result = await drive(h.relay, h.ui, created.workKey)
+      expect(result, h.ui.dump()).toMatchObject({ status: 'completed' })
+      await settle(h, created.workKey)
+      const dir = path.join(
+        h.home,
+        'projects',
+        projectId,
+        'works',
+        created.workKey.split('/')[1] ?? '',
+      )
+      const w = work(dir)
+      expect(w.tasks[1]?.review).toMatchObject({
+        error: expect.stringContaining('독립 리뷰를 하지 못함'),
+        finished_at: expect.any(String),
+        resumed_at: expect.any(String),
+      })
+      const text = read(path.join(dir, 'tasks', '02-fix', 'independent-review.md'))
+      expect(text).toContain('독립 리뷰를 하지 못함')
+      // 리뷰 호출은 하지 않았다
+      expect(fs.existsSync(path.join(h.root, 'scenario.json.independent-check-1.txt'))).toBe(false)
+      // 남은 진행 표시가 없다
+      expect(h.ui.activityLog.filter((u) => u.taskId === 't-02').at(-1)?.activity?.phase).not.toBe(
+        '확인',
+      )
+    } finally {
+      fs.rmSync(skills, { recursive: true, force: true })
+    }
   })
 })
 

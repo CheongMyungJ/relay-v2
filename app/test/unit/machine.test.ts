@@ -3621,4 +3621,42 @@ describe('마무리 단계와 독립 리뷰 (D493~D501)', () => {
     expect(status(r.work)).toBe('interrupted')
     expect(r.effects).toContainEqual({ type: 'cancelReview', taskId: currentTask(asked)?.id })
   })
+  it('리뷰 요청 Stop에 백그라운드 작업이 남았으면 세션을 닫지 않고 기다리고, 다음 Stop에서 리뷰를 요청받는다 (D129, D496)', () => {
+    const work = fixing()
+    const task = currentTask(work)
+    const held = apply(work, {
+      type: 'Stop',
+      taskId: task?.id ?? '',
+      at: at(),
+      stopHookActive: false,
+      handoffChanged: true,
+      check: requested(),
+      background: true,
+    })
+    expect(currentTask(held.work)).toMatchObject({ status: 'idle', session: { alive: true } })
+    expect(currentTask(held.work)?.review).toBeUndefined()
+    expect(held.effects.map((e) => e.type)).not.toContain('startReview')
+    // 작업이 끝나 다음 턴의 Stop: 리뷰를 요청받는다 (handoff는 그대로다)
+    const next = stop(held.work, requested(), { changed: false })
+    expect(status(next.work)).toBe('reviewing')
+    expect(next.effects).toContainEqual(expect.objectContaining({ type: 'startReview' }))
+  })
+
+  it('대화 ID를 받지 못한 Codex 마무리 단계의 [재개]는 끝난 독립 리뷰도 지우고 새 세션으로 처음부터 한다 (D423, D496)', () => {
+    const asked = stop(fixing(), requested()).work
+    const codex: WorkState = {
+      ...asked,
+      tasks: asked.tasks.map((t) =>
+        t.node === 'fix'
+          ? { ...t, engine: 'codex', session: t.session ? { ...t.session, id: '' } : null }
+          : t,
+      ),
+    }
+    const done = reviewed(codex).work
+    expect(status(done)).toBe('interrupted')
+    const r = apply(done, { type: 'resume', taskId: currentTask(done)?.id ?? '', at: at() })
+    expect(r.effects).toEqual([expect.objectContaining({ type: 'startTask' })])
+    expect(currentTask(r.work)).toMatchObject({ session: null })
+    expect(currentTask(r.work)?.review).toBeUndefined()
+  })
 })

@@ -45,9 +45,6 @@ export type ReviewStep =
   | { kind: 'done'; id: string }
   | { kind: 'text'; text: string }
 
-const record = (v: unknown): Record<string, unknown> | null =>
-  typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
-
 /**
  * 출력 이벤트(`--output-format stream-json`) 하나에서 진행의 걸음 (D502). assistant의 tool_use와 text, user의
  * tool_result만 읽는다(계약: test/contract/claude.ts의 STREAM_CONTRACT). 경로는 root(worktree) 안이면 상대 경로로 보인다
@@ -55,12 +52,13 @@ const record = (v: unknown): Record<string, unknown> | null =>
 export function reviewSteps(event: Record<string, unknown>, root?: string): ReviewStep[] {
   const type = event['type']
   if (type !== 'assistant' && type !== 'user') return []
-  const content = record(event['message'])?.['content']
+  const message = event['message']
+  const content = isRecord(message) ? message['content'] : undefined
   if (!Array.isArray(content)) return []
   const out: ReviewStep[] = []
   for (const item of content as unknown[]) {
-    const c = record(item)
-    if (!c) continue
+    if (!isRecord(item)) continue
+    const c = item
     const id = typeof c['id'] === 'string' ? c['id'] : ''
     if (type === 'assistant' && c['type'] === 'tool_use' && typeof c['name'] === 'string') {
       if (c['name'] !== STRUCTURED_TOOL)

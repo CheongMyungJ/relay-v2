@@ -50,6 +50,8 @@ export interface HarnessOptions {
   /** gh 실행 파일. 기본은 가짜 gh다. [실제]의 PR 진행(M9)은 실제 gh를 쓴다 */
   ghBin?: string
   ui?: FakeUi
+  /** 스킬 폴더. 없으면 레포의 skills/다 (스킬 파일이 없을 때를 보는 시험) */
+  skills?: string
 }
 
 export interface Harness {
@@ -113,7 +115,7 @@ export async function harness(o: HarnessOptions = {}): Promise<Harness> {
   const ghBin = o.ghBin ?? FAKE_GH
   // 작업 브랜치 끝의 임의의 4자(D427)를 aaaa로 고정한다: 시험이 브랜치 이름을 안다 (workBranchOf)
   const open = (u: FakeUi) =>
-    Relay.open({ home, skills: SKILLS, ui: u, env, ghBin, random: () => 0 })
+    Relay.open({ home, skills: o.skills ?? SKILLS, ui: u, env, ghBin, random: () => 0 })
   const jsonl = (name: string) => {
     const file = path.join(record, name)
     if (!fs.existsSync(file)) return []
