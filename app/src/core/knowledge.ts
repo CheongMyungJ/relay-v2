@@ -594,12 +594,12 @@ const UNDECIDED_NOTE =
 const CANDIDATE_RULES = [
   '### 지식 후보 남기기',
   '',
-  'handoff의 `knowledge_candidates`에, 이 task에서 알게 된 것 가운데 다음 일에도 쓸 사실을 한 줄에 하나씩 적는다. 다음 verify가 이것을 보고 레포에 지식으로 남긴다.',
+  'handoff의 `knowledge_candidates`에, 이 task에서 알게 된 것 가운데 다음 일에도 쓸 사실을 한 줄에 하나씩 적는다. Work를 마무리하는 단계가 이것을 보고 레포에 지식으로 남긴다.',
   '',
   '- 남길 것: 사람이 알려 준 규칙, 관례, 업무 사실(예: 업무 규정, 팀이 정한 방식, 모듈 사이의 의존 방향 같은 구조 규칙, 언제 무엇을 왜 바꿨나), 코드만 보고는 다시 알기 어려운 사실, 다시 겪을 만한 실패 유형과 그 위치. 사람이 말한 것은 뜻을 살려 그대로 적고 끝에 "(사람)"을 붙인다.',
   '- 사람이 요청이나 답에서 "늘 이렇게 한다", "이건 해결이 아니다"처럼 이번 일을 넘어 통하는 규칙을 말했으면, 이번 Work의 비목표나 제약으로 옮겼더라도 후보로 적는다.',
   '- 남기지 않을 것: 이번 일에만 해당하는 것, 코드와 커밋에 이미 드러난 것, 비밀(토큰, 비밀번호, 내부 주소)과 개인정보. "이 규칙이 저기에도 통하는지 모른다"처럼 모른다는 것만 담은 메모도 후보가 아니다.',
-  '- 사람의 지금 말이 위 항목과 어긋나면(값이나 규칙이 바뀌었으면) "고칠 지식: <경로> — <새 내용> (사람)"으로 후보에 적는다. verify가 그 항목을 고친다.',
+  '- 사람의 지금 말이 위 항목과 어긋나면(값이나 규칙이 바뀌었으면) "고칠 지식: <경로> — <새 내용> (사람)"으로 후보에 적는다. Work를 마무리하는 단계가 그 항목을 고친다.',
   `- ${SCOPE_NOTE} 후보에는 "아직 규칙을 따르지 않음: <경로> — <지금 상태>, 사람이 이번 범위에서 뺌 (사람)"으로 적는다.`,
   `- ${UNDECIDED_NOTE} 후보에는 "정하지 않음: <무엇> — 사람이 "<한 말>"이라고 함, <누가 언제 정하나>, 지금 코드는 <상태> (사람)"으로 적는다.`,
 ].join('\n')
@@ -681,8 +681,15 @@ function writeRules(input: KnowledgeInput): string {
 const PENDING_RULE =
   '- "기준 브랜치에는 아직 없다"고 적힌 항목은 머지를 기다리는 앞 Work에서 왔다. 그 Work가 고친 코드는 이 브랜치에 아직 없다. 같은 규칙을 어기는 코드가 이번 요청 밖에서 보이면 앞 Work가 이미 고친 곳일 수 있으니, 범위를 넓히지 말고 handoff의 `risks`에 "앞 Work(<id>)에서 고쳤을 수 있음, 머지 대기"로 적는다.'
 
-/** context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다 */
-export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string, string] {
+/**
+ * context.md의 지식 절 (제목, 본문). 지식 관리를 끄면 부르지 않는다. writes면 지식 파일을 쓰는 법을, 아니면 후보 적는 법을
+ * 넣는다: 쓰는 task는 Work 완료 task(마무리 단계, 옛 Work의 verify)다 (D284, D500)
+ */
+export function knowledgeSection(
+  node: TaskNode,
+  input: KnowledgeInput,
+  writes = node === 'verify',
+): [string, string] {
   const { full, titles, secret, narrowed, rest, total } = selectEntries(input.entries, input.query)
   const kind = node === 'intake' ? 'intake' : node === 'verify' ? 'verify' : 'work'
   const items = [
@@ -728,7 +735,7 @@ export function knowledgeSection(node: TaskNode, input: KnowledgeInput): [string
         ]
       : []),
     '',
-    node === 'verify' ? writeRules(input) : CANDIDATE_RULES,
+    writes ? writeRules(input) : CANDIDATE_RULES,
   ]
   return ['팀 지식', lines.join('\n')]
 }

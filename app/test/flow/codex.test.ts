@@ -296,7 +296,8 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     await s.hh.relay.updateConfig({
       auto_approve: { ...s.hh.relay.currentConfig().auto_approve, fix: true },
     })
-    for (const [index, node] of ['intake', 'fix', 'verify'].entries()) {
+    // fix는 마무리 단계다: 리뷰를 요청하고(세션을 닫음), 독립 리뷰 뒤 같은 대화를 다시 열어 승인 대기가 된다 (D494~D496)
+    for (const [index, node] of ['intake', 'fix'].entries()) {
       const id = `t-0${index + 1}`
       await s.hh.ui.until(
         () => s.view()?.tasks.find((t) => t.id === id)?.status === 'awaiting_approval',
@@ -309,7 +310,7 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
         expect(task?.auto_hold).toBeUndefined()
         expect((await s.hh.relay.review(s.key, id))?.autoApprove).toMatchObject({ on: false })
       }
-      if (node !== 'verify') expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
+      if (node !== 'fix') expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
     }
     const runner = s.hh.relay.work(s.key)
     if (!runner) throw new Error('runner 없음')
@@ -370,9 +371,29 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
     })
     expect(await s.hh.relay.closeCleanup(s.key)).toEqual({ ok: true })
     expect(s.view()?.cleanup).toBeNull()
-    expect(await s.hh.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.hh.relay.approve(s.key, 't-02', {})).toEqual({ ok: true })
     expect(s.read().status).toBe('completed')
-    expect(s.read().tasks).toHaveLength(3)
+    expect(s.read().tasks).toHaveLength(2)
+    // 독립 리뷰는 task의 엔진(Codex)으로 찾기와 확인을 읽기 전용으로 불렀다 (D495)
+    for (const kind of ['find', 'check']) {
+      const args = JSON.parse(fs.readFileSync(`${scenarioFile}.independent-${kind}-1.json`, 'utf8'))
+      expect(args.slice(args.indexOf('--sandbox'), args.indexOf('--sandbox') + 2)).toEqual([
+        '--sandbox',
+        'read-only',
+      ])
+    }
+    expect(s.read().tasks[1]?.review).toMatchObject({
+      code_review: true,
+      resumed_at: expect.any(String),
+    })
+    // Codex 호출은 도는 동안의 도구를 받지 않는다: 진행 기록은 시작과 끝, 그 까닭만 있다 (D502)
+    const log = fs.readFileSync(
+      path.join(path.dirname(s.file()), 'tasks', '02-fix', 'independent-review', 'find.log'),
+      'utf8',
+    )
+    expect(log).toContain('찾기 시작 (Codex')
+    expect(log).toContain('(Codex는 도는 동안의 도구를 받지 않는다)')
+    expect(log).toContain('찾기 끝')
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
   })
 
@@ -407,13 +428,13 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
         { do: 'wait' },
       ],
     })
-    for (const index of [0, 1, 2]) {
+    for (const index of [0, 1]) {
       const id = `t-0${index + 1}`
       await s.hh.ui.until(
         () => s.view()?.tasks[index]?.status === 'awaiting_approval',
         `${id} 승인 대기`,
       )
-      if (index < 2) expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
+      if (index < 1) expect(await s.hh.relay.approve(s.key, id, {})).toEqual({ ok: true })
     }
     const runner = s.hh.relay.work(s.key)
     if (!runner) throw new Error('runner 없음')

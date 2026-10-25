@@ -27,8 +27,9 @@ extraResources:
     to: README.md
   - from: ../skills
     to: skills
+    # 맨 위의 공용 스킬(_common.md, 마무리 절차 _final.md, 독립 리뷰 지침 _review.md, D493·D495)과 단계 폴더
     filter:
-      - _common.md
+      - '_*.md'
       - '*/**'
       - '!node_modules/**'
 # 자동 업데이트 (I95): 앱에 app-update.yml을 넣고 dist/에 latest.yml을 만든다.

@@ -6,7 +6,7 @@
 //   - 상태를 규칙처럼 적은 항목: 아직 고치지 않은 곳이나 정하지 않은 것을 규칙으로 적은 항목 (문제 2)
 //   - 서로 어긋나는 항목 짝, 기준 규칙마다 맞게 적었는지(맞음/틀림/없음)
 //   - 머리글의 kind가 내용과 맞지 않는 항목
-// 지식 검토 호출(D300)의 기록(verify task의 knowledge-review.json)이 있으면 쪽마다 호출 수, 시간, 비용, 토큰, 되돌림을 센다.
+// 지식 검토 호출(D300)의 기록(마무리 단계 task의 knowledge-review.json, 옛 Work는 verify)이 있으면 쪽마다 호출 수, 시간, 비용, 토큰, 되돌림을 센다.
 // kind 분포(머리글 kind마다 파일 수, 머리글이 없는 옛 형식은 "없음")는 기준이 없는 시나리오에서도 센다.
 // 레포에 남는 지식: Work의 diff(final/<id>.diff)는 시나리오 repo/에서 그 Work 끝까지의 차이다. 팀원 Work는 앞 Work를
 // 머지한 main에서 시작하므로 그 diff의 지식이 레포 전체다. 같은 사람의 Work는 main에서 따로 시작하므로 앞 Work의 지식
@@ -78,7 +78,7 @@ export function kindOf(text) {
   return KINDS.includes(k) ? k : '기타'
 }
 
-/** verify에서 지식 확인으로 되돌려진 수 (task.bounced 가운데 지식을 말한 것) */
+/** 마무리 단계에서 지식 확인으로 되돌려진 수 (task.bounced 가운데 지식을 말한 것) */
 function knowledgeBounces(run) {
   let n = 0
   for (const w of run.works) {
@@ -233,7 +233,7 @@ function kindTable(rows, arms) {
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
 const f2 = (x) => (Number.isFinite(x) ? x.toFixed(2) : '-')
 
-/** 실행의 지식 검토 호출 기록 (D300): verify task마다 knowledge-review.json */
+/** 실행의 지식 검토 호출 기록 (D300): 마무리 단계 task마다 knowledge-review.json */
 function reviewCalls(run) {
   const out = []
   for (const w of run.works) {

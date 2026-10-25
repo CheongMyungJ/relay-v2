@@ -152,10 +152,10 @@ describe('스키마 검사: handoff (5.2.1)', () => {
 
   it('실패: status가 허용값이 아니거나 비어 있다', () => {
     expect(run({ status: 'done' })).toEqual([
-      '`status` 값이 허용값이 아님 (허용값: awaiting_approval | blocked, 지금: done)',
+      '`status` 값이 허용값이 아님 (허용값: awaiting_approval | blocked | review_requested, 지금: done)',
     ])
     expect(run({ status: null })).toEqual([
-      '`status` 값이 허용값이 아님 (허용값: awaiting_approval | blocked, 지금: 비어 있음)',
+      '`status` 값이 허용값이 아님 (허용값: awaiting_approval | blocked | review_requested, 지금: 비어 있음)',
     ])
   })
 

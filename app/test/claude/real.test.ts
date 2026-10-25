@@ -1,9 +1,10 @@
-// [실제] 실제 claude로 M 요청과 S 요청이 intake → fix → verify를 지나 끝까지 간다 (docs/implementation.md I29, 8.4).
+// [실제] 실제 claude로 M 요청과 S 요청이 intake → fix(마무리, D493)를 지나 끝까지 간다 (docs/implementation.md I29, 8.4).
 // RELAY_REAL_CLAUDE=1일 때만 수동으로 돈다(app-claude 워크플로나 Linux 세션, 8.4). Claude 사용량이 든다.
 // [흐름]과 같은 도구(harness, drive)를 쓰고 claude 실행 파일만 실제 claude로 바꾼다 (8.1).
 // 모델과 effort는 앱이 PTY에 넘기는 환경 변수(ANTHROPIC_MODEL, CLAUDE_CODE_EFFORT_LEVEL)로 정한다.
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다.
-// 리뷰와 검증(M8)이 반영할 지적을 물으면 첫 선택지로 답하고, 고른 지적만 고쳐 커밋했는지 본다(review.ts, D229).
+// 마무리 단계가 독립 리뷰를 받은 뒤 반영할 지적을 물으면 첫 선택지로 답하고, 고른 지적만 고쳐 커밋했는지 본다(review.ts,
+// D229, D499).
 // 형식 오류가 끝까지 남으면 [오류 무시하고 승인]을 쓰고 센다(0이어야 함). 결과는 test-results/claude/에 남긴다.
 // RELAY_REAL_CLAUDE=dry면 가짜 claude로 같은 도구를 돌려 도구 자체를 확인한다 (사용량 없음).
 // RELAY_REAL_CASES로 돌릴 경우를 고른다(예: "S resume"). 비우면 전부(M, S, resume.test.ts의 resume,
@@ -38,7 +39,7 @@ interface CaseResult {
   result: DriveResult
   claudeVersion: string | null
   dialogs: string[]
-  /** 리뷰와 검증(M8)의 리뷰 판정. verify를 승인하지 못했으면 null */
+  /** 마무리 단계의 리뷰 반영 판정 (D499). 마무리 단계를 승인하지 못했으면 null */
   review: ReviewCheck | null
 }
 
@@ -87,18 +88,20 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
     const workId = created.workKey.split('/')[1] ?? ''
     workDir = path.join(h.home, 'projects', projectId, 'works', workId)
     const tree = path.join(h.home, 'projects', projectId, 'worktrees', workId)
-    // verify를 승인하는 때의 HEAD. 리뷰 판정은 verify가 만든 커밋만 센다 (승인 뒤 전달 등의 커밋은 뺀다)
-    let verifyHead: string | null = null
+    // 독립 리뷰를 받기 전과 마무리 단계를 승인하는 때의 HEAD. 리뷰 판정은 리뷰를 받은 뒤의 커밋만 센다 (D499).
+    // 리뷰 중에는 세션이 없어 커밋이 생기지 않는다 (D496). 승인 뒤 전달 등의 커밋은 뺀다
+    const heads: ReviewHeads = { from: null, to: null }
     const result = await drive(h.relay, ui, created.workKey, {
       force: true,
       nudge: NUDGE,
       maxNudges: 2,
       stepTimeoutMs: TASK_TIMEOUT_MS,
       tick: async (task) => {
+        if (task.status === 'reviewing' && !heads.from) heads.from = git(tree, 'rev-parse', 'HEAD')
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
       },
       beforeApprove: (task) => {
-        if (task.node === 'verify') verifyHead = git(tree, 'rev-parse', 'HEAD')
+        if (task.node === 'fix') heads.to = git(tree, 'rev-parse', 'HEAD')
       },
     })
     await settle(h, created.workKey)
@@ -108,7 +111,7 @@ async function runCaseOnce(c: RealCase): Promise<CaseResult> {
       result,
       claudeVersion: work.tasks[0]?.claude_version ?? null,
       dialogs: ui.dialogs.map((d) => `${d.name}: ${d.action}`),
-      review: reviewOf(work, workDir, tree, verifyHead, (sessionId) =>
+      review: reviewOf(work, workDir, tree, heads, (sessionId) =>
         dry ? fakeQuestions(h.records(), sessionId) : transcriptQuestions(CONFIG_DIR, sessionId),
       ),
     }
@@ -140,19 +143,26 @@ function fakeQuestions(records: Record<string, unknown>[], sessionId: string): s
   })
 }
 
+/** 마무리 단계가 독립 리뷰를 받기 전(독립 리뷰 중)의 HEAD와 승인하는 때의 HEAD */
+interface ReviewHeads {
+  from: string | null
+  to: string | null
+}
+
 /**
- * 리뷰의 판정 (5.6.6, D229): 승인된 verify의 verification.md(리뷰 지적)와 handoff, verify가 물은 질문, verify의 커밋과
- * 바뀐 파일. 커밋은 verify의 시작 커밋부터 verify를 승인하는 때의 HEAD까지다
+ * 리뷰 반영의 판정 (D229, D499): 승인된 마무리 단계(fix)의 verification.md(리뷰 지적)와 handoff, 그 세션이 물은 질문,
+ * 리뷰를 받은 뒤의 커밋과 바뀐 파일. 커밋은 독립 리뷰 중의 HEAD부터 승인하는 때의 HEAD까지다
  */
 function reviewOf(
   work: WorkState,
   workDir: string,
   tree: string,
-  head: string | null,
+  heads: ReviewHeads,
   questions: (sessionId: string) => string[],
 ): ReviewCheck | null {
-  const task = work.tasks.findLast((t) => t.node === 'verify' && t.status === 'approved')
-  if (!task?.start_commit || !head) return null
+  const task = work.tasks.findLast((t) => t.node === 'fix' && t.status === 'approved')
+  const { from, to } = heads
+  if (!task || !from || !to) return null
   const dir = path.join(workDir, 'tasks', taskDirName(task))
   const readIn = (name: string) => {
     const file = path.join(dir, name)
@@ -164,8 +174,8 @@ function reviewOf(
     reviewMd: readIn('verification.md'),
     handoff: readIn('handoff.md'),
     questions: task.session ? questions(task.session.id) : [],
-    commits: log(task.start_commit, head),
-    files: lines(git(tree, 'diff', '--name-only', `${task.start_commit}..${head}`)),
+    commits: log(from, to),
+    files: lines(git(tree, 'diff', '--name-only', `${from}..${to}`)),
   })
 }
 
@@ -209,12 +219,12 @@ function summary(): string {
   return lines.join('\n')
 }
 
-/** 리뷰와 검증(M8)의 리뷰 결과: 지적, 물은 질문, 반영, 커밋, 바뀐 파일, 사람 결정, 판정 */
+/** 마무리 단계의 리뷰 반영 결과 (D499): 지적, 물은 질문, 반영, 커밋, 바뀐 파일, 사람 결정, 판정 */
 function reviewLines(r: ReviewCheck | null): string[] {
-  if (!r) return ['### 리뷰', '', '- 리뷰와 검증을 승인하지 못함', '']
+  if (!r) return ['### 리뷰', '', '- 마무리 단계(독립 리뷰 뒤)를 승인하지 못함', '']
   const quote = (text: string | null) => (text ?? '(절 없음)').split('\n').map((l) => `  > ${l}`)
   return [
-    '### 리뷰 (M8, D229)',
+    '### 리뷰 반영 (D229, D499)',
     '',
     `- 판정: ${r.problems.length ? `어긋남 — ${r.problems.join('; ')}` : '통과'}`,
     `- 물은 질문: ${r.questions.length ? r.questions.map((q) => q.replace(/\s*\n\s*/g, ' ')).join(' | ') : '없음'}`,
@@ -224,7 +234,7 @@ function reviewLines(r: ReviewCheck | null): string[] {
     ...quote(r.applied),
     '- 반영하지 않은 지적 절:',
     ...quote(r.notApplied),
-    `- verify의 커밋: ${r.commits.length ? r.commits.join(' / ') : '없음'}`,
+    `- 리뷰를 받은 뒤의 커밋: ${r.commits.length ? r.commits.join(' / ') : '없음'}`,
     `- 바뀐 파일: ${r.files.length ? r.files.join(', ') : '없음'}`,
     `- 사람 결정(by: human): ${r.humanDecisions.length ? r.humanDecisions.join(' / ') : '없음'}`,
     '',
@@ -248,7 +258,8 @@ describe.runIf(enabled)('[실제] 실제 claude로 끝까지 (I29, 8.4)', () => 
       expect(r.result.status).toBe('completed')
       // [오류 무시하고 승인]을 쓴 횟수는 0이어야 한다 (8.4)
       expect(r.result.tasks.filter((t) => t.forced)).toEqual([])
-      // verify는 반영할 지적을 묻고 고른 지적만 고쳐 커밋하며, 나머지는 반영하지 않은 지적으로 남긴다 (D229)
+      // 마무리 단계는 독립 리뷰를 받은 뒤 반영할 지적을 묻고 고른 지적만 고쳐 커밋하며, 나머지는 반영하지 않은 지적으로
+      // 남긴다 (D229, D499)
       expect(r.review?.problems).toEqual([])
     })
   }

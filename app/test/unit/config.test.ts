@@ -7,7 +7,7 @@ import {
   mergeWorkSettings,
   normalizeConfig,
 } from '../../src/core/config'
-import { ALL_NODES, NODE_INFO, PIPELINES, RESPOND } from '../../src/core/pipeline'
+import { ALL_NODES, LEGACY_PIPELINES, NODE_INFO, RESPOND } from '../../src/core/pipeline'
 import { repoSettings } from '../../src/shared/project'
 import {
   AGENT_STEP_TITLES,
@@ -298,7 +298,8 @@ describe('화면의 스킬 이름', () => {
 
   it('묶음은 그 단계가 있는 파이프라인이다: 여러 유형에 있으면 공통, 한 유형에만 있으면 그 유형 (D256, D278, D318, D374)', () => {
     for (const n of ALL_NODES) {
-      const types = WORK_TYPES.filter((t) => PIPELINES[t].includes(n))
+      // verify는 옛 Work의 모든 유형에 있다 (D501)
+      const types = WORK_TYPES.filter((t) => LEGACY_PIPELINES[t].includes(n))
       const group = types.length > 1 ? 'common' : types[0]
       const skill = SKILL_TITLES.find(([s]) => s === NODE_INFO[n].skill)
       if (n === 'spec') expect(skill, n).toBeUndefined()

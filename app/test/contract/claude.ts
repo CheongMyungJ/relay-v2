@@ -57,6 +57,89 @@ export const HOOK_CONTRACT: Record<HookEvent, Record<string, FieldType>> = {
   SessionEnd: { ...COMMON, reason: 'string' },
 }
 
+/**
+ * 독립 리뷰 호출의 출력 이벤트(`--output-format stream-json --verbose`, D502)의 자리. 줄마다 오는 이벤트(type), 그 안의
+ * message, message.content의 항목(content.<type>)이다
+ */
+export type StreamPart =
+  | 'assistant'
+  | 'assistant.message'
+  | 'content.tool_use'
+  | 'content.text'
+  | 'user'
+  | 'user.message'
+  | 'content.tool_result'
+  | 'result'
+
+/** 출력 이벤트에서 앱이 읽는 필드와 그 타입 (src/core/independent-review.ts의 reviewSteps, src/adapters/claude.ts) */
+export const STREAM_CONTRACT: Record<StreamPart, Record<string, FieldType>> = {
+  // 진행 표시는 도구 호출(이름, 입력)과 모델의 글을 읽는다
+  assistant: { type: 'string', message: 'object' },
+  'assistant.message': { content: 'array' },
+  'content.tool_use': { type: 'string', id: 'string', name: 'string', input: 'object' },
+  'content.text': { type: 'string', text: 'string' },
+  // 도구가 끝난 때 (tool_result의 tool_use_id)
+  user: { type: 'string', message: 'object' },
+  'user.message': { content: 'array' },
+  'content.tool_result': { type: 'string', tool_use_id: 'string' },
+  // 결과는 --output-format json과 같은 필드다 (claudeJson)
+  result: {
+    type: 'string',
+    is_error: 'boolean',
+    structured_output: 'object',
+    total_cost_usd: 'number',
+    usage: 'object',
+  },
+}
+
+/** 출력 이벤트들에서 자리마다 처음 나온 것 */
+export function streamParts(
+  events: readonly Record<string, unknown>[],
+): Partial<Record<StreamPart, Record<string, unknown>>> {
+  const out: Partial<Record<StreamPart, Record<string, unknown>>> = {}
+  const put = (part: StreamPart, v: unknown) => {
+    if (!out[part] && typeof v === 'object' && v !== null && !Array.isArray(v))
+      out[part] = v as Record<string, unknown>
+  }
+  for (const e of events) {
+    const type = e['type']
+    if (type === 'result') put('result', e)
+    if (type !== 'assistant' && type !== 'user') continue
+    put(type, e)
+    const message = e['message'] as Record<string, unknown> | undefined
+    put(`${type}.message`, message)
+    const content = message?.['content']
+    if (!Array.isArray(content)) continue
+    for (const c of content as unknown[]) {
+      const t = (c as Record<string, unknown> | null)?.['type']
+      if (t === 'tool_use' || t === 'text' || t === 'tool_result') put(`content.${t}`, c)
+    }
+  }
+  return out
+}
+
+/** 출력 이벤트가 계약을 어긴 것 (자리가 없거나 필드가 없거나 타입이 다름) */
+export function streamViolations(
+  parts: Partial<Record<StreamPart, Record<string, unknown>>>,
+): string[] {
+  const out: string[] = []
+  for (const [part, fields] of Object.entries(STREAM_CONTRACT) as [
+    StreamPart,
+    Record<string, FieldType>,
+  ][]) {
+    const got = parts[part]
+    if (!got) {
+      out.push(`${part} 없음`)
+      continue
+    }
+    for (const [k, t] of Object.entries(fields)) {
+      if (!(k in got)) out.push(`${part}.${k} 없음`)
+      else if (typeOf(got[k]) !== t) out.push(`${part}.${k}의 타입이 ${typeOf(got[k])} (기대 ${t})`)
+    }
+  }
+  return out
+}
+
 /** 실제 claude에서 녹화하지 못하는 이벤트와 까닭. live.test.ts는 claude -p로 돌아 이 이벤트가 오지 않는다 */
 export const NOT_RECORDED: Partial<Record<HookEvent, string>> = {
   Notification: '대화형 세션에서만 온다. [실제]가 본다',
@@ -126,7 +209,17 @@ export function appFlags(): string[] {
       model: 'm',
       effort: 'low',
     }),
-    ...claudeJsonArgs({ model: 'm', effort: 'low', system: 's', schema: {} }),
+    // 독립 리뷰 호출은 읽기 도구와 Work 디렉터리를 넘긴다 (D495)
+    ...claudeJsonArgs({
+      model: 'm',
+      effort: 'low',
+      system: 's',
+      schema: {},
+      tools: ['Read'],
+      addDirs: ['d'],
+    }),
+    // 진행 표시를 받는 독립 리뷰 호출 (D502)
+    ...claudeJsonArgs({ model: 'm', system: 's', schema: {}, stream: true }),
   ]
   return [...new Set(args.filter((a) => /^--?[a-z]/.test(a)))].sort()
 }
@@ -198,6 +291,12 @@ export interface ClaudeFixture {
   /** 앱이 넘기는 옵션 가운데 --help에 있던 것 */
   flags: string[]
   events: Partial<Record<HookEvent, { shape: Record<string, FieldType>; sample: object }>>
+  /** 독립 리뷰 호출의 출력 이벤트(D502)의 자리마다 모양. 훅과 따로 녹화할 수 있어 버전과 날짜를 따로 둔다 */
+  stream?: {
+    claudeVersion: string
+    recordedAt: string
+    shapes: Partial<Record<StreamPart, Record<string, FieldType>>>
+  }
 }
 
 export const FIXTURE = path.join(__dirname, 'fixtures', 'claude.json')

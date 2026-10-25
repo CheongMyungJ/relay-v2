@@ -26,7 +26,7 @@ import type {
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
-import { Activity } from './Activity'
+import { Activity, ActivityRecent } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, Modal, UncommittedDialog } from './dialogs'
 import { DraftCards } from './DraftCards'
@@ -320,6 +320,27 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
       </div>
     )
   }
+  if (task.status === 'reviewing') {
+    return (
+      <div className="notice">
+        {task.review?.state === 'ready'
+          ? '독립 리뷰가 끝났습니다. 같은 대화를 다시 여는 중입니다.'
+          : `독립 리뷰 중: relay가 이 Work의 ${
+              task.review?.codeReview === false
+                ? '판정표를 확인합니다(코드 리뷰는 끔)'
+                : '변경을 리뷰하고 판정표를 확인합니다'
+            }. 끝나면 같은 대화를 결과와 함께 다시 엽니다. 그동안 물을 것은 곁 세션에 말하세요.`}
+      </div>
+    )
+  }
+  if (task.status === 'interrupted' && task.review?.state === 'ready') {
+    return (
+      <div className="notice">
+        독립 리뷰가 끝났습니다. [재개]하면 같은 대화를 다시 열고 리뷰 결과를 읽고 이어 하라고
+        알립니다.
+      </div>
+    )
+  }
   if ((task.status === 'interrupted' || task.status === 'session_ended') && task.sessionUnknown) {
     return (
       <div className="notice">
@@ -375,6 +396,26 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
   return null
 }
 
+/**
+ * Work 완료 화면의 독립 리뷰 줄 (D495, D497): 코드 리뷰를 껐거나, 리뷰가 실패했거나, 리뷰를 받지 않았으면 경고로 보인다.
+ * 코드 리뷰와 확인을 모두 했으면 한 줄로만 알린다
+ */
+function ReviewLine({
+  review,
+}: {
+  review: NonNullable<NonNullable<ReviewView['completion']>['review']>
+}) {
+  if (review.state === 'ok')
+    return <div className="dim review-line">독립 리뷰: 코드 리뷰와 판정표 확인을 했습니다.</div>
+  const text =
+    review.state === 'off'
+      ? '코드 리뷰 안 함: 독립 리뷰가 판정표만 확인했습니다 (code_review 설정).'
+      : review.state === 'failed'
+        ? `독립 리뷰가 실패했습니다: ${review.error ?? ''}`
+        : '독립 리뷰를 받지 않았습니다. 판정표는 작성 세션의 판정입니다.'
+  return <div className="notice review-line">{text}</div>
+}
+
 /** 진행 중: 형식 되돌림 안내(D220), 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
 function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
   return (
@@ -384,6 +425,7 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         <section className="progress">
           <h3>진행</h3>
           <Activity activity={task.activity} />
+          <ActivityRecent activity={task.activity} />
         </section>
       ) : null}
       <section>
@@ -565,12 +607,26 @@ function Review({
             <div className="dim">산출물 없음</div>
           )
         ) : null}
+        {tab === 'artifacts' && review.reviewLogs?.length ? (
+          <section className="review-logs" aria-label="독립 리뷰 기록">
+            <h3>독립 리뷰 기록</h3>
+            {review.reviewLogs.map((l) => (
+              <details key={l.name}>
+                <summary>{l.name}</summary>
+                <pre>{l.text}</pre>
+              </details>
+            ))}
+          </section>
+        ) : null}
         {tab === 'changes' ? (
           review.repoDiffs ? (
             <RepoDiff repos={review.repoDiffs} />
           ) : (
             <Diff text={review.diff} />
           )
+        ) : null}
+        {tab === 'verdicts' && review.completion?.review ? (
+          <ReviewLine review={review.completion.review} />
         ) : null}
         {tab === 'verdicts' && review.completion?.knowledge ? (
           <KnowledgeLine changes={review.completion.knowledge} onOpen={() => setTab('knowledge')} />

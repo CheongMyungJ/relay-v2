@@ -1,7 +1,7 @@
 // 사람에게 보일 것: task 이름과 머리 띠(D109), 상태 이름, 승인 화면의 강조 영역과 [변경]의 범위(D83),
 // Work 완료 화면의 판정표(시나리오 7-3). 화면은 main이 이 값으로 만든 스냅샷을 그리기만 한다 (I14).
 import type { Handoff, TaskNode } from '../shared/contracts'
-import type { Emphasis, StageLead, Verdict } from '../shared/views'
+import type { Completion, Emphasis, StageLead, Verdict } from '../shared/views'
 import type {
   FormatIssue,
   StartReason,
@@ -16,6 +16,7 @@ import {
   NODE_INFO,
   WORK_COMPLETE,
   customSections,
+  finishesWork,
   nextStage,
   nodeTitle,
   stageOf,
@@ -138,6 +139,32 @@ function shorten(value: string): string {
   return more ? `${first} …` : first
 }
 
+/**
+ * Work 완료 화면의 독립 리뷰 표시 (D495, D497). 마무리 단계가 아니면(옛 Work의 verify) null이다. 리뷰를 요청하지 않았거나 끝나지
+ * 않았으면 none이다(형식 오류를 무시하고 승인할 수 있게 된 때 등)
+ */
+export function completionReview(
+  work: Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>,
+  task: Pick<TaskRecord, 'node' | 'step' | 'review'>,
+): Completion['review'] {
+  if (!finishesWork(work, task)) return null
+  const r = task.review
+  if (!r?.finished_at) return { state: 'none' }
+  if (r.error) return { state: 'failed', error: r.error }
+  return { state: r.code_review ? 'ok' : 'off' }
+}
+
+/**
+ * task의 독립 리뷰 표시 (D495, D496): 도는 중(running)이거나, 끝났지만 결과로 세션을 아직 다시 열지 않았다(ready). 아니면 null
+ */
+export function reviewState(
+  task: Pick<TaskRecord, 'review'>,
+): { state: 'running' | 'ready'; codeReview: boolean } | null {
+  const r = task.review
+  if (!r || r.resumed_at !== undefined) return null
+  return { state: r.finished_at === undefined ? 'running' : 'ready', codeReview: r.code_review }
+}
+
 /** task 표시 이름 (3.3, 시나리오 3) */
 export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
   queued: '대기열',
@@ -147,6 +174,7 @@ export const TASK_STATUS_LABEL: Readonly<Record<TaskStatus, string>> = {
   idle: '대기',
   awaiting_approval: '승인 대기',
   blocked: '막힘',
+  reviewing: '독립 리뷰 중',
   session_ended: '세션 종료',
   interrupted: '중단됨',
   approved: '승인됨',
@@ -523,6 +551,7 @@ export function stageLead(
   node: TaskNode,
   files: Readonly<Record<string, string>>,
   step?: { id: string; title: string; sections: readonly string[] },
+  finishing = false,
 ): StageLead | null {
   // 커스텀 단계는 산출물 <단계 id>.md의 정의한 절이다 (D453)
   const lead =
@@ -530,10 +559,20 @@ export function stageLead(
       ? { file: `${step.id}.md`, title: step.title, sections: [...customSections(step)] }
       : LEAD[node]
   const text = lead ? files[lead.file] : undefined
-  if (!lead || text === undefined) return null
-  const body = lead.draft ? intentDraftBody(text).body : normalizeText(text)
-  const sections = leadSections(body, lead.sections)
-  return sections.length ? { title: lead.title, sections } : null
+  const own =
+    lead && text !== undefined
+      ? leadSections(lead.draft ? intentDraftBody(text).body : normalizeText(text), lead.sections)
+      : []
+  // 마무리 단계는 그 뒤에 verification.md의 리뷰 지적과 반영을 붙인다: 사람이 고른 것을 Work 완료 화면에서 본다 (D499)
+  const review = LEAD.verify
+  const verification = finishing && review ? files[review.file] : undefined
+  const reviewed =
+    review && verification !== undefined
+      ? leadSections(normalizeText(verification), review.sections)
+      : []
+  const sections = [...own, ...reviewed]
+  if (!sections.length) return null
+  return { title: own.length && lead ? lead.title : (review?.title ?? ''), sections }
 }
 
 /** body에서 names 절을 차례로 모은다. 없는 절은 뺀다 */

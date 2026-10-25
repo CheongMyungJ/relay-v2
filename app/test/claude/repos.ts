@@ -92,3 +92,12 @@ export const S_CASE: RealCase = {
     '',
   ].join('\n'),
 }
+
+/** 작은 기능: slug 레포(S 요청과 같은 파일)에 최대 길이 옵션을 더한다. 기능 추가와 자동 승인의 [실제]가 쓴다 */
+export const S_FEATURE_REQUEST = [
+  'slugify(title, { maxLength })에 최대 길이 옵션을 더해 주세요.',
+  '',
+  '결과가 maxLength보다 길면 maxLength 글자에서 자르고, 잘린 끝에 남은 -는 뗍니다.',
+  '옵션이 없으면 지금처럼 자르지 않습니다.',
+  '',
+].join('\n')

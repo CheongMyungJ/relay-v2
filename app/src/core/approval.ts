@@ -16,7 +16,7 @@ import type {
   WorkType,
 } from '../shared/work'
 import { AUTO_APPROVE_NODES } from './config'
-import { RESPOND, customStep } from './pipeline'
+import { RESPOND, completesWork, customStep } from './pipeline'
 import { isRespondPending } from './respond'
 import { INTENT_DRAFT_FILE, REPLIES_FILE, isValid } from './validate'
 
@@ -89,6 +89,25 @@ export function approvalMode(
   }
   if (!autoApprovable(node)) return 'manual'
   return (settings.auto_approve?.[node] ?? config.auto_approve[node]) ? 'auto' : 'manual'
+}
+
+/**
+ * task의 승인 방식 (4.2, D498). 승인 화면이 Work 완료 화면인 task(마무리 단계, 옛 Work의 verify)는 늘 수동이고, 나머지는
+ * approvalMode다. 커스텀 단계는 그 단계의 정의를 함께 본다 (D457)
+ */
+export function taskApprovalMode(
+  config: Pick<AppConfig, 'auto_approve'>,
+  work: Pick<WorkState, 'settings' | 'type' | 'custom_type' | 'pipeline'>,
+  task: Pick<TaskRecord, 'node' | 'step' | 'engine'>,
+): ApprovalMode {
+  if (completesWork(work, task)) return 'manual'
+  return approvalMode(
+    config,
+    work.settings,
+    task.node,
+    knownTaskEngine(task),
+    customStep(work, task),
+  )
 }
 
 /**
@@ -182,7 +201,7 @@ export interface AutoApproveNote {
  * 대기로 남은 PR 대응 task는 보이지 않는다: 세션이 끝나 판정할 턴이 없고, 실패와 [다시 시도]는 강조 영역이 보인다
  */
 export function autoApproveNote(
-  work: Pick<WorkState, 'settings' | 'custom_type'>,
+  work: Pick<WorkState, 'settings' | 'type' | 'custom_type' | 'pipeline'>,
   task: Pick<
     TaskRecord,
     'node' | 'step' | 'status' | 'countdown' | 'auto_hold' | 'respond' | 'engine'
@@ -190,9 +209,7 @@ export function autoApproveNote(
   config: AppConfig,
 ): AutoApproveNote {
   const engine = knownTaskEngine(task)
-  // 커스텀 단계는 그 단계의 정의를 함께 본다 (D457)
-  const on =
-    approvalMode(config, work.settings, task.node, engine, customStep(work, task)) === 'auto'
+  const on = taskApprovalMode(config, work, task) === 'auto'
   if (engine === null)
     return { on: false, hold: `${agentLabel(task)}. 이 세션은 재개할 수 없습니다.` }
   if (engine === 'codex') {
@@ -219,7 +236,7 @@ export function autoApproveNote(
 /**
  * 배지 우선순위 (D80, D121, D183). 상태가 겹치면 앞의 것을 보인다:
  * 끊긴 작업 > 질문 대기·입력 필요 > 승인 대기 > 막힘 > 멈춤 > 자동 대응 멈춤 > 대응 거리 있음 > PR 닫힘 >
- * 머지 가능 > 세션 종료(handoff 없음) > 작업 중 > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기·보관됨
+ * 머지 가능 > 세션 종료(handoff 없음) > 작업 중 > 독립 리뷰 중(D496) > 대기 > 대기열 > 리뷰·CI 대기 > 중단됨 > 완료·포기·보관됨
  */
 export const BADGE_ORDER: readonly BadgeKind[] = [
   'recovery',
@@ -233,6 +250,7 @@ export const BADGE_ORDER: readonly BadgeKind[] = [
   'mergeable',
   'session_ended',
   'working',
+  'reviewing',
   'idle',
   'queued',
   'pr_waiting',
@@ -264,6 +282,7 @@ const TASK_BADGE: Readonly<Record<TaskStatus, BadgeKind | null>> = {
   blocked: 'blocked',
   session_ended: 'session_ended',
   working: 'working',
+  reviewing: 'reviewing',
   idle: 'idle',
   queued: 'queued',
   interrupted: 'interrupted',
@@ -280,6 +299,7 @@ const BADGE_LABEL: Readonly<Record<BadgeKind, string>> = {
   auto_paused: '자동 대응 멈춤',
   session_ended: '세션 종료',
   working: '작업 중',
+  reviewing: '독립 리뷰 중',
   idle: '대기',
   queued: '대기열',
   pr_items: '대응 거리 있음',

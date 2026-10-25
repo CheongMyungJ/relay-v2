@@ -459,7 +459,7 @@ function TypeEditor({
         />
       </label>
       <label className="field">
-        리뷰와 검증에 더할 리뷰 관점 (선택, verify.md)
+        독립 리뷰에 더할 관점 (선택, verify.md)
         <textarea
           aria-label="리뷰 관점"
           rows={3}

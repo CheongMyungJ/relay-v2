@@ -15,6 +15,8 @@ import {
   type HookEvent,
 } from '../../src/core/settings'
 import type { Step } from '../support/scenarios'
+import { claudeJsonArgs } from '../../src/adapters/claude'
+import { FIND_SCHEMA } from '../../src/core/independent-review'
 import {
   appFlags,
   helpFlags,
@@ -23,8 +25,12 @@ import {
   NOT_RECORDED,
   readFixture,
   shapeOf,
+  STREAM_CONTRACT,
+  streamParts,
+  streamViolations,
   violations,
   type Recorded,
+  type StreamPart,
 } from './claude'
 
 const FAKE = path.resolve(__dirname, '../support/fake-claude/fake-claude.mjs')
@@ -161,5 +167,59 @@ describe('[계약] 가짜 claude', () => {
       }
     }
     expect([...new Set(diffs)]).toEqual([])
+  })
+})
+
+/** 가짜 claude의 독립 리뷰 찾기 호출을 진행 표시와 함께(stream-json) 부르고 출력 줄을 읽는다 (D502) */
+function fakeStream(): Promise<Record<string, unknown>[]> {
+  const args = claudeJsonArgs({ model: '', system: 's', schema: FIND_SCHEMA, stream: true })
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [FAKE, ...args], {
+      cwd: root,
+      env: { PATH: process.env['PATH'] },
+    })
+    let out = ''
+    p.stdout.on('data', (c: Buffer) => (out += c.toString('utf8')))
+    p.stdin.end('리뷰')
+    p.on('error', reject)
+    p.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`가짜 claude 종료 코드 ${code}: ${out}`))
+      resolve(
+        out
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => JSON.parse(l) as Record<string, unknown>),
+      )
+    })
+  })
+}
+
+describe('[계약] 독립 리뷰의 출력 이벤트 (D502)', () => {
+  const fixture = readFixture()
+
+  it('녹화본이 있고 앱이 읽는 필드를 모두 담는다', () => {
+    const shapes = fixture.stream?.shapes ?? {}
+    const broken = (
+      Object.entries(STREAM_CONTRACT) as [StreamPart, Record<string, string>][]
+    ).flatMap(([part, fields]) =>
+      Object.entries(fields)
+        .filter(([k, t]) => shapes[part]?.[k] !== t)
+        .map(([k, t]) => `${part}.${k}: 녹화본 ${shapes[part]?.[k] ?? '없음'}, 계약 ${t}`),
+    )
+    expect(fixture.stream).toBeDefined()
+    expect(broken).toEqual([])
+  })
+
+  it('가짜 claude가 계약을 지키고, 녹화본에 없는 필드를 보내지 않는다', async () => {
+    const parts = streamParts(await fakeStream())
+    expect(streamViolations(parts)).toEqual([])
+    const shapes = fixture.stream?.shapes ?? {}
+    const invented = Object.entries(parts).flatMap(([part, body]) => {
+      const real = shapes[part as StreamPart] ?? {}
+      return Object.entries(shapeOf(body))
+        .filter(([k, t]) => real[k] !== t)
+        .map(([k, t]) => `${part}.${k}: 가짜 ${t}, 실제 ${real[k] ?? '없음'}`)
+    })
+    expect(invented).toEqual([])
   })
 })

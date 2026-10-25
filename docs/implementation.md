@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -195,6 +195,12 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I179 | 바뀐 파일 표시(D490)는 `WorkRunner.filesChanges()`가 레포마다(메인과 묶음 Work의 고른 서브모듈) `git diff --name-status --no-renames -z <기준 커밋>`(`changedPaths`)과 `git ls-files --others --exclude-standard -z`(`untrackedPaths`)를 읽고, `core/files`의 `treeChanges`가 A·M·D로 줄여(T·U는 M, 추적하지 않는 것은 A, D로 왔는데 추적하지 않는 파일로 남아 있으면 M) 서브모듈 자리를 앞에 붙이고 트리가 받지 않는 경로를 빼 경로 순으로 낸다(상한 `CHANGES_MAX` 5000). 서브모듈 레인을 읽지 못하면 그 레인만 빼고, 메인을 읽지 못하면 실패다. 명령은 `workFileChanges(workKey)`, IPC는 `files:changes`다. 화면은 마지막 요청의 응답만 받고(`changesSeq`), 실패하면 낡은 표시를 지운다. 서브모듈 자리(gitlink)는 폴더 줄이 파일 표시로도 본다. 화면의 폴더 표시와 지운 항목 더하기는 `renderer/src/fileTree.ts`(`changeMarks`, `withDeleted`)의 순수 함수다. 지운 폴더는 디스크에 없어 펼쳐도 `workFiles`를 부르지 않고 바뀐 파일 목록으로 그린다. 트리의 차례는 core의 `sortEntries`와 같은 규칙을 `fileTree.ts`에 둔다 | git status만 보면 커밋한 변경이 사라진다. 폴더마다 git을 부르지 않도록 목록은 한 번 받아 화면에서 나눈다. 렌더러는 core를 부르지 못한다(I167) | |
 | I180 | 터미널에서 [파일] 탭으로 열기(D491): `terminal:open`이 `external` 인자를 받아, 거짓이면 먼저 `Relay.terminalFilesTarget(key, raw)`를 본다. 터미널 키의 주인이 Work이고 `filesRoot()`가 있으면 그 터미널 폴더에서 경로를 풀고(`resolveLink`, D412), `adapters/files`의 `relativeFile`로 화면의 경로와 링크를 따라간 실제 경로를 차례로 worktree 기준 경로로 바꾼다(D468의 `inside` 검사). `readTextFile`이 글이라고 하면 `{ workKey, path }`를 돌려주고 열지 않는다. 아니면 전처럼 OS 프로그램으로 열고 null이다. 렌더러의 `terminals.ts`는 Shift를 `external`로 넘기고, 받은 자리를 App이 `setFilesOpener`로 정한 곳에 준다. App은 그 Work의 탭을 `@files`로 바꾸고 `Files.tsx`의 `openInFiles`를 부른다. 그 Work의 `FilesView`가 아직 없으면 열 경로를 모듈의 `pendingOpens`에 두고, 처음 그려질 때 연다 | 경로를 다시 푸는 일과 worktree 안 검사는 main이 한다(렌더러가 보낸 글을 믿지 않는다). [파일] 탭이 처음 그려지기 전에 온 열기도 놓치지 않는다 | |
 | I181 | 연 파일 탭(D492): `FilesView`는 `tabs`(탭마다 `path`, `file`, `draft`, `view`, `conflict`, `error`)와 `current`, 닫기 확인의 `closing`을 든다. 같은 파일을 빨리 두 번 열면 먼저 들어간 탭을 둔다. 지금 탭은 마지막으로 고른 차례(`openSeq`)일 때만 바꾸고, 탭을 누르거나 닫아도 차례가 올라 앞의 열기 응답이 탭을 빼앗지 않는다. [다시 읽기]는 그사이 더 고쳤거나 저장했으면 두고 본다. 저장 중 표시는 탭마다다. 다시 읽기는 탭마다 읽기 전의 `file`과 같고 고치지 않았을 때만 바꾼다(I167과 같다). 닫은 뒤 고를 탭(`afterClose`)과 같은 이름 탭의 폴더(`tabHints`)는 `fileTree.ts`의 순수 함수다. 편집 칸은 탭마다 `key`를 달리해 되돌리기 기록이 섞이지 않게 한다 | 탭을 옮겨도 고친 글이 남아야 한다. 빠르게 고른 파일의 응답 차례가 바뀌어도 사람이 마지막에 고른 탭이 보인다 | |
+| I182 | 파이프라인 판(D501): `createWork`가 `work.json`에 `pipeline: 2`를 쓰고, `core/pipeline`의 `pipelineOf(work)`가 그 표시로 `PIPELINES`(verify 없음)와 `LEGACY_PIPELINES`(끝에 verify)를 고른다. 노드가 verify인지 보던 자리는 모두 `completesWork(work, task)`(verify거나 다음 단계가 Work 완료인 작업 단계)로 바꾸고, 마무리 절차가 붙는지는 `finishesWork`(새 판에서 Work를 마무리하는 verify 아닌 단계)다. 커스텀 유형은 단계가 없거나 옛 Work일 때만 verify를 붙인다 | 끝나지 않은 옛 Work가 바뀐 스킬과 상태 기계로 도중에 다른 길로 가지 않는다. 승인·전달·지식·PR 판정표가 "Work를 마무리하는 task" 하나의 물음으로 모인다 | |
+| I183 | 리뷰 요청은 handoff 상태 `review_requested`(D494)다. Stop에 백그라운드 작업이 남았으면(`background`, D129) 대기로 두고 다음 Stop에서 받는다. 상태 기계는 형식 확인을 통과한 그 handoff를 Stop이나 세션 종료에서 받으면 task를 `reviewing`으로 두고 `review`(`requested_at`, `code_review`)를 쓰고 `review.requested`를 남긴 뒤 `startReview`(세션을 끝내라는 표시 포함)를 낸다. 앱은 Stop 응답을 돌려준 뒤 500ms 기다려 세션을 끝내고 리뷰를 돌린다. 마무리 단계가 아닌 task, 리뷰를 이미 받은 task, 판정표가 없는 리뷰 요청은 `core/validate`가 되돌린다. `review.finished`를 받으면 `resumeTask`(입력 `review`)로 같은 대화를 `--resume`하고 첫 입력은 `reviewResumePrompt`(결과 글 경로)다. Work가 진행 중이 아니거나 재시작 뒤에 끝난 리뷰, 세션 기록이 없는 task는 다시 열지 않고 `interrupted`로 둔다([재개]가 리뷰 입력으로 연다) | 비목표 1.2(돌고 있는 세션에 글을 넣지 않음) 때문에 리뷰 결과는 세션을 닫았다가 다시 여는 첫 입력으로만 준다. 리뷰 중에는 세션이 없어 풀의 자리를 차지하지 않는다 | |
+| I184 | 독립 리뷰 호출(D495)은 `WorkRunner.runReview`가 한다. 변경은 앱이 `tasks/<nn>/independent-review/diff.patch`(묶음 Work는 레포마다)로 쓰고, 찾기(코드 리뷰를 켰을 때)와 확인(늘)을 차례로 `claude -p --json-schema --no-session-persistence --tools Read,Grep,Glob --add-dir <Work 디렉터리>`(Codex는 `codex exec --sandbox read-only`)로 부른다. 모델과 노력은 그 task의 것이다. 지침은 `skills/_review.md`의 `# Finder`, `# Checker`를 유형 블록으로 골라 넣는다. 결과는 `independent-review.md`(사람과 세션이 읽음)와 `independent-review.json`(호출 기록: 시간, 비용, 실패)이다. 호출이 실패해도 리뷰는 끝나고 결과 글에 까닭을 쓴다. `runReview`가 던지면(지침이나 변경 파일) `failReview`가 실패한 결과 글을 쓰고 `review.finished`를 넣는다. `review.finished`는 처리 줄 안에서 끊겼거나 앱을 끝내는 중이면 넣지 않는다(`feedReviewFinished`). 호출 상한은 30분, 그만두기·앱 종료·Work 지우기는 `AbortController`로 멈춘다 | 리뷰 세션은 다른 세션의 판단을 이어받지 않아야 독립이다. 읽기 도구만 주고 구조화된 출력만 받으면 앱이 결과를 정해진 모양으로 쓸 수 있다 | |
+| I185 | 앱 재시작(D496): 끝나지 않은 리뷰(`review.finished_at` 없음)는 `restarted: true`로 다시 돌리고, 끝나면 task를 `interrupted`로 둬 저절로 열지 않는다. 끝난 리뷰는 `interrupted`이고 [재개]가 리뷰 입력으로 연다. 그만두기는 `cancelReview`를 내고 task를 `interrupted`로 둔다 | 사람이 없는 동안 세션을 저절로 열지 않는다(D418의 재시작 규칙과 같음) | |
+| I186 | 코드 리뷰 설정(D497)은 앱 설정 `code_review`(기본 켬)와 Work 설정의 같은 키(null은 앱 설정을 따름)다. `codeReviewOn(config, settings)`로 리뷰를 요청받을 때의 값을 정해 `review.code_review`에 남긴다. 판정표 확인은 끄지 못한다(D497). 마무리 단계의 승인은 자동 승인을 켜도 늘 수동이다(D498, `taskApprovalMode`) | 리뷰를 요청할 때 정한 값이 결과 글, `pr.md`의 "독립 코드 리뷰를 하지 않음", 완료 화면에 같게 보인다 | |
+| I187 | 독립 리뷰의 진행 표시(D502): `claudeJson`이 `onEvent`를 받으면 `--output-format stream-json --verbose`로 부르고 `exec.run`의 `onStdout`으로 받은 출력을 `jsonLines`가 줄로 읽어 넘긴다. `onStdout`을 준 실행은 `spawn`으로 돌고 출력을 모아 두지 않는다(끝의 `STREAM_TAIL` 64KB만 남김): 도구 결과가 실려 길어진 출력이 `MAX_BUFFER`에 걸리지 않는다. 결과는 마지막 `result` 이벤트에서 `json` 모양과 같게 읽는다. `core/independent-review`의 `reviewSteps`가 이벤트에서 도구 호출(`toolLabel`, D216과 같은 이름), 도구 결과, 모델의 글을 걸음으로 뽑고 `StructuredOutput`은 뺀다. `WorkRunner`는 task마다 메모리에 지금 호출, 시작한 때, 지금 도구, 최근 도구 다섯(`reviewProgress`)을 두고 걸음마다 `ui.activity`로 보낸다(스냅샷을 다시 만들지 않는다). `activityOf`는 독립 리뷰 중인 task에 `phase`와 `recent`가 붙은 `ActivityView`를 준다. 기록은 호출마다 `independent-review/<find|check>.log`에 이어 쓰고, `ReviewView.reviewLogs`로 [산출물] 탭 아래에 보인다. 계약은 `test/contract/claude.ts`의 `STREAM_CONTRACT`(앱이 읽는 자리와 필드)와 녹화본의 `stream`(자리마다 모양, 2.1.310), 가짜 claude는 그 모양에서 필드를 지어내지 않는다 | 도구를 쓸 때마다 스냅샷을 보내면 렌더러가 승인 화면을 다시 읽는다(D216과 같은 까닭). 녹화는 훅과 따로 할 수 있게 `RELAY_CONTRACT_UPDATE=stream`이 옵션과 출력 이벤트만 새로 쓴다. Codex의 `exec --json` 도구 이벤트는 녹화하지 않아 읽지 않는다 | |
 
 ## 3. 확인한 사실
 
@@ -1479,6 +1485,40 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[스모크]** `test/smoke/files.spec.ts`: 연 파일 탭(고친 채 다른 파일 열기, 탭 오가기, 고친 탭 닫기의 확인), 트리의 고침·지움 표시와 폴더 표시, 터미널의 Ctrl+클릭으로 [파일] 탭에서 열고 폴더를 펼침, Ctrl+Shift+클릭은 OS 프로그램.
 - **[계약]**, **[실제]** 바뀌지 않았다: 에이전트와 `claude`, gh에 닿지 않는다.
 
+### M36. 마무리 단계와 독립 리뷰 (D493~D501)
+
+사람이 "리뷰와 검증 단계를 없애고, 코드 리뷰는 독립 세션이 한 뒤 코드를 고친 세션이 받아 고치게 하고, 판정표와 `pr.md`, 지식도 앞 세션이 쓰게 하자"고 했다. 코드 리뷰만 켜고 끌 수 있고(기본 켬, 앱 설정과 Work 설정), 판정표 확인은 늘 한다. 설계 v0.31.
+
+- 스킬: `skills/_final.md`(마무리 절차: 판정표 → 리뷰 요청 → 결과 읽기 → 고르기 → 반영 → 판정 고치기 → `pr.md` → 지식 → 마무리), `skills/_review.md`(독립 리뷰의 찾기와 확인 지침, verify의 리뷰 항목을 옮김). 단계 스킬의 verify 문구를 덜어 냄. `_common.md`의 `review_requested`. `skills/check.mjs` [6].
+- core: `pipeline`의 판과 `completesWork`·`finishesWork`(I182), `machine`의 `reviewing`과 `review.requested`·`review.finished`, `startReview`·`cancelReview`·`resumeTask`의 입력(I183, I185), `validate`의 리뷰 요청 규칙, `independent-review`(I184), `config`의 `code_review`(I186), `context`의 `## 마무리` 절과 리뷰 요청 안내 문구, `review`의 완료 화면 리뷰 줄과 [요약]의 리뷰 지적·반영.
+- 어댑터: `claude`의 `--tools`·`--add-dir`·멈춤, 마무리 절차를 붙인 `instructions.md`, `codex`의 같은 것, `exec`의 `signal`.
+- 앱과 화면: `WorkRunner.startReview`·`runReview`, 리뷰 중 표시와 결과를 받은 끊긴 task의 안내, 완료 화면의 리뷰 줄, 앱 설정과 Work 설정의 "독립 리뷰의 코드 리뷰".
+- 계약: handoff 스키마의 `review_requested`.
+
+**시험**
+
+- **스킬 정적 검사** `skills/check.mjs` [6]: 마무리 절차와 리뷰 지침의 조립, verify와 같은 템플릿, 핵심 문구, design.md의 D493~D501.
+- **[단위]** `test/unit/machine.test.ts`("마무리 단계와 독립 리뷰"): 리뷰 요청, 끝난 리뷰로 다시 열기, 진행 중이 아닌 Work와 재시작, 그만두기, 리뷰를 받은 뒤의 승인. `test/unit/finishing.test.ts`: 리뷰 요청 규칙, 결과 읽기와 결과 글, 설정, 완료 화면의 리뷰 줄. `pipeline.test.ts`, `context.test.ts`. 옛 Work를 보는 시험은 `test/support/legacy.ts`로 `pipeline` 표시를 뗀다.
+- **[흐름]** 가짜 `claude`가 독립 리뷰 호출(`-p`에 후보 스키마)과 결과로 다시 연 세션(시나리오의 `reviewed`)을 흉내 낸다. `test/flow/flow.test.ts`: 판정표 → 리뷰 요청 → 리뷰 → 다시 열기 → 마무리의 이벤트와 기록, 호출 인자, 결과 글. 유형마다의 흐름 시험은 마지막 작업 단계가 Work 완료 화면이 된다(`atCompletion`).
+- **[계약]** `claude -p`의 `--tools`, `--add-dir`는 녹화본의 옵션 목록에 있다.
+- **[실제]**, **[스모크]** 아직 더하지 않았다. 마무리 세션이 리뷰를 요청하고 결과로 마무리하는지는 평가(`app/eval/`)로 본다.
+
+### M37. 독립 리뷰의 진행 표시 (D502)
+
+사람이 "독립 리뷰 중일 때 찾기와 확인을 볼 수 없나"를 물었고, 출력 이벤트를 받아 패널에 보이는 방법을 골랐다. 설계 v0.32.
+
+- 어댑터: `exec.run`의 `onStdout`, `claude`의 `claudeJsonArgs`의 `stream`, `claudeJson`의 `onEvent`, `jsonLines`(I187).
+- core: `independent-review`의 `reviewSteps`, `reviewLogLine`, `REVIEW_PHASE`, `reviewLogFile`.
+- 앱과 화면: `WorkRunner`의 `reviewProgress`와 진행 기록, `activityOf`, `ReviewView.reviewLogs`, `Activity`의 호출 이름과 `ActivityRecent`, [산출물] 탭의 "독립 리뷰 기록".
+- 계약: `STREAM_CONTRACT`, `streamParts`, `streamViolations`, 녹화본의 `stream`과 `--verbose`, live 시험의 출력 이벤트 녹화와 `RELAY_CONTRACT_PASS_ENV`.
+
+**시험**
+
+- **[단위]** `test/unit/finishing.test.ts`: 이벤트에서 걸음 뽑기(경로, 구조화된 출력 도구 빼기, 모양이 다른 것), 기록의 줄, 조각난 출력을 줄로 읽기.
+- **[계약]** `fakes.test.ts`: 녹화본이 앱이 읽는 필드를 담고, 가짜 claude의 출력 이벤트가 계약을 지키며 녹화본에 없는 필드를 보내지 않는다. `live.test.ts`: 실제 claude의 출력 이벤트가 계약을 지키고 진행과 결과를 읽는다(2.1.310에서 녹화).
+- **[흐름]** `flow.test.ts`: 리뷰 중 진행 표시가 찾기와 확인, 도구의 시작과 끝을 보이고, 구조화된 출력 도구는 보이지 않으며, 기록 파일과 Work 완료 화면의 기록. `codex.test.ts`: Codex의 기록은 시작과 끝, 까닭만 있다.
+- **[스모크]**, **[실제]** 더하지 않았다. 화면 글자는 흐름 시험의 진행 표시 값으로 이어 본다.
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층
@@ -1528,6 +1568,8 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
   - 명령 실패는 `FAKE_GH_FAIL`(`view`, `api`, `event`, `merge`, `log`를 더함. `api`는 REST 요청 모두, `event`는 실행 읽기만), gh 버전은 `FAKE_GH_VERSION`(기본 2.101.0)으로 흉내 낸다. `merge`의 실패는 M9 [실제]에서 GitHub가 준 "GraphQL: Pull Request is not mergeable (mergePullRequest)"다. 브랜치 보호로 막힌 것(mergeStateStatus BLOCKED)은 `github.json`의 `merge_state`로 두면 gh처럼 GitHub에 묻기 전에 멈춘다.
 
 - 가짜 `codex`: `app/test/support/fake-codex/fake-codex.mjs`. 실제 Codex의 옵션을 받아 relay의 command 훅·MCP 브리지를 실제로 실행하고, 모델 요청은 하지 않는다. Codex [흐름](`test/flow/codex.test.ts`)과 Codex GUI [스모크]가 쓴다([engines.md](engines.md)).
+
+- 독립 리뷰 호출(D495)은 `--json-schema`에 `candidates`가 있는 `-p` 호출로 알아보고, `--output-format stream-json`이면 녹화본의 `stream` 모양으로 글, 읽기 도구와 그 결과, 구조화된 출력 도구를 줄마다 낸 뒤 `result`로 끝낸다(D502).
 
 - 가짜가 실제를 따라가게 하는 장치는 [계약]이다(`test/contract`). 실제 `claude`와 gh에서 녹화한 모양(`fixtures/claude.json`, `fixtures/gh.json`)과 가짜가 보내는 모양이 다르면 가짜 쪽 시험이 실패한다. 녹화본은 `app-claude`의 경우 `contract`를 `update_contract`와 함께 돌려 결과물(`contract-fixtures`)로 받아 바꾼다. 실제 `claude`는 Claude Code 웹 세션에서도 `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=1 npx vitest run --project contract test/contract/live.test.ts`로 녹화할 수 있다. 녹화는 `claude -p`(비대화형)로 한다. 앱은 PTY에서 대화형으로 띄우므로, 대화형에서만 오는 이벤트(`Notification`)와 대화형에서만 달라지는 필드는 녹화본에 없고 [실제]가 잡는다(`test/contract/claude.ts`의 `NOT_RECORDED`).
 

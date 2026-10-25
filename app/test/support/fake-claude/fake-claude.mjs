@@ -10,7 +10,8 @@
 // - FAKE_CLAUDE_RECORD 폴더가 있으면 실행 인자와 훅 응답을 fake-claude.jsonl에 남긴다.
 // - --session-id로 시작한 세션은 FAKE_CLAUDE_RECORD/sessions/<id>.json에 task를 적어 두고,
 //   --resume <id>로 다시 열면 그 task의 resume 시나리오를 한다. 입력을 함께 주면 그것을 먼저 첫 요청으로 보낸다
-//   (중단됨의 [재개], D218). 적어 둔 것이 없으면 실제 claude처럼
+//   (중단됨의 [재개], D218). 입력이 독립 리뷰 결과(D496)면 resume 대신 그 task의 reviewed 시나리오를 한다. 적어 둔 것이
+//   없으면 실제 claude처럼
 //   "No conversation found with session ID"를 내고 종료 코드 1로 끝난다 (스파이크 S6).
 // - clear 단계는 /clear를 흉내 낸다: SessionEnd(reason: clear)를 보내고 새 세션 id로 계속 돈다(D110).
 //   새 세션은 다음 요청으로 대화가 생겨야 --resume으로 열 수 있다.
@@ -47,11 +48,85 @@ if (argv[0] === 'auth' && argv[1] === 'status') {
 }
 
 // claude -p (지식 검토 호출, D300): 표준 입력의 프롬프트를 남기고 시나리오의 review[n](n번째 호출, 없으면 문제 없음)를
-// 구조화된 출력으로 돌려준다. FAKE_CLAUDE_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다
+// 구조화된 출력으로 돌려준다. FAKE_CLAUDE_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다.
+// 독립 리뷰(D495)는 --json-schema에 candidates가 있는 호출이다: later가 있으면 찾기, 없으면 확인이다. 프롬프트와 실행 인자를
+// <시나리오>.independent-<찾기|확인>-<n>.txt·.json에 남기고 시나리오의 independent.find·check(없으면 지적·이의 없음)를
+// 돌려준다. FAKE_CLAUDE_INDEPENDENT_FAIL이 find·check·all이면 그 호출이 종료 코드 1로 끝나고, FAKE_CLAUDE_INDEPENDENT_MS가
+// 있으면 그만큼 기다린 뒤 답한다(리뷰 중인 상태를 보는 시험). --output-format stream-json이면(진행 표시, D502) 녹화본의 모양으로
+// 글 하나, 읽기 도구 하나(worktree의 README.md)와 그 결과, 구조화된 출력 도구를 줄마다 내고 기다린 뒤 result 줄로 끝낸다
 if (argv[0] === '-p') {
   const prompt = fs.readFileSync(0, 'utf8')
   const file = env.FAKE_CLAUDE_SCENARIO
   const scenario = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+  const schemaArg = argv[argv.indexOf('--json-schema') + 1]
+  const schema = schemaArg ? JSON.parse(schemaArg) : {}
+  if (schema.properties?.candidates) {
+    const kind = 'later' in schema.properties ? 'find' : 'check'
+    const counter = `${file ?? path.join(os.tmpdir(), 'fake-claude')}.independent-${kind}-count`
+    const n = (fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0) + 1
+    fs.writeFileSync(counter, String(n))
+    if (file) {
+      fs.writeFileSync(`${file}.independent-${kind}-${n}.txt`, prompt)
+      fs.writeFileSync(`${file}.independent-${kind}-${n}.json`, JSON.stringify(argv))
+      // 앱을 끌 때 이 호출을 끝내고 기다리는지 보는 시험이 읽는다
+      fs.writeFileSync(`${file}.independent-${kind}-${n}.pid`, String(process.pid))
+    }
+    const stream = argv[argv.indexOf('--output-format') + 1] === 'stream-json'
+    const data =
+      scenario.independent?.[kind] ??
+      (kind === 'find' ? { candidates: [], later: [] } : { candidates: [], objections: [] })
+    const session = randomUUID()
+    const line = (e) =>
+      process.stdout.write(`${JSON.stringify({ ...e, session_id: session, uuid: randomUUID() })}\n`)
+    const said = (content) => line({ type: 'assistant', message: { role: 'assistant', content } })
+    if (stream) {
+      const id = `toolu_fake_${kind}`
+      said([{ type: 'text', text: kind === 'find' ? '변경 파일을 읽는다.' : '판정표를 읽는다.' }])
+      said([
+        {
+          type: 'tool_use',
+          id,
+          name: 'Read',
+          input: { file_path: path.join(process.cwd(), 'README.md') },
+        },
+      ])
+      line({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: id, content: '1\t# sample' }],
+        },
+      })
+    }
+    const wait = Number(env.FAKE_CLAUDE_INDEPENDENT_MS ?? 0)
+    if (wait) await new Promise((r) => setTimeout(r, wait))
+    const failing = env.FAKE_CLAUDE_INDEPENDENT_FAIL
+    if (failing === kind || failing === 'all') {
+      process.stderr.write('가짜 리뷰 실패\n')
+      process.exit(1)
+    }
+    if (stream)
+      said([
+        { type: 'tool_use', id: `toolu_fake_${kind}_out`, name: 'StructuredOutput', input: data },
+      ])
+    process.stdout.write(
+      JSON.stringify({
+        type: 'result',
+        is_error: false,
+        result: '',
+        structured_output: data,
+        total_cost_usd: 0.25,
+        duration_ms: 420,
+        usage: {
+          input_tokens: 20000,
+          output_tokens: 800,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+        },
+      }),
+    )
+    process.exit(0)
+  }
   const counter = `${file ?? path.join(os.tmpdir(), 'fake-claude')}.review-count`
   const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0
   fs.writeFileSync(counter, String(n + 1))
@@ -527,11 +602,14 @@ async function run() {
     ? ((opts.resume ? scenario.sessionResume : scenario.session) ?? [])
     : side
       ? ((opts.resume ? scenario.sideResume : scenario.side) ?? [])
-      : opts.resume
-        ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
-        : opts.prompt === null
-          ? (scenario.cleanup ?? [])
-          : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
+      : opts.resume && opts.prompt?.startsWith('relay: 독립 리뷰가 끝났습니다')
+        ? // 독립 리뷰 결과로 다시 연 마무리 세션 (D496)
+          (scenario.reviewed?.[ctx.taskId] ?? scenario.reviewed?.[ctx.skill] ?? [])
+        : opts.resume
+          ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
+          : opts.prompt === null
+            ? (scenario.cleanup ?? [])
+            : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
   await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }

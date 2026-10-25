@@ -20,7 +20,7 @@ import {
   type Harness,
   workBranchOf,
 } from '../support/harness'
-import { REQUEST, scenario, steps, type Scenario } from '../support/scenarios'
+import { atCompletion, REQUEST, scenario, steps, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -113,7 +113,7 @@ const work = (w: Created) => JSON.parse(read(path.join(w.dir, 'work.json'))) as 
 
 async function toVerify(s: Setup, w: Created): Promise<void> {
   const r = await drive(s.h.relay, s.h.ui, w.key, {
-    pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    pauseAt: atCompletion(),
   })
   expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused' })
   await settle(s.h, w.key)
@@ -164,7 +164,7 @@ describe('[흐름] 서브모듈 Work (D413~D417)', () => {
 
     // 메인 쪽 변경은 승인 화면에 알리고 전달하지 않는다
     writeFiles(w.root, { 'README.md': '메인 쪽 변경\n' })
-    const shown = (await s.h.relay.review(w.key, 't-03'))?.emphasis ?? []
+    const shown = (await s.h.relay.review(w.key, 't-02'))?.emphasis ?? []
     expect(shown.map((e) => e.kind)).toEqual(['main_changes'])
     expect(shown[0]?.lines).toEqual([' M README.md'])
 

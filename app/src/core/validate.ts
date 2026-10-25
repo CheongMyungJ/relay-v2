@@ -512,7 +512,10 @@ export function checkHandoff(text: string, opts: HandoffCheckOptions): HandoffCh
   const status = h.data?.['status']
   return {
     value: errors.length ? null : h.value,
-    status: status === 'awaiting_approval' || status === 'blocked' ? status : null,
+    status:
+      status === 'awaiting_approval' || status === 'blocked' || status === 'review_requested'
+        ? status
+        : null,
     header: h.value,
     errors,
     warnings: [
@@ -715,6 +718,40 @@ export interface TaskCheckInput {
    * 초안(pr.md)이 필요한지(메인을 고치지 않는 Work는 필요 없다). 묶음 Work가 아니면 없다
    */
   bundleDrafts?: { drafts: readonly { file: string; text: string | null }[]; main: boolean }
+  /**
+   * 마무리 단계 task (D493, D494): 독립 리뷰를 요청했는가(task의 review가 있음). 마무리 단계가 아니면 없다. 리뷰를 요청할 때와
+   * 마무리할 때의 필수 산출물이 다르고, 리뷰 요청은 task마다 한 번이다
+   */
+  finishing?: { requested: boolean }
+}
+
+/** 마무리 단계가 리뷰를 요청할 때 verification.md에 있어야 할 절 (D494). 설계는 테스트 파일 대신 문서 밖 파일이다 (D374) */
+export function reviewRequestSections(type: WorkType): readonly string[] {
+  return ['완료조건 판정', type === 'spec' ? '문서 밖 파일 변경' : '테스트 파일 변경']
+}
+
+/**
+ * 리뷰 요청의 규칙 (D494): review_requested는 마무리 단계에서 task마다 한 번이고, 마무리 단계의 awaiting_approval은 리뷰를
+ * 요청한 뒤다. 어기면 handoff.md의 status 오류다
+ */
+function reviewRequestIssues(
+  status: string | null,
+  finishing: TaskCheckInput['finishing'],
+): FormatIssue[] {
+  const issue = (message: string): FormatIssue[] => [
+    { file: HANDOFF_FILE, part: 'header', field: 'status', message },
+  ]
+  if (status === 'review_requested') {
+    if (!finishing) return issue('`review_requested`는 Work의 마지막 작업 단계만 씀 (D494)')
+    if (finishing.requested) {
+      return issue(
+        '독립 리뷰는 이미 받음: 리뷰를 받은 뒤의 순서를 마치고 `status: awaiting_approval`로 마무리 (D494)',
+      )
+    }
+  } else if (status === 'awaiting_approval' && finishing && !finishing.requested) {
+    return issue('판정표를 쓰고 `status: review_requested`로 독립 리뷰를 먼저 요청해야 함 (D494)')
+  }
+  return []
 }
 
 export interface TaskCheck extends CheckSummary {
@@ -753,11 +790,40 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
 
   const errors: FormatIssue[] = [...(handoff?.errors ?? [])]
   const step = node === 'custom' ? input.customStep : undefined
-  const bundle = node === 'verify' ? input.bundleDrafts : undefined
-  const required = (step ? [`${step.id}.md`] : NODE_INFO[node].artifacts).filter(
-    (a) => !(bundle && !bundle.main && a === PR_FILE),
-  )
-  if (handoff?.status === 'awaiting_approval') {
+  const finishing = input.finishing
+  // 마무리 단계와 옛 Work의 verify가 Work 완료 화면의 판정표와 PR 초안을 쓴다 (D493, D500)
+  const completing = node === 'verify' || finishing !== undefined
+  const bundle = completing ? input.bundleDrafts : undefined
+  const own = step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
+  const required = [
+    ...own,
+    ...(finishing && !own.includes(VERIFICATION_FILE) ? [VERIFICATION_FILE, PR_FILE] : []),
+  ].filter((a) => !(bundle && !bundle.main && a === PR_FILE))
+  const status = handoff?.status ?? null
+  errors.push(...reviewRequestIssues(status, finishing))
+  if (status === 'review_requested' && finishing && !finishing.requested) {
+    // 리뷰 요청 때는 단계 산출물과 판정표만 본다. pr.md와 지식은 리뷰를 받은 뒤에 쓴다 (D494)
+    for (const artifact of [...own, VERIFICATION_FILE]) {
+      if (files[artifact] === undefined) {
+        errors.push({
+          file: artifact,
+          part: 'file',
+          message: `\`${artifact}\` 없음: \`status: review_requested\`일 때 필수 산출물`,
+        })
+      }
+    }
+    const verification = files[VERIFICATION_FILE]
+    if (verification !== undefined) {
+      errors.push(
+        ...missingSections(
+          VERIFICATION_FILE,
+          verification,
+          reviewRequestSections(input.type),
+          '리뷰 요청',
+        ),
+      )
+    }
+  } else if (handoff?.status === 'awaiting_approval') {
     for (const d of bundle?.drafts ?? []) {
       if (d.text === null) {
         errors.push({
@@ -776,6 +842,19 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         })
       }
     }
+    // 마무리할 때도 판정표의 절이 남아 있어야 한다: 리뷰 지적을 옮기며 판정표를 다시 써도 Work 완료 화면과 머지 전 확인이
+    // 그 절을 읽는다 (D494, D499)
+    const verification = finishing ? files[VERIFICATION_FILE] : undefined
+    if (verification !== undefined) {
+      errors.push(
+        ...missingSections(
+          VERIFICATION_FILE,
+          verification,
+          reviewRequestSections(input.type),
+          '마무리 때 판정표',
+        ),
+      )
+    }
   } else if (node === 'intake' && handoff && handoff.status === null && draftText === undefined) {
     // status를 읽지 못한 handoff는 [오류 무시하고 승인]할 수 있으므로 초안 없음을 넘길 수 없는 오류로 남긴다 (D134)
     errors.push({
@@ -792,10 +871,10 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
       ...missingSections(`${step.id}.md`, stepText, step.sections, '이 커스텀 단계 산출물'),
     )
   }
-  const prText = node === 'verify' ? files[PR_FILE] : undefined
+  const prText = completing ? files[PR_FILE] : undefined
   if (prText !== undefined) errors.push(...checkPr(prText))
   for (const d of bundle?.drafts ?? []) if (d.text !== null) errors.push(...checkPr(d.text, d.file))
-  if (input.knowledgeIssues && node === 'verify' && handoff?.status === 'awaiting_approval') {
+  if (input.knowledgeIssues && completing && handoff?.status === 'awaiting_approval') {
     errors.push(...input.knowledgeIssues)
   }
   if (node === 'respond') {
@@ -813,7 +892,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     warnings: [
       ...(handoff?.warnings ?? []),
       ...(draft?.warnings ?? []),
-      ...(input.knowledgeWarnings && node === 'verify' ? input.knowledgeWarnings : []),
+      ...(input.knowledgeWarnings && completing ? input.knowledgeWarnings : []),
     ],
     handoff: handoff?.value ?? null,
     handoffHeader: handoff?.header ?? null,

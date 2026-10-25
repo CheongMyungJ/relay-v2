@@ -20,7 +20,14 @@ import {
   workBranchOf,
 } from '../support/harness'
 import { FakeGitHub } from '../support/github'
-import { REQUEST, scenario, steps, type Scenario, type Step } from '../support/scenarios'
+import {
+  atCompletion,
+  REQUEST,
+  scenario,
+  steps,
+  type Scenario,
+  type Step,
+} from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -106,15 +113,15 @@ type Created = Awaited<ReturnType<typeof create>>
 
 const work = (w: Created) => JSON.parse(read(path.join(w.dir, 'work.json'))) as WorkState
 
-async function toVerify(s: Setup, w: Created): Promise<void> {
+async function toCompletion(s: Setup, w: Created): Promise<void> {
   const r = await drive(s.h.relay, s.h.ui, w.key, {
-    pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    pauseAt: atCompletion(),
   })
   expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused' })
   await settle(s.h, w.key)
 }
 
-/** fix가 메인과 lib에 따로 커밋하고, verify가 lib의 PR 초안도 쓴다 */
+/** fix가 메인과 lib에 따로 커밋하고, 리뷰를 받은 뒤 마무리하며 lib의 PR 초안도 쓴다 (D493, D500) */
 function bundleScenario(opts: { main?: boolean } = {}): Scenario {
   const fix = steps('fix')
   const at = fix.findIndex((st) => st.do === 'commit')
@@ -153,7 +160,7 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
       expect.objectContaining({ path: 'lib', baseBranch: 'main', worktree: w.lib }),
     ])
 
-    await toVerify(s, w)
+    await toCompletion(s, w)
     // 에이전트는 메인 worktree 루트에서 시작하고 context.md의 레포 절을 받는다 (D474)
     const start = s.h.records().find((r) => r['type'] === 'start' && r['taskId'] === 't-02')
     expect(start?.['cwd']).toBe(w.root)
@@ -165,19 +172,15 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
     expect(ctx).toContain('고르지 않은 서브모듈: `vendor`')
     expect(ctx).not.toContain('## 서브모듈\n')
     expect(fix.repo_starts).toEqual({ lib: libBase })
-    // verify는 레포마다 PR 초안 파일을 안다 (D476)
-    const verify = work(w).tasks[2]
-    if (!verify) throw new Error('verify task가 없음')
-    expect(read(path.join(w.dir, 'tasks', taskDirName(verify), 'context.md'))).toContain(
-      'PR 초안: `pr/lib.md`',
-    )
+    // 마무리 단계(fix)는 레포마다 PR 초안 파일을 안다 (D476, D500)
+    expect(ctx).toContain('PR 초안: `pr/lib.md`')
 
     // 승인 화면은 레포마다 본다 (D475): 메인의 커밋 안 된 변경에서 lib 자리를 뺀다
     const review = await s.h.relay.review(w.key, 't-02')
     expect(review?.repoDiffs?.map((d) => d.path)).toEqual(['', 'lib'])
     expect(review?.repoDiffs?.[1]?.diff).toContain('+lib 고침')
     expect(review?.emphasis).toEqual([])
-    const done = await s.h.relay.review(w.key, 't-03')
+    const done = await s.h.relay.review(w.key, 't-02')
     expect(done?.completion?.repos?.map((r) => [r.path, r.branch?.ahead, r.linkable])).toEqual([
       ['', 1, false],
       ['lib', 1, true],
@@ -253,11 +256,11 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
     expect(work(w).main_fixed).toBe(true)
     expect(git(w.root, 'branch', '--show-current')).toBe('')
     expect(git(s.checkout, 'branch', '--list', w.branch)).toBe('')
-    await toVerify(s, w)
+    await toCompletion(s, w)
     writeFiles(w.root, { 'README.md': '메인 쪽 변경\n' })
-    const shown = (await s.h.relay.review(w.key, 't-03'))?.emphasis ?? []
+    const shown = (await s.h.relay.review(w.key, 't-02'))?.emphasis ?? []
     expect(shown.map((e) => [e.kind, e.lines])).toEqual([['main_changes', [' M README.md']]])
-    const completion = (await s.h.relay.review(w.key, 't-03'))?.completion
+    const completion = (await s.h.relay.review(w.key, 't-02'))?.completion
     expect(completion?.repos?.map((r) => [r.path, r.editable])).toEqual([
       ['', false],
       ['lib', true],
@@ -304,7 +307,7 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
   it('보낼 레포의 커밋 안 된 변경은 레포마다 고르고, 메인의 [커밋하고 진행]은 lib 자리를 넣지 않는다 (D475)', async () => {
     const s = await setup(bundleScenario())
     const w = await create(s)
-    await toVerify(s, w)
+    await toCompletion(s, w)
     writeFiles(w.root, { 'NOTE.md': '메인 메모\n' })
     writeFiles(w.lib, { 'more.txt': 'lib 메모\n' })
     const picks = [
@@ -349,7 +352,7 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
   it('레포마다 PR 초안으로 PR을 만들고, 메인 PR 본문에 함께 머지할 서브모듈 PR을 붙인다 (D476, D479)', async () => {
     const s = await setup(bundleScenario())
     const w = await create(s)
-    await toVerify(s, w)
+    await toCompletion(s, w)
     expect(
       await s.h.relay.deliver(w.key, {
         choice: 'pr',
@@ -386,7 +389,7 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
   it('PR 카드마다 읽고 머지한다. 메인 PR은 서브모듈 PR을 기다리고, squash 머지 뒤 [서브모듈 커밋 맞추기]로 맞춘 뒤 머지한다 (D480, D481)', async () => {
     const s = await setup(bundleScenario())
     const w = await create(s)
-    await toVerify(s, w)
+    await toCompletion(s, w)
     expect(
       await s.h.relay.deliver(w.key, {
         choice: 'pr',
@@ -506,7 +509,7 @@ describe('[흐름] 묶음 Work (D470~D483)', () => {
     const base = bundleScenario()
     const s = await setup({ ...base, tasks: { ...base.tasks, 'pr-respond': respond } })
     const w = await create(s)
-    await toVerify(s, w)
+    await toCompletion(s, w)
     expect(
       await s.h.relay.deliver(w.key, {
         choice: 'pr',

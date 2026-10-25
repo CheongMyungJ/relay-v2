@@ -20,6 +20,7 @@ import { createWork } from '../../src/core/machine'
 import type { TaskCheck } from '../../src/core/validate'
 import type { Handoff } from '../../src/shared/contracts'
 import type { TaskRecord, TaskStatus, WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 const HANDOFF: Handoff = {
   status: 'awaiting_approval',
@@ -48,15 +49,17 @@ function check(h: Partial<Handoff> = {}, errors = 0): TaskCheck {
   }
 }
 
-/** 지금 task가 verify(t-03)인 Work (intake → fix → verify) */
+/** 지금 task가 verify(t-03)인 옛 Work (intake → fix → verify, D501) */
 function atVerify(status: TaskStatus, patch: Partial<WorkState> = {}): WorkState {
-  const base = createWork({
-    type: 'bugfix',
-    workId: 'w-20260927-001',
-    baseBranch: 'main',
-    baseCommit: 'c0',
-    at: 'x',
-  }).work
+  const base = legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20260927-001',
+      baseBranch: 'main',
+      baseCommit: 'c0',
+      at: 'x',
+    }).work,
+  )
   const task = (seq: number, node: TaskRecord['node'], s: TaskStatus): TaskRecord => ({
     ...(base.tasks[0] as TaskRecord),
     id: `t-0${seq}`,
@@ -135,7 +138,7 @@ describe('전달을 시작할 수 있는 verify (7-3, D119, D120)', () => {
     }
     expect(deliveryStart(notVerify, check())).toEqual({
       ok: false,
-      error: '리뷰와 검증의 Work 완료 화면이 아님',
+      error: 'Work 완료 화면이 아님',
     })
   })
 

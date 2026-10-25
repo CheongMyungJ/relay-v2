@@ -68,6 +68,8 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
 
 const SKILL_FILE = 'SKILL.md'
 const COMMON_FILE = '_common.md'
+/** 마무리 절차 (5.6.14, D493). 마무리 단계 task에만 스킬 본문과 공통 규칙 사이에 붙인다 */
+export const FINAL_FILE = '_final.md'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.
@@ -174,21 +176,24 @@ async function customBody(body: string, skill: SkillName, custom: CustomSource):
 
 /**
  * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
- * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). 마무리 단계(finishing)는 그 뒤에 마무리 절차(_final.md)의 그 유형
+ * 구간을 붙인다 (5.6.14, D493). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
  */
 export async function skillText(
   source: string,
   skill: SkillName,
   type: WorkType,
   custom?: CustomSource,
+  finishing = false,
 ): Promise<string> {
   const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
   const body = selectType(stripFrontMatter(raw), type)
-  return mergeSkill(
-    custom && type === 'custom' ? await customBody(body, skill, custom) : body,
-    selectType(common, type),
-  )
+  const own = custom && type === 'custom' ? await customBody(body, skill, custom) : body
+  const final = finishing
+    ? mergeSkill(own, selectType(await fsp.readFile(path.join(source, FINAL_FILE), 'utf8'), type))
+    : own
+  return mergeSkill(final, selectType(common, type))
 }
 
 /**
@@ -233,8 +238,10 @@ export async function deploySkill(o: {
   type: WorkType
   /** 커스텀 Work의 유형 폴더와 단계 (D452, D456) */
   custom?: CustomSource
+  /** 마무리 단계 task다: 마무리 절차를 붙인다 (5.6.14, D493) */
+  finishing?: boolean
 }): Promise<DeployedSkill> {
-  const text = await skillText(o.source, o.skill, o.type, o.custom)
+  const text = await skillText(o.source, o.skill, o.type, o.custom, o.finishing)
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
   await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))
@@ -255,18 +262,30 @@ async function removeRelaySkills(workDir: string): Promise<void> {
   }
 }
 
-// ---------- 짧은 모델 호출 (D300) ----------
+// ---------- 짧은 모델 호출 (D300, D495) ----------
 
 export interface ClaudeJsonInput {
   bin: string
   env: NodeJS.ProcessEnv
   cwd: string
+  /** 모델. 비우면 CLI의 기본이다 */
   model: string
   effort?: string
   system: string
   prompt: string
   schema: object
   timeoutMs: number
+  /** 줄 도구. 없으면 도구 없음이다(지식 검토, D300). 독립 리뷰는 읽기 도구만 준다 (D495) */
+  tools?: readonly string[]
+  /** 작업 폴더 밖에서 읽을 폴더 (--add-dir) */
+  addDirs?: readonly string[]
+  /** 끊을 때 (Work 포기). 끊으면 프로세스를 끝내고 error에 적는다 */
+  signal?: AbortSignal
+  /**
+   * 출력 이벤트를 오는 대로 받는다 (독립 리뷰의 진행 표시, D502). 주면 `--output-format stream-json --verbose`로 부르고
+   * 줄마다 읽은 JSON을 넘긴다. 결과는 마지막 `result` 이벤트에서 읽는다
+   */
+  onEvent?: (event: Record<string, unknown>) => void
 }
 
 export interface ClaudeJsonResult {
@@ -280,21 +299,24 @@ export interface ClaudeJsonResult {
 
 /** claudeJson의 실행 인자. 계약 시험이 실제 claude의 --help와 맞춰 본다 (test/contract) */
 export function claudeJsonArgs(
-  input: Pick<ClaudeJsonInput, 'model' | 'effort' | 'system' | 'schema'>,
+  input: Pick<ClaudeJsonInput, 'model' | 'effort' | 'system' | 'schema' | 'tools' | 'addDirs'> & {
+    /** 출력 이벤트를 줄마다 받는다 (onEvent, D502) */
+    stream?: boolean
+  },
 ): string[] {
   return [
     '-p',
-    '--model',
-    input.model,
+    ...(input.model ? ['--model', input.model] : []),
     ...(input.effort ? ['--effort', input.effort] : []),
     '--output-format',
-    'json',
+    ...(input.stream ? ['stream-json', '--verbose'] : ['json']),
     '--system-prompt',
     input.system,
     '--json-schema',
     JSON.stringify(input.schema),
     '--tools',
-    '',
+    (input.tools ?? []).join(','),
+    ...(input.addDirs ?? []).flatMap((d) => ['--add-dir', d]),
     '--no-session-persistence',
   ]
 }
@@ -304,14 +326,19 @@ export function claudeJsonArgs(
  * 구조화된 출력(--json-schema). 프롬프트는 표준 입력으로 넘긴다. 실패해도 던지지 않고 error에 적는다
  */
 export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResult> {
-  const args = claudeJsonArgs(input)
+  const onEvent = input.onEvent
+  const args = claudeJsonArgs({ ...input, stream: onEvent !== undefined })
   const started = Date.now()
+  const lines = onEvent ? jsonLines(onEvent) : null
   const r = await run(input.bin, args, {
     cwd: input.cwd,
     env: input.env,
     timeoutMs: input.timeoutMs,
     input: input.prompt,
+    ...(input.signal ? { signal: input.signal } : {}),
+    ...(lines ? { onStdout: lines.push } : {}),
   })
+  lines?.end()
   const ms = Date.now() - started
   const fail = (error: string): ClaudeJsonResult => ({
     data: null,
@@ -322,10 +349,16 @@ export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResu
   })
   if (r.code !== 0) return fail(describeFailure(r))
   let j: Record<string, unknown>
-  try {
-    j = JSON.parse(r.stdout) as Record<string, unknown>
-  } catch {
-    return fail(`출력을 읽지 못함: ${r.stdout.slice(0, 200)}`)
+  if (lines) {
+    const last = lines.result()
+    if (!last) return fail(`결과 이벤트가 없음: ${r.stdout.slice(-200)}`)
+    j = last
+  } else {
+    try {
+      j = JSON.parse(r.stdout) as Record<string, unknown>
+    } catch {
+      return fail(`출력을 읽지 못함: ${r.stdout.slice(0, 200)}`)
+    }
   }
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
   const u = j['usage'] as Record<string, unknown> | undefined
@@ -350,5 +383,47 @@ export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResu
         : data === null
           ? '구조화된 출력 없음'
           : null,
+  }
+}
+
+/**
+ * stream-json 출력을 줄로 나눠 읽는다 (D502). 읽은 줄마다 onEvent를 부르고, 마지막 `result` 이벤트를 남긴다. JSON이 아닌
+ * 줄은 건너뛴다. 받는 쪽이 던져도 읽기는 이어 간다
+ */
+export function jsonLines(onEvent: (event: Record<string, unknown>) => void): {
+  push: (chunk: string) => void
+  end: () => void
+  result: () => Record<string, unknown> | null
+} {
+  let rest = ''
+  let last: Record<string, unknown> | null = null
+  const line = (text: string) => {
+    if (!text.trim()) return
+    let e: unknown
+    try {
+      e = JSON.parse(text)
+    } catch {
+      return
+    }
+    if (typeof e !== 'object' || e === null || Array.isArray(e)) return
+    const event = e as Record<string, unknown>
+    if (event['type'] === 'result') last = event
+    try {
+      onEvent(event)
+    } catch {
+      // 진행 표시가 실패해도 결과는 읽는다
+    }
+  }
+  return {
+    push: (chunk) => {
+      const parts = (rest + chunk).split('\n')
+      rest = parts.pop() ?? ''
+      for (const p of parts) line(p)
+    },
+    end: () => {
+      line(rest)
+      rest = ''
+    },
+    result: () => last,
   }
 }

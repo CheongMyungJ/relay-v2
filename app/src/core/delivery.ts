@@ -13,6 +13,7 @@ import type {
   WorkState,
 } from '../shared/work'
 import { REVIEWABLE, approvalGate } from './approval'
+import { completesWork } from './pipeline'
 import { ghTooOld, ghVersionReason } from './pr'
 import { normalizeText } from './validate'
 
@@ -87,11 +88,14 @@ export function approvalStops(work: Pick<WorkState, 'stop_after_step'>): boolean
   return work.stop_after_step === true
 }
 
-/** verify에서 멈춘 Work의 verify task (D119). 아니면 undefined */
+/**
+ * Work 완료 task(마무리 단계, 옛 Work의 verify)에서 멈춘 Work의 그 task (D119, D493). 아니면 undefined. 이름은 verify만 있던
+ * 때의 것이다
+ */
 export function stoppedVerify(work: WorkState): TaskRecord | undefined {
   if (work.status !== 'stopped' || !work.stop) return undefined
   const task = work.tasks.find((t) => t.id === work.stop?.task_id)
-  return task?.node === 'verify' && task.status === 'approved' ? task : undefined
+  return task && completesWork(work, task) && task.status === 'approved' ? task : undefined
 }
 
 /**
@@ -113,7 +117,7 @@ export function deliveryStart(
   if (stopped) return { ok: true, from: 'stopped', task: stopped }
   if (work.status !== 'active') return { ok: false, error: '전달할 수 있는 Work가 아님' }
   const task = work.tasks[work.tasks.length - 1]
-  if (task?.node !== 'verify') return { ok: false, error: '리뷰와 검증의 Work 완료 화면이 아님' }
+  if (!task || !completesWork(work, task)) return { ok: false, error: 'Work 완료 화면이 아님' }
   if (!REVIEWABLE.includes(task.status)) {
     return { ok: false, error: `${task.id}는 승인할 수 있는 상태가 아님` }
   }

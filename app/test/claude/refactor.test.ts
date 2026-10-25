@@ -1,11 +1,12 @@
-// [실제] 실제 claude로 작은 리팩터링이 intake → refactor → verify를 지나 끝까지 간다
+// [실제] 실제 claude로 작은 리팩터링이 intake → refactor(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M15, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - work-start가 머리글 없는 intent 초안에 리팩터링의 기본 완료조건 넷과 구조 조건을 쓴다 (D264, D266)
 // - refactor가 안전망을 먼저 따로 커밋하고, refactor.md 다섯 절에 안전망 커밋 해시를 적는다 (D259, D272, I64)
 // - 숨은 버그(공백을 하나만 바꿈)를 고치지 않고 지금 동작을 지킨다 (D260)
-// - verify가 리팩터링 pr.md(목표 구조, 동작 보존, 찾은 버그)를 쓰고 작업 브랜치로 돌아와 있다 (D273, D274)
+// - refactor가 독립 리뷰를 요청해 받고(D494~D496), 리팩터링 pr.md(목표 구조, 동작 보존, 찾은 버그)를 쓰고 작업 브랜치로
+//   돌아와 있다 (D273, D274, D500)
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 앱 설정은
-// 기본값(계획과 리팩터링 자동)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
+// 기본값(계획과 리팩터링은 마무리 단계라 늘 수동, D498)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 refactor로 고른다.
 // 결과는 test-results/claude/refactor/와 refactor.md에 남긴다.
 import { execFileSync } from 'node:child_process'
@@ -248,17 +249,22 @@ function inspect(
   )
   need(out === KEPT, `동작이 바뀜: slugify('Hello Big World') = ${JSON.stringify(out)} (D260)`)
 
-  // verify가 안전망 커밋을 체크아웃했다가 작업 브랜치로 돌아왔다 (I64)
+  // 안전망 커밋을 체크아웃했다가 작업 브랜치로 돌아왔다 (I64)
   need(git(tree, 'branch', '--show-current') !== '', '작업 브랜치로 돌아오지 않음 (I64)')
 
-  const pr = readIn('verify', 'pr.md')
+  need(
+    Boolean(task('refactor')?.review?.resumed_at),
+    'refactor가 독립 리뷰를 받아 다시 열리지 않음 (D494~D496)',
+  )
+  need(readIn('refactor', 'independent-review.md') !== null, 'independent-review.md 없음 (D495)')
+  const pr = readIn('refactor', 'pr.md')
   need(pr !== null, 'pr.md 없음')
   if (pr !== null) {
     const names = sectionNames(pr)
     need(names.includes('동작 보존'), 'pr.md에 ## 동작 보존 없음 (D274)')
     notes.push(`pr.md 절: ${names.join(', ')}`)
   }
-  const verification = readIn('verify', 'verification.md')
+  const verification = readIn('refactor', 'verification.md')
   if (verification !== null) {
     notes.push(`판정: ${(sectionText(verification, '완료조건 판정') ?? '').replace(/\n/g, ' / ')}`)
   }
@@ -300,15 +306,11 @@ describe.runIf(enabled)('[실제] 실제 claude로 리팩터링 (M15, 8.4)', () 
     console.log(text)
   })
 
-  it('작은 리팩터링이 intake → refactor → verify → Work 완료로 간다', async () => {
+  it('작은 리팩터링이 intake → refactor(마무리) → Work 완료로 간다', async () => {
     result = await run()
     expect(result.drive.reason).toBeNull()
     expect(result.drive.status).toBe('completed')
-    expect(result.drive.tasks.map((t) => t.label)).toEqual([
-      '01 의도 정리',
-      '02 계획과 리팩터링',
-      '03 리뷰와 검증',
-    ])
+    expect(result.drive.tasks.map((t) => t.label)).toEqual(['01 의도 정리', '02 계획과 리팩터링'])
     expect(result.drive.tasks.filter((t) => t.forced)).toEqual([])
     expect(result.problems).toEqual([])
   })

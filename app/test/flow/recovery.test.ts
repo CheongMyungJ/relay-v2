@@ -40,7 +40,7 @@ import {
   type Harness,
   workBranchOf,
 } from '../support/harness'
-import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
+import { atCompletion, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 /** 시험이 띄운 자식 프로세스와, 그 트리의 ID와 시작 시각. 시험이 실패해도 남기지 않는다 */
@@ -100,8 +100,11 @@ async function newWork(hh: Harness, projectId: string): Promise<WorkPaths> {
   }
 }
 
-async function setup(s: Scenario, o: { github?: boolean } = {}): Promise<Setup> {
-  h = await harness({ scenario: s })
+async function setup(
+  s: Scenario,
+  o: { github?: boolean; env?: Record<string, string> } = {},
+): Promise<Setup> {
+  h = await harness({ scenario: s, ...(o.env ? { env: o.env } : {}) })
   const hh = h
   const { repo, remote } = makeRepo(hh.root, 'sample', REPO_FILES)
   if (o.github) {
@@ -139,12 +142,15 @@ const backups = (s: Setup) =>
     .split('\n')
     .filter(Boolean)
 
-/** 기본 경로(intake → fix → verify)로 리뷰와 검증이 승인 대기가 될 때까지 간다 */
-async function toVerify(s: Setup): Promise<void> {
+/** 기본 경로(intake → fix)로 마무리 단계 fix가 독립 리뷰를 받고 Work 완료 화면(승인 대기)이 될 때까지 간다 (D493) */
+async function toCompletion(s: Setup): Promise<void> {
   const r = await drive(s.h.relay, s.h.ui, s.key, {
-    pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+    pauseAt: atCompletion(),
   })
-  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '03 리뷰와 검증: 승인 대기' })
+  expect(r, s.h.ui.dump()).toMatchObject({
+    status: 'paused',
+    reason: '02 원인 분석과 수정: 승인 대기',
+  })
   await settle(s.h, s.key)
 }
 
@@ -255,9 +261,9 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
   it.runIf(listing)(
     '다시 켜면 기록과 시작 시각이 같은 claude를 트리째 끝내고 그 Work의 패널에 알린다. 시작 시각이 다르면 건드리지 않는다',
     async () => {
-      // B: 리뷰와 검증에서 [AI 세션 열기]로 연 정리 세션이 살아 있다 (7-5)
+      // B: Work 완료 화면에서 [AI 세션 열기]로 연 정리 세션이 살아 있다 (7-5)
       const s = await setup(scenario())
-      await toVerify(s)
+      await toCompletion(s)
       expect(await s.h.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
       await s.h.ui.until(() => view(s.h, s).cleanup?.status === 'live', '정리 세션')
       await settle(s.h, s.key)
@@ -292,11 +298,11 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
           },
         ],
       }
-      // B의 verify 세션 기록은 ID가 살아 있는 다른 프로세스와 같고 시작 시각이 다르다: ID를 재사용한 다른 프로그램이다
+      // B의 fix 세션 기록은 ID가 살아 있는 다른 프로세스와 같고 시작 시각이 다르다: ID를 재사용한 다른 프로그램이다
       const bCrashed: WorkState = {
         ...b.work,
         tasks: b.work.tasks.map((t) =>
-          t.id === 't-03' && t.session
+          t.id === 't-02' && t.session
             ? {
                 ...t,
                 session: {
@@ -359,7 +365,7 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
 
   it('정리 세션의 프로세스는 살아 있는 동안만 work.json에 둔다. task와 이벤트, pty.log는 남기지 않는다 (7-5, D126)', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     const events = eventsOf(s)
     expect(await s.h.relay.openCleanup(s.key, 'push')).toEqual({ ok: true })
     await s.h.ui.until(() => view(s.h, s).cleanup?.status === 'live', '정리 세션')
@@ -367,7 +373,7 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
     const w = workOf(s)
     expect(w.cleanup_process?.pid).toEqual(expect.any(Number))
     if (listing) expect(w.cleanup_process?.process_started_at).toEqual(expect.any(String))
-    expect(w.tasks).toHaveLength(3)
+    expect(w.tasks).toHaveLength(2)
     // [정리 끝 → push/PR 진행]: 세션을 끝내고 깨끗하니 원래 고른 전달을 한다
     expect(await s.h.relay.finishCleanup(s.key)).toEqual({ ok: true })
     await settle(s.h, s.key)
@@ -379,18 +385,74 @@ describe('[흐름] 고아 프로세스와 정리 세션 (M6, 시나리오 9-1, D
         .slice(events.length)
         .map((e) => e.type),
     ).toEqual(['task.approved', 'delivery.succeeded', 'work.completed'])
-    expect(fs.readdirSync(path.join(s.dir, 'tasks')).sort()).toEqual([
-      '01-intake',
-      '02-fix',
-      '03-verify',
-    ])
+    expect(fs.readdirSync(path.join(s.dir, 'tasks')).sort()).toEqual(['01-intake', '02-fix'])
+  })
+})
+
+describe('[흐름] 독립 리뷰 중의 재시작 (D496, I185)', () => {
+  it('리뷰 중에 앱을 다시 켜면 리뷰를 처음부터 다시 돌리고, 끝나도 세션을 저절로 열지 않는다. [재개]가 리뷰 결과를 첫 입력으로 연다', async () => {
+    // 리뷰 호출마다 2초 걸린다: 찾기를 하는 동안 앱을 끈다
+    const s = await setup(scenario(), { env: { FAKE_CLAUDE_INDEPENDENT_MS: '2000' } })
+    const paused = await drive(s.h.relay, s.h.ui, s.key, {
+      pauseAt: (t) => t.node === 'intake' && t.status === 'awaiting_approval',
+    })
+    expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
+    expect(await s.h.relay.approve(s.key, 't-01', {})).toEqual({ ok: true })
+    await s.h.ui.until(
+      () => s.h.ui.works.get(s.key)?.tasks[1]?.status === 'reviewing',
+      '독립 리뷰 중',
+      30_000,
+    )
+    await settle(s.h, s.key)
+    expect(workOf(s).tasks[1]).toMatchObject({
+      status: 'reviewing',
+      session: { alive: false },
+      review: { code_review: true },
+    })
+    expect(workOf(s).tasks[1]?.review?.finished_at).toBeUndefined()
+    // 찾기 호출이 도는 중에 끈다
+    const scenarioFile = path.join(s.h.root, 'scenario.json')
+    await s.h.ui.until(
+      () => fs.existsSync(`${scenarioFile}.independent-find-1.txt`),
+      '찾기 호출',
+      10_000,
+    )
+    await s.h.relay.close()
+    await settle(s.h, s.key)
+    await s.h.reopen()
+    // 끝나지 않은 리뷰는 다시 돈다. 끝나면 중단됨으로 두고 세션을 열지 않는다
+    const view0 = () => s.h.ui.works.get(s.key)?.tasks[1]
+    await s.h.ui.until(() => view0()?.status === 'interrupted', '리뷰 뒤 중단됨', 30_000)
+    await settle(s.h, s.key)
+    const w = workOf(s)
+    expect(w.tasks[1]?.review).toMatchObject({
+      restarted: true,
+      finished_at: expect.any(String),
+    })
+    expect(w.tasks[1]?.review?.resumed_at).toBeUndefined()
+    expect(eventsOf(s).filter((e) => e.type === 'review.finished')).toHaveLength(1)
+    expect(eventsOf(s).filter((e) => e.type === 'task.resumed')).toEqual([])
+    // 찾기를 두 번 불렀다(꺼질 때 멈춘 것과 다시 켠 뒤의 것). 결과 글이 있다
+    expect(fs.existsSync(`${scenarioFile}.independent-find-2.txt`)).toBe(true)
+    expect(fs.existsSync(path.join(s.dir, 'tasks', '02-fix', 'independent-review.md'))).toBe(true)
+
+    // [재개]는 리뷰 결과를 첫 입력으로 같은 대화를 연다 (D496). 마무리해 Work를 끝낸다
+    expect(await s.h.relay.resume(s.key, 't-02')).toEqual({ ok: true })
+    const done = await drive(s.h.relay, s.h.ui, s.key)
+    expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    const prompts = s.h
+      .records()
+      .filter((r) => r['type'] === 'hook' && r['event'] === 'UserPromptSubmit')
+      .map((r) => String((r['body'] as { prompt?: string }).prompt ?? ''))
+    expect(prompts.at(-1)).toMatch(/^relay: 독립 리뷰가 끝났습니다/)
+    expect(workOf(s).tasks[1]?.review?.resumed_at).toEqual(expect.any(String))
   })
 })
 
 describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)', () => {
   it('알리고 [무시]만 받는다. [다시 시도]는 받지 않고, [무시]는 기록만 지워 코드와 task를 그대로 둔다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     writeFiles(s.tree, { 'notes.txt': '메모\n' })
     const head = git(s.tree, 'rev-parse', 'HEAD')
     const b = await before(s.h, s)
@@ -400,9 +462,9 @@ describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)',
       stage: 'backup',
       started_at: at(),
       node: 'fix',
-      from_task: 't-03',
+      from_task: 't-02',
       instruction: null,
-      discard: ['t-02', 't-03'],
+      discard: ['t-02'],
       reset_to: b.work.tasks[1]?.start_commit ?? '',
       backup_branch: `relay/${s.workId}-discarded-1`,
       backup_commit: null,
@@ -423,13 +485,13 @@ describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)',
       `만들려던 백업 브랜치: ${op.backup_branch ?? ''}`,
       '코드는 아직 되돌리지 않았습니다.',
       `되돌릴 커밋: ${op.reset_to.slice(0, 8)}`,
-      '폐기할 task: 02 원인 분석과 수정, 03 리뷰와 검증',
+      '폐기할 task: 02 원인 분석과 수정',
       '지금 앱에는 되감기가 없어 이어서 하지 않습니다 (D418). 코드를 확인하고 [무시]를 누르세요.',
     ])
     expect(Object.values(v.actions).some(Boolean)).toBe(false)
     expect(s.h.ui.notices).toEqual([])
     // 기록이 있는 동안은 [무시]와 Work 설정만 받는다 (D122)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({
       ok: false,
       error: OPERATION_BLOCKS,
     })
@@ -452,7 +514,7 @@ describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)',
     expect(git(s.tree, 'status', '--porcelain')).toBe('?? notes.txt')
     expect(view(s.h, s).operation).toBeNull()
     expect(eventsOf(s).map((e) => e.type)).not.toContain('task.rewound')
-    // 하던 verify를 승인해 끝까지 간다
+    // 하던 마무리 단계를 승인해 끝까지 간다
     const done = await drive(s.h.relay, s.h.ui, s.key)
     expect(done, s.h.ui.dump()).toMatchObject({ status: 'completed' })
   })
@@ -461,14 +523,14 @@ describe('[흐름] D418 전에 끊긴 되감기 (시나리오 9-4, D122, D424)',
 describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => {
   it('push한 뒤 끊긴 전달을 알리고, [다시 시도]는 끊긴 시도를 실패로 남긴 뒤 다시 push해 Work를 완료한다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     const b = await before(s.h, s)
     const delivering = step(b.work, {
       type: 'deliver',
       at: at(),
       choice: 'push',
       uncommitted: null,
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-02'),
     })
     expect(delivering.operation).toMatchObject({ kind: 'deliver', stage: 'push' })
     // 앱은 push하고 결과를 기록하기 전에 꺼졌다
@@ -489,7 +551,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       ok: false,
       error: OPERATION_BLOCKS,
     })
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({
       ok: false,
       error: OPERATION_BLOCKS,
     })
@@ -518,7 +580,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
 
   it('stash를 만들고 기록하기 전에 끊긴 전달의 [무시]는 그 stash를 찾아 실패한 전달로 남긴다. 그 뒤 [전달 없이 완료]로 끝낸다', async () => {
     const s = await setup(scenario(), { github: true })
-    await toVerify(s)
+    await toCompletion(s)
     writeFiles(s.tree, { 'debug.log': '실험 출력\n' })
     const b = await before(s.h, s)
     const delivering = step(b.work, {
@@ -526,7 +588,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       at: at(),
       choice: 'pr',
       uncommitted: 'discard',
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-02'),
     })
     expect(delivering.operation).toMatchObject({ stage: 'prepare', uncommitted: 'discard' })
     const stash = await stashAll(s.tree, stashMessage(s.workId))
@@ -543,7 +605,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
     const w = workOf(s)
     expect(w.operation).toBeUndefined()
     expect(w.status).toBe('active')
-    expect(w.tasks[2]?.status).toBe('awaiting_approval')
+    expect(w.tasks[1]?.status).toBe('awaiting_approval')
     expect(w.delivery).toEqual({
       choice: 'pr',
       status: 'failed',
@@ -558,9 +620,9 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       payload: { reason: 'app_restart', stage: 'prepare', stashes: [stash] },
     })
     // Work 완료 화면은 M5의 실패처럼 [다시 시도]·[전달 없이 완료]다 (D120)
-    const review = await s.h.relay.review(s.key, 't-03')
+    const review = await s.h.relay.review(s.key, 't-02')
     expect(review?.completion).toMatchObject({ mode: 'deliver', delivery: { status: 'failed' } })
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({ ok: true })
     await settle(s.h, s.key)
     const done = workOf(s)
     expect(done.status).toBe('completed')
@@ -570,7 +632,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
 
   it('stash 전에 끊긴 전달의 [다시 시도]는 커밋 안 된 변경의 선택지를 다시 보이고, 고르면 PR까지 간다', async () => {
     const s = await setup(scenario(), { github: true })
-    await toVerify(s)
+    await toCompletion(s)
     writeFiles(s.tree, { 'debug.log': '실험 출력\n' })
     const b = await before(s.h, s)
     const delivering = step(b.work, {
@@ -578,7 +640,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
       at: at(),
       choice: 'pr',
       uncommitted: 'discard',
-      check: await checkOf(s, b.work, 't-03'),
+      check: await checkOf(s, b.work, 't-02'),
     })
     await crash(s.h, [{ w: s, work: delivering, events: b.events }])
 
@@ -615,7 +677,7 @@ describe('[흐름] 끊긴 전달 (M6, 시나리오 9-4, 7-5, D120~D123)', () => 
 describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => {
   it('worktree를 반쯤 지우다 끊긴 정리의 [다시 시도]는 prune하고 남은 폴더를 지운 뒤 브랜치를 지워 보관됨으로 끝낸다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
       ok: true,
     })
@@ -650,12 +712,12 @@ describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => 
     expect(w.cleaned).toMatchObject({ forced: false, deleted_branches: [s.branch] })
     expect(eventsOf(s).at(-1)).toMatchObject({ type: 'work.cleaned' })
     // 산출물은 남는다
-    expect(fs.existsSync(path.join(s.dir, 'tasks', '03-verify', 'verification.md'))).toBe(true)
+    expect(fs.existsSync(path.join(s.dir, 'tasks', '02-fix', 'verification.md'))).toBe(true)
   })
 
   it('브랜치를 지우다 끊긴 정리의 [다시 시도]는 아직 있는 브랜치만 지운다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
       ok: true,
     })
@@ -687,8 +749,8 @@ describe('[흐름] 끊긴 정리 (M6, 시나리오 9-4, 8-2, D121~D123)', () => 
 
   it('[무시]는 기록만 지운다. 기록이 있는 동안 받지 않던 [Work 정리]를 다시 해 끝낸다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    await toCompletion(s)
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({ ok: true })
     const b = await before(s.h, s)
     expect(b.work.status).toBe('completed')
     const { cleaning, input } = await cleanStarted(s, b, {
@@ -753,9 +815,14 @@ describe('[흐름] 앱 소유 파일과 잘린 pty.log (M6, 6.1, 시나리오 9-
       'intent.md': fileHash(read(path.join(s.dir, 'intent.md'))),
       'decisions.md': fileHash(read(path.join(s.dir, 'decisions.md'))),
     })
-    // 스크립트가 decisions.md에 덧붙였다. 앱이 덧붙이며 읽을 때 알리고, 그 내용 뒤에 덧붙인다
+    // 스크립트가 decisions.md에 덧붙이고 work.json의 승인 기록을 바꿨다. 마무리 단계(fix)를 승인하면 앱이 decisions.md에
+    // 덧붙이며 읽을 때 알리고 그 내용 뒤에 덧붙인다. work.json은 다음에 쓸 때 바뀐 내용을 옆에 남기고 자기 상태로 쓴다
     fs.appendFileSync(path.join(s.dir, 'decisions.md'), '\n스크립트 메모\n')
-    expect(await pause('verify')).toMatchObject({ status: 'paused' })
+    const file = path.join(s.dir, 'work.json')
+    const script = read(file).replace('"status": "active"', '"status": "stopped"')
+    expect(script).not.toBe(read(file))
+    fs.writeFileSync(file, script)
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({ ok: true })
     await settle(s.h, s.key)
     expect(files()?.lines).toEqual([
       expect.stringMatching(/^request\.md: 내용이 바뀜/),
@@ -770,16 +837,8 @@ describe('[흐름] 앱 소유 파일과 잘린 pty.log (M6, 6.1, 시나리오 9-
     // [확인]하면 지금 내용을 받아들인다
     expect(await s.h.relay.dismissNotice(s.key, 'files')).toEqual({ ok: true })
     await settle(s.h, s.key)
-    expect(view(s.h, s).notices).toEqual([])
     expect(workOf(s).file_hashes?.['request.md']).toBe(fileHash(request))
 
-    // 스크립트가 work.json의 승인 기록을 바꿨다. 앱은 다음에 쓸 때 바뀐 내용을 옆에 남기고 자기 상태로 쓴다
-    const file = path.join(s.dir, 'work.json')
-    const script = read(file).replace('"status": "active"', '"status": "stopped"')
-    expect(script).not.toBe(read(file))
-    fs.writeFileSync(file, script)
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
-    await settle(s.h, s.key)
     const copies = fs.readdirSync(s.dir).filter((f) => f.startsWith('work.json.changed-'))
     expect(copies).toEqual([expect.stringMatching(/^work\.json\.changed-\d{8}T\d{6}$/)])
     const copy = path.join(s.dir, copies[0] ?? '')
@@ -800,7 +859,7 @@ describe('[흐름] 앱 소유 파일과 잘린 pty.log (M6, 6.1, 시나리오 9-
 
   it('다시 켜면 앱 소유 파일의 해시를 비교해 알리고, 잘린 pty.log는 경고 없이 남은 만큼 보인다. M6 전에 만든 Work는 경고 없이 적는다', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     await s.h.relay.close()
     await settle(s.h, s.key)
     // 꺼진 동안 스크립트가 intent.md를 고치고 decisions.md를 지웠다

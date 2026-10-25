@@ -16,7 +16,7 @@ import {
   workBranchOf,
   type Harness,
 } from '../support/harness'
-import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
+import { atCompletion, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -121,13 +121,13 @@ async function published(s: Setup): Promise<void> {
   await settle(s.h, s.key)
 }
 
-/** 리뷰와 검증이 승인 대기가 될 때까지 간다 */
-async function toVerify(s: Setup, awaitAuto = false): Promise<void> {
-  const r = await drive(s.h.relay, s.h.ui, s.key, {
-    awaitAuto,
-    pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+/** 마무리 단계(fix)가 독립 리뷰를 받고 Work 완료 화면(승인 대기)이 될 때까지 간다 (D493) */
+async function toCompletion(s: Setup): Promise<void> {
+  const r = await drive(s.h.relay, s.h.ui, s.key, { pauseAt: atCompletion() })
+  expect(r, s.h.ui.dump()).toMatchObject({
+    status: 'paused',
+    reason: '02 원인 분석과 수정: 승인 대기',
   })
-  expect(r, s.h.ui.dump()).toMatchObject({ status: 'paused', reason: '03 리뷰와 검증: 승인 대기' })
   await published(s)
 }
 
@@ -140,10 +140,11 @@ function marker(s: Setup, key: string): string {
 
 describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
   it('의도 승인에서 라벨을 붙인 이슈를 만들고, 승인된 task마다 코멘트를 달고, [PR 생성]에 Closes를 붙인다 (D336, D339, D342, D346, D348)', async () => {
+    // fix의 자동 승인을 켜도 마무리 단계라 사람이 승인한다 (D498). 자동 승인의 머리 줄(D342)은 [단위] issue.test.ts가 본다
     const s = await setup(scenario(), {
       config: { auto_approve: { fix: true }, auto_approve_countdown_sec: 1 },
     })
-    await toVerify(s, true)
+    await toCompletion(s)
     let all = issues(s)
     expect(all.labels[GH_REPO]).toEqual(['relay'])
     expect(all.issues).toHaveLength(1)
@@ -160,9 +161,9 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(issue?.body).toContain('## 목표\n빈 배열의 평균이 NaN이 되는 문제를 고친다.')
     expect(issue?.body).not.toContain('schema_version')
     expect(issue?.body).toContain(marker(s, 'body'))
-    // intake와 fix의 코멘트. verify는 아직 승인하지 않았다
-    const [intake, fix] = issue?.comments ?? []
-    expect(issue?.comments).toHaveLength(2)
+    // intake의 코멘트. 마무리 단계 fix는 아직 승인하지 않았다
+    const [intake] = issue?.comments ?? []
+    expect(issue?.comments).toHaveLength(1)
     // 새 이슈의 v1 intent는 본문과 같아 intake 코멘트에서 뺀다 (D339)
     expect(intake?.body).toContain('### t-01 의도 정리 · 승인(사람)')
     expect(intake?.body).toContain('**요약**\n\n의도 초안을 썼다.')
@@ -170,11 +171,6 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(intake?.body).not.toContain('**intent v1**')
     expect(intake?.body).not.toContain('<details>')
     expect(intake?.body).toContain(marker(s, 't-01'))
-    // 자동 승인은 머리 줄에 적는다 (D342). 산출물은 접는다 (D339)
-    expect(fix?.body).toContain('### t-02 원인 분석과 수정 · 승인(자동)')
-    expect(fix?.body).toContain('- 원인은 0으로 나눔 — 원인은 0으로 나눔인 이유 (AI)')
-    expect(fix?.body).toContain('<details><summary>fix.md</summary>')
-    expect(fix?.url).toMatch(new RegExp(`^${ISSUE_URL}/1#issuecomment-\\d+$`))
 
     expect(await s.h.relay.deliver(s.key, { choice: 'pr', uncommitted: null })).toEqual({
       ok: true,
@@ -186,12 +182,16 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(gh(s, 'pr create')[0]?.args).not.toContain('--draft')
     expect(work(s).delivery).toMatchObject({ draft: false })
     all = issues(s)
-    const verify = all.issues[0]?.comments[2]
-    expect(verify?.body).toContain('### t-03 리뷰와 검증 · 승인(사람)')
-    expect(verify?.body).toContain('<details><summary>verification.md</summary>')
-    expect(verify?.body).toContain('<details><summary>pr.md</summary>')
+    // 산출물은 접는다 (D339). 마무리 단계는 제 산출물과 판정표, PR 초안을 함께 올린다
+    const fix = all.issues[0]?.comments[1]
+    expect(fix?.body).toContain('### t-02 원인 분석과 수정 · 승인(사람)')
+    expect(fix?.body).toContain('- 원인은 0으로 나눔 — 원인은 0으로 나눔인 이유 (AI)')
+    expect(fix?.body).toContain('<details><summary>fix.md</summary>')
+    expect(fix?.body).toContain('<details><summary>verification.md</summary>')
+    expect(fix?.body).toContain('<details><summary>pr.md</summary>')
+    expect(fix?.url).toMatch(new RegExp(`^${ISSUE_URL}/1#issuecomment-\\d+$`))
     // PR 진행이라 아직 끝 코멘트와 닫기가 없다
-    expect(all.issues[0]?.comments).toHaveLength(3)
+    expect(all.issues[0]?.comments).toHaveLength(2)
     expect(all.issues[0]?.state).toBe('open')
     const w = work(s)
     expect(w.issue).toMatchObject({
@@ -200,14 +200,13 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       url: `${ISSUE_URL}/1`,
       pending: [],
     })
-    expect(w.issue?.posted.map((p) => p.key)).toEqual(['body', 't-01', 't-02', 't-03'])
+    expect(w.issue?.posted.map((p) => p.key)).toEqual(['body', 't-01', 't-02'])
     expect(w.issue?.posted[1]?.comment_id).toBe(all.issues[0]?.comments[0]?.id)
     const logged = events(s).filter((e) => e.type.startsWith('issue.'))
     expect(logged.map((e) => [e.type, e.payload['key'] ?? null])).toEqual([
       ['issue.created', null],
       ['issue.posted', 't-01'],
       ['issue.posted', 't-02'],
-      ['issue.posted', 't-03'],
     ])
     expect(logged[0]?.payload).toEqual({ number: 1, url: `${ISSUE_URL}/1`, labeled: true })
     expect(s.h.ui.works.get(s.key)?.issue).toEqual({
@@ -223,7 +222,7 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
 
   it('[push]로 끝나면 끝 코멘트를 달고 completed로 닫는다 (D346, D347)', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
       ok: true,
     })
@@ -232,7 +231,6 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(issue?.comments.map((c) => c.body.split('\n')[0])).toEqual([
       '### t-01 의도 정리 · 승인(사람)',
       '### t-02 원인 분석과 수정 · 승인(사람)',
-      '### t-03 리뷰와 검증 · 승인(사람)',
       `Work 완료(push): 브랜치 \`${workBranchOf(s.workId)}\``,
     ])
     expect(issue).toMatchObject({ state: 'closed', state_reason: 'completed' })
@@ -241,7 +239,6 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       'body',
       't-01',
       't-02',
-      't-03',
       'end',
       'close',
     ])
@@ -297,9 +294,9 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
       issueNumber: 7,
       issues: { labels: {}, issues: [existing], faults: [] },
     })
-    await toVerify(s)
+    await toCompletion(s)
     // [완료만]
-    expect(await s.h.relay.approve(s.key, 't-03', {})).toEqual({ ok: true })
+    expect(await s.h.relay.approve(s.key, 't-02', {})).toEqual({ ok: true })
     await published(s)
     expect(gh(s, 'issue create')).toEqual([])
     expect(gh(s, 'label create')).toEqual([])
@@ -310,7 +307,6 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(issue?.comments.map((c) => c.body.split('\n')[0])).toEqual([
       '### t-01 의도 정리 · 승인(사람)',
       '### t-02 원인 분석과 수정 · 승인(사람)',
-      '### t-03 리뷰와 검증 · 승인(사람)',
       'Work 완료',
     ])
     expect(work(s).issue).toMatchObject({ linked: true, number: 7, url: `${ISSUE_URL}/7` })
@@ -318,7 +314,7 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
 
   it('다시 하는 Work는 원래 Work의 이슈를 이어 쓴다: 새 이슈 없이 intent부터 코멘트로 달고, 원래 Work는 끝 코멘트만 달고 닫지 않는다 (D421)', async () => {
     const s = await setup(scenario())
-    await toVerify(s)
+    await toCompletion(s)
     const original = work(s).issue?.number ?? 0
     expect(original).toBeGreaterThan(0)
     // 곁 세션이 다시 할 Work의 초안을 쓴다
@@ -359,14 +355,14 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(all).toHaveLength(1)
     expect(all[0]).toMatchObject({ number: original, state: 'open' })
     const heads = all[0]?.comments.map((c) => c.body.split('\n')[0])
+    // 원래 Work의 마무리 단계는 승인하지 않은 채 포기했다
     expect(heads).toEqual([
       '### t-01 의도 정리 · 승인(사람)',
-      '### t-02 원인 분석과 수정 · 승인(사람)',
       `Work 포기: ${newId}로 다시 시작`,
       '### t-01 의도 정리 · 승인(사람)',
     ])
     // 이어 쓰는 이슈라 새 Work의 intake 코멘트는 intent를 펼친다 (D339, D421)
-    expect(all[0]?.comments[3]?.body).toContain('**intent v1**\n\n## 목표')
+    expect(all[0]?.comments[2]?.body).toContain('**intent v1**\n\n## 목표')
     expect(work(t)).toMatchObject({
       from_work: s.workId,
       issue: { linked: false, number: original, from_work: s.workId },
@@ -380,25 +376,25 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
 
   it('게시가 실패해도 흐름은 막히지 않고, [다시 시도]와 앱을 다시 켤 때 앞부터 순서대로 올린다 (D344, I98)', async () => {
     const s = await setup(scenario(), { env: { FAKE_GH_FAIL: 'issue' } })
-    // 이슈를 만들지 못해도 fix와 verify는 간다
-    await toVerify(s)
+    // 이슈를 만들지 못해도 fix는 Work 완료 화면까지 간다
+    await toCompletion(s)
     let w = work(s)
-    expect(w.issue?.pending.map((e) => e.kind)).toEqual(['issue', 'task', 'task'])
+    expect(w.issue?.pending.map((e) => e.kind)).toEqual(['issue', 'task'])
     expect(w.issue?.failure).toMatchObject({ key: 'body' })
     // 만들기 전에 라벨을 읽다가 실패해 만들기를 시도하지 않았다
     expect(w.issue?.failure?.error).toContain('gh label list 실패')
     expect(w.issue?.attempted_at).toBeUndefined()
     expect(gh(s, 'issue create')).toEqual([])
-    expect(s.h.ui.works.get(s.key)?.issue).toMatchObject({ number: null, pending: 3 })
+    expect(s.h.ui.works.get(s.key)?.issue).toMatchObject({ number: null, pending: 2 })
     // 실패하는 동안의 [다시 시도]는 다시 실패한다
     expect(await s.h.relay.issueRetry(s.key)).toEqual({ ok: true })
     await published(s)
-    expect(work(s).issue?.pending).toHaveLength(3)
+    expect(work(s).issue?.pending).toHaveLength(2)
     expect(
       events(s)
         .filter((e) => e.type === 'issue.post_failed')
         .map((e) => e.payload['key']),
-    ).toEqual(['body', 'body', 'body'])
+    ).toEqual(['body', 'body'])
 
     // gh가 돌아온 뒤 앱을 다시 켜면 남은 게시를 앞부터 잇는다
     await s.h.relay.close()
@@ -411,7 +407,6 @@ describe('[흐름] 이슈 기록 (M19, 설계 3.7)', () => {
     expect(w.issue?.failure).toBeUndefined()
     expect(issues(s).issues[0]?.comments.map((c) => c.body.split('\n')[0])).toEqual([
       '### t-01 의도 정리 · 승인(사람)',
-      '### t-02 원인 분석과 수정 · 승인(사람)',
     ])
   })
 

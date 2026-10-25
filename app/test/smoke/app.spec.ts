@@ -5,28 +5,27 @@
 // → intent.md 확정, intake 세션 트리 종료, 다음 task 시작. M12: 다음 task의 터미널은 표시 줄로 시작하고, 머리 띠와
 // 패널에 진행 표시(마지막 동작 Bash(npm test))가 보인다. 첫 intake의 [요약] 맨 위에 의도 초안이, 열린 질문에 답할 곳과
 // [터미널에서 답하기]가 있고, 열린 질문이 남은 채 [의도 승인]하면 확인 창이 뜬다. 크기(size) 고르기는 없다(D227).
-// 버튼 줄은 패널 아래에 붙어 있다. 리뷰와 검증의 [요약] 맨 위에 리뷰 지적과 반영이, 완료 알림에 작업 브랜치와
+// 버튼 줄은 패널 아래에 붙어 있다. Work 완료 화면의 [요약] 맨 위에 리뷰 지적과 반영이, 완료 알림에 작업 브랜치와
 // worktree가 보인다.
 // M3: 다음 task(원인 분석과 수정)를 [즉시 중단]하면 중단됨·읽기 전용이 되고 트리가 끝난다 → [재개]하면 같은 세션을
 // --resume으로 이전 화면 뒤에 잇고, 이어서 하라는 입력으로 바로 작업 중이 된다(M12) → 설정 화면에서 세션 상한을
-// 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(원인 분석과 수정의 자동 승인은 기본으로 켜져 있다).
+// 바꾼다. M7: 같은 설정 화면에서 카운트다운을 600초로 바꾼다(원인 분석과 수정의 자동 승인은 기본으로 켜져 있지만 마지막
+// 단계라 쓰이지 않는다, D498. 카운트다운과 [취소]는 custom.spec.ts가 커스텀 유형의 가운데 단계로 본다).
 // D418, D421: [단계 선택]과 [이 단계 새 세션으로 다시]는 없다. 첫 Work의 초안 폴더에 다시 할 Work의 초안을 쓰면 패널
 // 맨 위에 "Work 초안" 카드가 보이고, [새 Work로 만들기]는 새 Work 대화상자를 채우며 "원래 Work 포기"가 켜져 있다 →
 // [취소]한 뒤 [버리기]하면 카드와 파일이 없어진다.
-// M5: 두 번째 Work를 리뷰와 검증까지 가면 Work 완료 화면에 전달 버튼이 보인다 → [push]하면 리뷰와 검증이 남긴
+// M5: 두 번째 Work의 원인 분석과 수정이 독립 리뷰를 받고 마무리하면 Work 완료 화면에 전달 버튼이 보인다(D493) → [push]하면 마무리 단계가 남긴
 // 열린 질문 때문에 한 번 확인받고(D222), 커밋 안 된 파일 때문에 선택지가 뜨고, [AI 세션 열기]로 정리 세션을 연다(7-5) → 정리 세션 중에 [이 단계 끝나면 멈춤]을
 // 켜면 [승인하고 멈춤] 화면이 되어도 [정리 세션 닫기]가 남고, 멈추는 동안은 전달하지 않는다(D137) → 끄고
 // [정리 끝 → push/PR 진행]을 누르면 로컬 bare 원격에 Work 브랜치가 생기고 Work 완료(전달: push)가 된다 → [Work 정리]의
 // 요약에 push됨이 보이고 [정리]하면 worktree가 없어지고 보관됨이 된다(산출물은 남음).
 // M7: 두 번째 Work의 새 Work 대화상자에서 고급 설정을 펼치면 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다(PR 자동
-// 대응은 없다, M12) → 원인 분석과 수정이 승인 대기가 되면
-// 승인 화면에 자동 승인 카운트다운과 [취소]가 보인다 → [취소]하면 카운트다운이 없어지고 까닭([취소]를 누름)이 보이며,
-// 사람이 [승인]한다.
+// 대응은 없다, M12). 원인 분석과 수정은 마무리 단계라 자동 승인을 켜도 카운트다운이 없다 (D498).
 // M11: 같은 설정 화면에 PR 대응의 자동 승인과 "자동 대응 (PR 진행)" 절(대응 자동 시작, 자동 대응 라운드 상한)이 있고
 // 기본은 꺼짐, 3이다.
-// M8: 설정 화면에 리뷰와 검증의 질문 방식이 있고 자동 승인은 없다(늘 수동, D229) → 두 번째 Work는 원인 분석과 수정
-// 뒤 리뷰와 검증으로 간다. Work 완료 화면의 [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 verification.md와 pr.md가
-// 보인다.
+// M8: 설정 화면에 리뷰와 검증의 질문 방식이 있고 자동 승인은 없다(옛 Work의 verify, D501) → 두 번째 Work의 원인 분석과
+// 수정이 마무리 단계로 Work 완료 화면이 된다(D493). [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 verification.md와
+// pr.md, independent-review.md가 보인다.
 // M6: 앱 종료 확인을 거쳐 앱을 끄고, 첫 Work의 work.json에 D418 전의 끊긴 되감기 기록을 넣고 decisions.md를 고친 뒤
 // 다시 켠다 → 첫 Work의 배지가 "끊긴 작업"이고, 패널 맨 위에 끊긴 곳과 [무시](되감기는 이어서 하지 않아 [다시 시도]가
 // 없다, D424), 바뀐 파일과 [확인]이 보인다 → [확인]하면 파일 알림이 닫히고, [무시]하면 기록만 지우고 task는 중단됨으로
@@ -56,6 +55,7 @@ import {
   VERDICTS,
   handoff,
   intentDraft,
+  requestReview,
   scenario,
   steps,
   type Scenario,
@@ -124,11 +124,12 @@ test.beforeAll(async () => {
   home = path.join(root, 'home')
   ;({ repo, remote } = makeRepo(root, 'sample', REPO_FILES))
   // intake는 초안과 handoff를 쓰고 멈추고, 첫 Work의 원인 분석과 수정은 시작만 한다(두 번째 Work는 시나리오를 바꿔
-  // 끝까지 간다). 리뷰와 검증은 지적 둘을 쓰고 커밋 안 된 파일을 남기고, 정리 세션은 그 파일을 지운다 (7-5)
+  // 끝까지 간다). 두 번째 Work의 수정은 리뷰를 받은 뒤 지적 둘을 쓰고 커밋 안 된 파일을 남기고, 정리 세션은 그 파일을
+  // 지운다 (7-5, D499)
   scenarioFile = path.join(root, 'scenario.json')
   const base = scenario({
     fix: WAITING_FIX,
-    // 리뷰와 검증은 열린 질문 하나를 남긴다: 전달 버튼도 한 번 확인받는다 (D222)
+    // 리뷰를 받은 뒤의 마무리는 열린 질문 하나를 남긴다: 전달 버튼도 한 번 확인받는다 (D222)
     verify: [
       ...steps('verify')
         .slice(0, -2)
@@ -156,6 +157,7 @@ test.beforeAll(async () => {
   })
   // 두 Work의 첫 intake(t-01)는 열린 질문 하나를 남긴다 (D222)
   const s: Scenario = {
+    ...base,
     tasks: {
       ...base.tasks,
       't-01': [
@@ -365,7 +367,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     '원인 분석과 수정',
   )
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
-  // 리뷰와 검증은 질문 방식만 고른다. 의도 정리와 리뷰와 검증은 늘 수동이라 자동 승인이 없다 (4.2, D229)
+  // 리뷰와 검증(옛 Work, D501)은 질문 방식만 고른다. 의도 정리와 리뷰와 검증은 늘 수동이라 자동 승인이 없다 (4.2, D229)
   await expect(win.getByLabel('리뷰와 검증 질문 방식', { exact: true })).toHaveValue('draft_first')
   await expect(win.getByLabel('리뷰와 검증 자동 승인', { exact: true })).toHaveCount(0)
   await expect(win.getByLabel('의도 정리 자동 승인', { exact: true })).toHaveCount(0)
@@ -429,10 +431,14 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 바꾼다. 가짜 claude는 뜰 때 시나리오 파일을 읽는다
   fs.writeFileSync(
     scenarioFile,
-    JSON.stringify({ ...scenarioData, tasks: { ...scenarioData.tasks, 't-02': steps('fix') } }),
+    // 두 번째 Work의 수정은 판정표를 쓰고 독립 리뷰를 요청한다 (D494). 리뷰를 받은 뒤는 시나리오의 reviewed.fix다
+    JSON.stringify({
+      ...scenarioData,
+      tasks: { ...scenarioData.tasks, 't-02': requestReview(steps('fix'), VERDICTS) },
+    }),
   )
 
-  // 두 번째 Work (M5): 리뷰와 검증까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
+  // 두 번째 Work (M5): 마무리 단계(수정)까지 간다. 세션 상한 2에서 첫 Work의 세션 하나와 함께 돈다
   await win.getByRole('button', { name: '새 Work' }).click()
   await win.getByLabel('요청').fill(`${REQUEST}\n두 번째 Work`)
   await win.getByRole('radio', { name: '버그 수정' }).click()
@@ -458,28 +464,14 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(intake2).toBeEnabled({ timeout: 60_000 })
   await intake2.click()
   await unanswered.getByRole('button', { name: '의도 승인', exact: true }).click()
-  const approveFix = win.getByRole('button', { name: '승인', exact: true })
-  await expect(approveFix).toBeEnabled({ timeout: 60_000 })
-  await expect(win.locator('.band')).toContainText('02 원인 분석과 수정')
-  // 자동 승인이 켜진 원인 분석과 수정은 승인 화면에 카운트다운과 [취소]가 보인다 (4.3, D83)
-  const countdown = win.getByRole('status', { name: '자동 승인 카운트다운' })
-  await expect(countdown).toContainText('자동 승인까지', { timeout: 30_000 })
-  await win.screenshot({ path: 'test-results/countdown.png' })
-  await countdown.getByRole('button', { name: '취소', exact: true }).click()
-  await expect(countdown).toBeHidden({ timeout: 30_000 })
-  await expect(win.locator('.notice.auto-hold')).toContainText(
-    '자동 승인하지 않음: [취소]를 누름',
-    { timeout: 30_000 },
-  )
-  await win.screenshot({ path: 'test-results/countdown-cancelled.png' })
-  await approveFix.click()
-
-  // Work 완료 화면 (시나리오 7-3): 리뷰와 검증은 늘 수동이라 카운트다운이 없다. 판정표와 전달 버튼이 있고,
-  // origin(로컬 bare)이 있어 [push]를 누를 수 있다
+  // Work 완료 화면 (시나리오 7-3): 수정이 독립 리뷰를 받고 마무리했다 (D493~D496). 마무리 단계는 자동 승인을 켜도 늘
+  // 수동이라 카운트다운이 없다(D498). 판정표와 전달 버튼이 있고, origin(로컬 bare)이 있어 [push]를 누를 수 있다
   const push = win.getByRole('button', { name: 'push', exact: true })
   await expect(push).toBeEnabled({ timeout: 60_000 })
-  await expect(win.locator('.band')).toContainText('03 리뷰와 검증')
-  await expect(countdown).toBeHidden()
+  await expect(win.locator('.band')).toContainText('02 원인 분석과 수정')
+  await expect(win.getByRole('status', { name: '자동 승인 카운트다운' })).toHaveCount(0)
+  // 독립 리뷰를 받았다: 판정표 탭에 그 줄이 있다 (D495)
+  await expect(win.locator('.review-line')).toBeVisible()
   await expect(win.getByRole('button', { name: '완료만', exact: true })).toBeEnabled()
   await expect(win.locator('table.verdicts')).toContainText('재현 절차가 더 이상 실패하지 않는다')
   // 이 Work의 지식 (D298): [판정표] 위의 한 줄과 [지식] 탭, 누르면 그 파일의 차이
@@ -492,7 +484,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await knowledge.getByRole('button', { name: /빈 배열의 평균은 0/ }).click()
   await expect(knowledge.locator('.diff')).toContainText('+- 빈 배열의 평균은 0이다.')
   await win.screenshot({ path: 'test-results/knowledge.png' })
-  // 리뷰와 검증 (M8, D229): [요약] 맨 위에 리뷰 지적과 반영이 있다 (D223). 산출물은 둘이다
+  // 마무리 (M8, D229, D499): [요약] 맨 위에 원인과 리뷰 지적, 반영이 있다 (D223). 산출물은 단계 산출물과 판정표, PR 초안,
+  // 독립 리뷰 결과다
   await win.getByRole('tab', { name: '요약', exact: true }).click()
   const lead = win.locator('.review-body .lead')
   await expect(lead).toContainText('리뷰 지적')
@@ -500,10 +493,11 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(lead).toContainText('반영')
   await expect(lead).not.toContainText('반영할 지적은 번호로')
   await win.getByRole('tab', { name: '산출물', exact: true }).click()
-  for (const f of ['verification.md', 'pr.md']) {
+  for (const f of ['fix.md', 'verification.md', 'pr.md', 'independent-review.md']) {
     await expect(win.locator('.review-body')).toContainText(f)
   }
-  await expect(win.locator('.review-body')).not.toContainText('review.md')
+  // 옛 review.md는 없다 (independent-review.md는 독립 리뷰 결과다)
+  await expect(win.locator('.review-body h3').filter({ hasText: /^review\.md$/ })).toHaveCount(0)
   await win.screenshot({ path: 'test-results/review.png' })
   await push.click()
   // 답하지 않은 열린 질문이 있어 전달 전에 한 번 확인받는다 (D222). 창의 [push]로 전달한다
@@ -513,7 +507,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expectModal(deliverQuestions)
   await deliverQuestions.getByRole('button', { name: 'push', exact: true }).click()
 
-  // 리뷰와 검증이 남긴 커밋 안 된 파일 때문에 고른다 (7-5): [AI 세션 열기]로 정리 세션을 연다
+  // 마무리 단계가 남긴 커밋 안 된 파일 때문에 고른다 (7-5): [AI 세션 열기]로 정리 세션을 연다
   await expect(win.getByRole('list', { name: '커밋 안 된 변경' })).toContainText('debug.log', {
     timeout: 30_000,
   })
@@ -571,7 +565,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(badge2).toHaveText('보관됨', { timeout: 30_000 })
   const worktree = findDir(path.join(home, 'projects'), workId2 ?? '', 'worktrees')
   expect(worktree).toBeNull()
-  expect(findFile(path.join(home, 'projects'), 'pr.md', '03-verify')).not.toBeNull()
+  expect(findFile(path.join(home, 'projects'), 'pr.md', '02-fix')).not.toBeNull()
   await win.screenshot({ path: 'test-results/archived.png' })
 
   // M6: 앱을 끈다(살아 있는 세션이 있어 종료 확인을 거친다). D418 전의 앱이 되감기 백업 브랜치를 만들기 전에 꺼진

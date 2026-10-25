@@ -1,6 +1,6 @@
-// [실제] 리뷰와 검증(verify)의 리뷰 판정 (docs/implementation.md 8.4, 5.6.6, D229).
-// verify는 지적을 쓰고, 지적이 있으면 반영할 지적을 AskUserQuestion으로 묻는다. 사람 역할(driver)은 첫 선택지(추천)로
-// 답한다. Work가 끝나면 verify가 물었는지, 고른 지적만 고쳐 커밋했는지, 반영 절과 반영하지 않은 지적 절이 지적을
+// [실제] 리뷰 반영의 판정 (docs/implementation.md 8.4, 5.6.14, D229, D499). 마무리 단계(옛 Work는 verify)는 독립 리뷰의
+// 지적을 옮겨 쓰고, 지적이 있으면 반영할 지적을 AskUserQuestion으로 묻는다. 사람 역할(driver)은 첫 선택지(추천)로
+// 답한다. Work가 끝나면 그 세션이 물었는지, 고른 지적만 고쳐 커밋했는지, 반영 절과 반영하지 않은 지적 절이 지적을
 // 빠짐없이 나눴는지를 산출물, handoff, git으로 본다. 고친 내용이 지적과 맞는지는 결과에 남긴 지적과 커밋, 바뀐 파일,
 // 대화 기록(pty.log)으로 사람이 본다.
 import fs from 'node:fs'
@@ -101,14 +101,14 @@ export const asksFindings = (question: string): boolean => /반영/.test(questio
 export interface ReviewCheck {
   /** verification.md의 리뷰 지적 */
   findings: string[]
-  /** verify가 물은 질문 (머리, 질문, 선택지 이름) */
+  /** 마무리 세션이 물은 질문 (머리, 질문, 선택지 이름) */
   questions: string[]
   /** 반영 절과 반영하지 않은 지적 절 */
   applied: string | null
   notApplied: string | null
-  /** verify가 만든 커밋의 제목 (verify의 시작 커밋 → verify를 승인한 때의 HEAD) */
+  /** 리뷰를 받은 뒤 만든 커밋의 제목 (독립 리뷰 중의 HEAD → 승인한 때의 HEAD) */
   commits: string[]
-  /** verify가 바꾼 파일 (verify의 시작 커밋 → verify를 승인한 때의 HEAD) */
+  /** 리뷰를 받은 뒤 바꾼 파일 (같은 범위) */
   files: string[]
   /** handoff의 사람 결정 (by: human) */
   humanDecisions: string[]
@@ -127,7 +127,7 @@ const same = (a: readonly number[], b: readonly number[]) =>
 export function judgeReview(input: {
   reviewMd: string
   handoff: string
-  /** verify가 물은 질문들 (questionTexts) */
+  /** 마무리 세션이 물은 질문들 (questionTexts) */
   questions: string[]
   commits: string[]
   files: string[]

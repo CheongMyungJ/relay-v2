@@ -22,7 +22,7 @@ For a general Work, do the work the intent asks for. How you do it is up to you:
 
 - **How to work** is yours to decide: what to do first and how to split it. Write it in `계획` and in `decisions`.
 - **Tests:** if you change how code behaves, add a test that catches that behavior. Write it before or after the change, as you like. If you cannot add one (UI behavior, needs an external service, no way to run tests), write why in `변경 요약` and in `risks`, and go on. Never weaken or delete existing tests.
-- **Self-check:** run each 완료조건's check method for real and write the result in the `완료조건별 자체 확인` table. For `확인: 사람`, write where the human should look. verify runs them again, so this table is for comparison.
+- **Self-check:** run each 완료조건's check method for real and write the result in the `완료조건별 자체 확인` table. For `확인: 사람`, write where the human should look. The Work's verdicts are judged on the final code when it finishes, so this table is for comparison.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
 - **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Problems outside the scope:** do not fix them. Write them in `risks`. Fixing one widens the scope, which is a human decision.

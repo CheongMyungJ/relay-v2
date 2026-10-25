@@ -1,4 +1,5 @@
-// 진행 표시 (D216): 작업 중인 task의 경과 시간과 마지막 동작. 시각은 main이 보내고 경과 시간은 렌더러가 센다.
+// 진행 표시 (D216): 작업 중인 task의 경과 시간과 마지막 동작. 독립 리뷰 중(D502)이면 지금 호출(찾기, 확인)과 그 도구다.
+// 시각은 main이 보내고 경과 시간은 렌더러가 센다.
 // 시계만 따라 바뀌는 글자는 data-tick으로 둔다: 평가 도구는 화면이 멈췄는지 볼 때 이 글자를 뺀다 (docs/eval.md).
 import { useEffect, useState } from 'react'
 import type { ActivityView } from '../../shared/views'
@@ -18,8 +19,8 @@ function ago(ms: number): string {
 }
 
 /**
- * "세션을 띄우는 중 12초", "1분 12초 · Bash(npm test) 실행 중 8초", "1분 12초 · 마지막 동작 Edit(src/avg.js) 8초 전".
- * 터미널은 읽지 않고 훅으로만 안다 (D2)
+ * "세션을 띄우는 중 12초", "1분 12초 · Bash(npm test) 실행 중 8초", "1분 12초 · 마지막 동작 Edit(src/avg.js) 8초 전",
+ * 독립 리뷰는 "독립 리뷰 찾기 40초 · Read(src/avg.js) 실행 중 2초". 터미널은 읽지 않고 훅과 리뷰 호출의 출력으로만 안다 (D2)
  */
 export function Activity({ activity }: { activity: ActivityView }) {
   const [now, setNow] = useState(() => Date.now())
@@ -30,7 +31,7 @@ export function Activity({ activity }: { activity: ActivityView }) {
   const tool = activity.tool
   return (
     <span className="activity">
-      {activity.turn ? null : '세션을 띄우는 중 '}
+      {activity.phase ? `독립 리뷰 ${activity.phase} ` : activity.turn ? null : '세션을 띄우는 중 '}
       <span data-tick="">{duration(now - activity.since)}</span>
       {tool && tool.endedAt === null ? (
         <>
@@ -44,5 +45,17 @@ export function Activity({ activity }: { activity: ActivityView }) {
         </>
       ) : null}
     </span>
+  )
+}
+
+/** 독립 리뷰 중의 최근 도구 (D502): 지금 것 앞의 것들, 오래된 것부터 */
+export function ActivityRecent({ activity }: { activity: ActivityView }) {
+  if (!activity.recent?.length) return null
+  return (
+    <ul className="activity-recent">
+      {activity.recent.map((label, i) => (
+        <li key={i}>{label}</li>
+      ))}
+    </ul>
   )
 }

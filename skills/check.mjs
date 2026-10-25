@@ -6,6 +6,7 @@
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
 // 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
+// 6. 마무리 절차(_final.md)와 독립 리뷰 지침(_review.md): 유형별 조립, 템플릿 절, 핵심 문구 (5.6.14, D493~D500)
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -337,7 +338,7 @@ const spec = {
     ['D351', '새 문서인데 관례가 없으면 docs/design/<영어-이름>.md 제안', /no convention for design documents, propose `docs\/design\/<english-name>\.md`/, ['spec']],
     ['D355', '설계 기본 완료조건 셋, 테스트 명령 항목 없음', /No test command item[\s\S]*`- \[ \] 대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다` \/ `- \[ \] 문서의 서술이 서로, 그리고 지금 코드와 어긋나지 않는다` \/ `- \[ \] 정하지 않고 남긴 것은 문서의 따로 둔 절에 이유와 함께 있다`/, ['spec']],
     ['D354', '"<무엇>을 정한다" 한 줄에 하나, 어떻게는 쓰지 않음, 사람과 맞춤', /"<무엇>을 정한다", one per line[\s\S]*Not how to decide it[\s\S]*Agree on this list with the human/, ['spec']],
-    ['D356', '확인 방법을 붙이지 않음', /No check method[\s\S]*verify judges them by reading the document and the diff/, ['spec']],
+    ['D356', '확인 방법을 붙이지 않음', /No check method[\s\S]*judged by reading the document and the diff/, ['spec']],
     ['D351', '완료조건: 대상 문서 경로가 제약에', /## Done when[\s\S]*target document's path is in `제약`/, ['spec']],
   ],
   design: [
@@ -351,7 +352,7 @@ const spec = {
     ['D431', '기존 동작 영향: 기대는 곳과 처리, 추가만이면 없음, 없애는 것은 바뀌는 곳에', /`기존 동작 영향`, for each \(바뀜\)\/\(없앰\) line[\s\S]*fix together \/ migrate \/ deprecate first[\s\S]*"없음"[\s\S]*goes away[\s\S]*`바뀌는 곳`/],
     ['D431', '없애는 것이 있으면 마지막 단계는 남은 참조 정리, 테스트 계획에 바뀌는 기존 테스트', /last step cleans up the references left[\s\S]*which existing tests change/],
     ['5.6.8', '유저 시나리오: 누가 무엇을 어떻게, 내부 기능은 호출하는 코드', /who does what[\s\S]*calling code or the developer/],
-    ['D245', '기능 요구사항: 출처, intent에 없으면 물음, 참고용', /\(F1, F2…\)[\s\S]*완료조건 n \/ 설계에서 더함[\s\S]*ask the human[\s\S]*verify judges only the intent's 완료조건/],
+    ['D245', '기능 요구사항: 출처, intent에 없으면 물음, 참고용', /\(F1, F2…\)[\s\S]*완료조건 n \/ 설계에서 더함[\s\S]*ask the human[\s\S]*only the intent's 완료조건 are judged/],
     ['D246', '비기능 관점 목록, 해당 없으면 없음', /performance, compatibility and migration, security, error handling, accessibility[\s\S]*"없음"/],
     ['D241', '사람 제안마다 받아들일지와 이유를 접근에', /"\(사람 제안\)"[\s\S]*`접근`/],
     ['D247', '구현 계획: 단계마다 바꿀 것과 요구사항, 테스트할 수 있는 크기', /for each step, what changes and which requirements[\s\S]*small enough to test/],
@@ -386,7 +387,7 @@ const spec = {
     ['D260', '동작을 바꾸지 않음, 찾은 버그는 고치지 않고 적음', /Do not change behavior[\s\S]*do not fix it[\s\S]*`찾은 버그와 받아들인 차이`[\s\S]*`risks`/],
     ['D268', '기존 테스트가 덮으면 근거와 함께 적고 빈 곳만 새로, 커버리지 도구', /existing tests already cover[\s\S]*reason[\s\S]*only for behavior no test covers[\s\S]*coverage tool/],
     ['D259', '새 안전망은 기준 코드에서 통과, 따로 커밋, 해시를 적음(I64)', /must pass on the base code[\s\S]*safety-net commit hash/],
-    ['D271', '안전망을 쓸 수 없으면 묻지 않고 이유를 적고 진행, verify는 판정 불가', /No safety net possible[\s\S]*do not ask[\s\S]*`risks`[\s\S]*판정 불가/],
+    ['D271', '안전망을 쓸 수 없으면 묻지 않고 이유를 적고 진행, 그곳은 판정 불가', /No safety net possible[\s\S]*do not ask[\s\S]*`risks`[\s\S]*판정 불가/],
     ['D263', '레포 안 인터페이스는 바꿀 수 있고 호출부도, 밖은 intent가 정할 때만', /used only inside the repo[\s\S]*callers[\s\S]*used outside the repo[\s\S]*only when the intent says so/],
     ['D265', '기존 테스트는 호출 이름·import·위치·준비 코드만, 기대값과 입력은 바꾸지 않음', /call names, import paths, file location and setup code[\s\S]*Never change their expected values or inputs/],
     ['D269', '안전망 커밋 하나와 단계마다 커밋, 커밋마다 테스트 통과', /one safety-net commit, then one commit per plan step[\s\S]*pass at every commit/],
@@ -426,7 +427,7 @@ const spec = {
     ['D359', '형식 셋: 결정마다 이유, 사람 결정 표시, 정하지 않은 것의 절. 나머지는 관례, 기존 문서는 그 표와 번호, 새 문서는 템플릿, 앱은 검사 안 함', /Every decision has a reason[\s\S]*Mark the decisions the human made[\s\S]*undecided in a separate section[\s\S]*conventions[\s\S]*existing document, use its decision table and numbering[\s\S]*new one, use the template[\s\S]*app does not check the format/],
     ['D360', '실험: 추측하지 않고 확인, 되돌림, 결정의 이유와 확인한 것에', /do not guess how a tool or the current code behaves[\s\S]*Revert the experimental code and temporary files[\s\S]*reason of that decision and in `확인한 것`/],
     ['D361', '지식: 설계 결정은 후보 아님, 설계 밖에서도 통하는 것만', /design decisions are not knowledge candidates[\s\S]*`knowledge_candidates` only what the human told you that holds beyond this design/],
-    ['D361', '지식 파일은 verify가 씀(spec은 대상 문서만)', /Knowledge files are not yours to write: verify writes them from your `knowledge_candidates`/],
+    ['D361', '지식 파일은 Work를 마무리할 때만 씀(spec은 대상 문서만, D500)', /Knowledge files are written only when the Work finishes, from your `knowledge_candidates`/],
     ['D374', '커밋: 대상 문서를 커밋, 그 밖의 파일은 바꾸지 않음', /changes the target document\. Commit it before you close\. Do not change any other file/],
     ['5.6.12', 'intent와 어긋날 때: 물음, 정하지 않은 것, intent_deviation과 사람에게 물음', /conflict or cannot be decided[\s\S]*ask the human[\s\S]*undecided section[\s\S]*`intent_deviation` and ask the human/],
     ['5.6.12', '결정 지점: 주제 목록과 순서, 주제마다의 결정. 모두 물음', /The topic list and its order, and every decision of each topic\. Ask the human about all of them/],
@@ -604,6 +605,57 @@ for (const v of variants.filter((x) => SHARED.includes(x.name))) {
 const SPEC_VERIFY_SHA256 = 'f15ffa1f7574ad616d9e75203bb49ed375354c57de490c95073988f43978164d';
 const specVerify = createHash('sha256').update(assemble(stripFrontMatter(skills.verify), 'spec')).digest('hex');
 check(specVerify === SPEC_VERIFY_SHA256, `verify·spec: 조립 결과가 코드 리뷰 방법을 들이기 전과 같음 (D489)${specVerify === SPEC_VERIFY_SHA256 ? '' : ` (${specVerify})`}`);
+
+// 마무리 단계(Work의 마지막 작업 단계)에 붙는 마무리 절차와 앱이 독립 리뷰에 넣는 지침 (5.6.14, D493~D495)
+console.log('\n[6] 마무리 절차와 독립 리뷰 지침 (5.6.14, D493~D500)');
+const finalSrc = read('skills/_final.md');
+const reviewSrc = read('skills/_review.md');
+check(!/^---\n/.test(finalSrc) && !/^---\n/.test(reviewSrc), '_final.md·_review.md: 머리글 없음 (앱이 본문에 붙이거나 브리프에 넣음)');
+check(designSection('#### 5.6.14').length > 0, '설계 5.6.14 마무리 절이 있음');
+const d493 = ['D493', 'D494', 'D495', 'D496', 'D497', 'D498', 'D499', 'D500', 'D501'].filter((d) => !design.includes(`\n| ${d} |`));
+check(d493.length === 0, `design.md: 결정 D493~D501${d493.length ? ` (빠짐: ${d493.join(', ')})` : ''}`);
+const uniq = (xs) => [...new Set(xs)];
+for (const t of TYPES) {
+  let fin = null;
+  let rev = null;
+  try {
+    fin = assemble(finalSrc, t);
+    rev = assemble(reviewSrc, t);
+  } catch (e) {
+    fail(`_final.md·_review.md·${t}: 유형 표시가 맞음 (${e.message})`);
+    continue;
+  }
+  ok(`_final.md·_review.md·${t}: 유형 표시가 맞음`);
+  check(!/<!--/.test(fin) && !/<!--/.test(rev), `_final.md·_review.md·${t}: 조립한 글에 유형 표시가 남지 않음 (줄 단위 표시)`);
+  // 템플릿은 옛 verify(5.6.6)와 같다: verification.md와 그 유형의 pr.md
+  const finH = uniq(codeBlocks(fin, 'markdown').flatMap(headings));
+  const verH = uniq(codeBlocks(assemble(stripFrontMatter(skills.verify), t), 'markdown').flatMap(headings));
+  const missing = verH.filter((h) => !finH.includes(h));
+  const extra = finH.filter((h) => !verH.includes(h));
+  check(missing.length === 0 && extra.length === 0, `_final.md·${t}: 템플릿 절이 5.6.6과 같음${missing.length || extra.length ? ` (빠짐: ${missing.join(', ')} / 더함: ${extra.join(', ')})` : ''}`);
+  const foreign = TYPES.filter((x) => x !== t).flatMap((x) => ARTIFACT[x]).filter((a) => fin.includes(a));
+  check(foreign.length === 0, `_final.md·${t}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
+  const finalItems = [
+    ['D494', '판정표를 쓰고 status: review_requested로 리뷰를 한 번 요청하고 안내 문구를 찍고 턴을 끝냄', /`## 완료조건 판정`[\s\S]*`status: review_requested`[\s\S]*`리뷰 요청 안내 문구`[\s\S]*end your turn[\s\S]*once only/],
+    ['D496', '다시 열리면 independent-review.md를 읽고 지적을 리뷰 지적에 옮김', /reopens[\s\S]*`independent-review\.md`[\s\S]*`## 리뷰 지적`/],
+    ['D497', '코드 리뷰를 끄면 리뷰 지적에 적고 pr.md에 "독립 코드 리뷰를 하지 않음"', /코드 리뷰를 끔[\s\S]*독립 코드 리뷰를 하지 않음/],
+    ['D229', '반영할 지적을 물음: 차단·권장만 / 모두 / 반영하지 않음, by: human', /차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*`by: human`/],
+    ['D165', '반영 뒤 리뷰를 다시 요청하지 않음', /Do not request the review again/],
+    ['D499', '판정표 이의마다 답함: 받아들이면 고치고 아니면 근거에 까닭', /`## 판정표 이의`[\s\S]*accept it[\s\S]*add why/],
+    ['D500', 'pr.md와 지식을 쓰고 awaiting_approval로 마무리', /Write `pr\.md`[\s\S]*`### 지식 남기기`[\s\S]*`status: awaiting_approval`/],
+    ['D61', '실패·판정 불가 → 여기서 고침 / 이대로 / 새 Work', /Fix it here[\s\S]*Go to the completion screen as is[\s\S]*Start over as a new Work/],
+  ];
+  for (const [ref, desc, re] of finalItems) check(re.test(fin), `_final.md·${t}: ${desc} (${ref})`);
+  check(/^# Finder$/m.test(rev) && /^# Checker$/m.test(rev), `_review.md·${t}: \`# Finder\`와 \`# Checker\`가 있음 (앱이 잘라 씀)`);
+  const reviewItems = [
+    ['D495', '읽기만 하고 묻지 않음', /You only read: change no files, ask no one anything/],
+    ['D484', '실패 시나리오를 댈 수 있으면 거르지 않고 넘김', /Pass on every candidate that has a nameable failure scenario/],
+    ['D486', '가능성이 기본, 틀림은 코드로 보일 때만', /plausible is the default[\s\S]*refuted only when the code shows it/],
+    ['D495', '판정표 확인: 근거, 판정 규칙, 바뀐 테스트 파일', /## Verdict table[\s\S]*evidence does not support the verdict[\s\S]*test file changed since the base commit is missing/],
+  ];
+  for (const [ref, desc, re] of reviewItems) check(re.test(rev), `_review.md·${t}: ${desc} (${ref})`);
+  if (t === 'custom') check(/This Work type's review points/.test(rev), '_review.md·custom: 유형의 리뷰 관점을 봄 (D456, D495)');
+}
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
 process.exit(failures ? 1 : 0);

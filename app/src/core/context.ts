@@ -12,17 +12,27 @@ import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
   NODE_INFO,
   RESPOND,
+  completesWork,
   customArtifact,
   customSections,
   customStep,
+  finishesWork,
   isPipelineNode,
   stagesOf,
   taskTitle,
   workType,
 } from './pipeline'
 import { targetBranch, workBranch } from './records'
-import { REPLIES_FILE, RESPONSE_FILE, parseFrontMatter } from './validate'
+import {
+  PR_FILE,
+  REPLIES_FILE,
+  RESPONSE_FILE,
+  VERIFICATION_FILE,
+  parseFrontMatter,
+} from './validate'
 import { knowledgeSection, type KnowledgeInput } from './knowledge'
+import { codeReviewOn } from './config'
+import { REVIEW_RESULT_FILE } from './independent-review'
 
 /**
  * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)과 커스텀 단계는 질문 방식 설정이
@@ -59,7 +69,14 @@ const RESPOND_CLOSING =
   '대응 결과와 답글 초안을 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르면 push하고 답글을 게시합니다. ' +
   `${AUTO_SENTENCE} 고칠 점은 여기에 말해 주세요.`
 
-/** 승인하면 멈추는 verify의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
+/**
+ * 마무리 단계의 리뷰 요청 문구 (시나리오 2-4, D494, D496). 판정표를 쓰고 status: review_requested로 마무리할 때 출력한다
+ */
+export const REVIEW_REQUEST_CLOSING =
+  '판정표를 쓰고 독립 리뷰를 요청했습니다. relay가 이 세션을 닫고 독립 리뷰를 돌린 뒤 같은 대화를 다시 엽니다. ' +
+  '그동안 물을 것은 곁 세션에 말해 주세요.'
+
+/** 승인하면 멈추는 Work 완료 화면의 버튼 (D119). 멈춤은 context.md를 쓴 뒤에도 켜고 끌 수 있어 늘 함께 적는다 */
 const VERIFY_STOPS =
   '[이 단계 끝나면 멈춤]이 켜져 있으면 [승인하고 멈춤]을 누르고, ' +
   '전달은 멈춘 뒤 Work 완료 화면에서 고르세요.'
@@ -71,9 +88,14 @@ const VERIFY_STOPS =
  * 적는다. [이 단계 끝나면 멈춤]은 task가 도는 중에도 켜고 끌 수 있고, 스킬은 이 문구를 그대로 찍으므로(_common.md)
  * 둘 중 하나를 골라 적을 수 없다.
  */
-function pressSentence(node: NodeName, delivery: readonly string[], engine: AgentEngine): string {
+function pressSentence(
+  node: NodeName,
+  delivery: readonly string[],
+  engine: AgentEngine,
+  completes: boolean,
+): string {
   if (node === 'intake') return '[의도 승인]을 누르세요.'
-  if (node !== 'verify') return engine === 'codex' ? PRESS : `${PRESS} ${AUTO_SENTENCE}`
+  if (!completes) return engine === 'codex' ? PRESS : `${PRESS} ${AUTO_SENTENCE}`
   const buttons = delivery.length ? delivery : ['[완료만]']
   const pick = buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
   return `${pick} 누르세요. ${VERIFY_STOPS}`
@@ -82,16 +104,18 @@ function pressSentence(node: NodeName, delivery: readonly string[], engine: Agen
 /**
  * 마무리 안내 문구 (D104, D132). 노드에 따라 고정 문구를 쓴다. 자동 승인을 켤 수 있는 단계는 수동 승인과 자동 승인을
  * 한 문구에 적는다. PR 대응은 승인하면 push하고 답글을 게시한다는 문구다.
- * delivery는 verify의 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
+ * completes는 승인 화면이 Work 완료 화면인 task(마무리 단계, 옛 Work의 verify)다. 늘 수동이고(D498), delivery는 그 화면의
+ * 전달 버튼이다(core/delivery closingButtons). 없으면 [완료만]이다.
  */
 export function closingMessage(
   node: TaskNode,
   delivery: readonly string[] = [],
   engine: AgentEngine = 'claude',
+  completes: boolean = node === 'verify',
 ): string {
   if (!isPipelineNode(node))
     return engine === 'codex' ? RESPOND_CLOSING.replace(`${AUTO_SENTENCE} `, '') : RESPOND_CLOSING
-  return CLOSING.replace(PRESS, pressSentence(node, delivery, engine))
+  return CLOSING.replace(PRESS, pressSentence(node, delivery, engine, completes))
 }
 
 const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', auto: '자동 승인' }
@@ -107,12 +131,13 @@ function approvalSection(
   node: TaskNode,
   engine: AgentEngine,
   step?: CustomStep,
+  completes = false,
 ): string {
   if (engine === 'codex') {
     const push = node === RESPOND ? ' 승인하면 앱이 push하고 답글을 게시한다.' : ''
     return `수동 승인 (Codex 작업은 자동 승인 설정과 관계없이 사람이 승인한다.${push})`
   }
-  if (!autoApprovable(node) && node !== 'custom') {
+  if (completes || (!autoApprovable(node) && node !== 'custom')) {
     return '수동 승인 (의도 승인, Work 완료는 늘 수동)'
   }
   const mode = APPROVAL_LABEL[approvalMode(config, settings, node, engine, step)]
@@ -614,9 +639,32 @@ function respondSection(r: RespondInput, base: string): [string, string] {
 }
 
 /** context.md의 내용 (시나리오 2-4의 표) */
+/**
+ * 마무리 절 (5.6.14, D494~D497): 마무리 단계 task에만 있다. 리뷰 요청 안내 문구, 코드 리뷰를 켰는지(task를 시작할 때의 설정.
+ * 리뷰 요청을 받을 때의 값을 쓴다), 독립 리뷰 결과 파일, 판정표와 PR 초안 파일
+ */
+function finishingSection(input: ContextInput, codeReview: boolean): [string, string] {
+  const sep = input.taskDir.includes('\\') ? '\\' : '/'
+  const file = (name: string) => `${input.taskDir}${sep}${name}`
+  const bundleDrafts = input.bundle !== undefined && input.bundle !== null
+  return [
+    '마무리',
+    list([
+      'Work의 마지막 작업 단계다. 이 단계의 일을 마치면 절차의 마무리 순서를 따른다: 판정표 → 리뷰 요청 → 독립 리뷰를 받은 뒤 반영과 판정 → `pr.md`와 지식 → 마무리.',
+      `리뷰 요청 안내 문구: ${REVIEW_REQUEST_CLOSING}`,
+      `코드 리뷰: ${codeReview ? '켬' : '끔 (판정표만 확인한다. `pr.md`에 "독립 코드 리뷰를 하지 않음"을 적는다)'} (task를 시작할 때의 설정. 리뷰 요청을 받을 때의 값을 쓴다, D497)`,
+      `판정표: \`${file(VERIFICATION_FILE)}\``,
+      `독립 리뷰 결과: \`${file(REVIEW_RESULT_FILE)}\` (relay가 쓴다)`,
+      bundleDrafts ? 'PR 초안: 위 `## 레포` 절의 레포마다 파일' : `PR 초안: \`${file(PR_FILE)}\``,
+    ]),
+  ]
+}
+
 export function buildContext(input: ContextInput): string {
   const { work, task, config } = input
   const info = NODE_INFO[task.node]
+  // 승인 화면이 Work 완료 화면인 task (마무리 단계, 옛 Work의 verify, D493, D501)
+  const completes = completesWork(work, task)
   const type = workType(work)
   const entry = input.respond
     ? respondSection(input.respond, input.respond.repo?.base ?? targetBranch(work))
@@ -651,11 +699,21 @@ export function buildContext(input: ContextInput): string {
     ...(custom ? [custom] : []),
     [
       '승인 방식',
-      approvalSection(config, work.settings, task.node, taskEngine(task), customStep(work, task)),
+      approvalSection(
+        config,
+        work.settings,
+        task.node,
+        taskEngine(task),
+        customStep(work, task),
+        completes,
+      ),
     ],
-    ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task))],
+    ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task), completes)],
+    ...(finishesWork(work, task)
+      ? [finishingSection(input, codeReviewOn(config, work.settings))]
+      : []),
     ['질문 방식', questionLine(config, work.settings, task.node)],
-    ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge)] : []),
+    ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge, completes)] : []),
     ...(input.target ? [targetSection(input.target)] : []),
     ...(input.bundle
       ? [bundleSection(input.bundle, workBranch(work))]

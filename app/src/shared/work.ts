@@ -93,6 +93,8 @@ export type WorkStatus = 'active' | 'stopped' | 'pr' | 'completed' | 'abandoned'
  * - 실행 중: working(작업 중), asking(질문 대기), input_needed(입력 필요), idle(대기).
  *   working이면서 세션이 살아 있지 않으면 세션을 띄우는 중이다
  * - awaiting_approval(승인 대기), blocked(막힘): 세션이 끝나도 남는다 (3.3)
+ * - reviewing(독립 리뷰 중): 마무리 단계가 리뷰를 요청해 앱이 세션을 닫고 독립 리뷰를 돌린다. 끝나면 같은 대화를 다시
+ *   연다 (D494~D496). 세션은 없다
  * - session_ended: handoff 없이 세션이 끝났다. 3.3의 "중단됨"에 들지만 배지가 따로 있다 (D80)
  * - interrupted: 중단됨. [즉시 중단], 앱 종료, 재시작 조정(D75, D78), task를 띄우지 못했을 때
  * - approved: 승인됨
@@ -106,6 +108,7 @@ export type TaskStatus =
   | 'idle'
   | 'awaiting_approval'
   | 'blocked'
+  | 'reviewing'
   | 'session_ended'
   | 'interrupted'
   | 'approved'
@@ -328,6 +331,27 @@ export interface TaskRecord {
    * worktree가 없던 때(나중에 [레포 추가]로 더함, D473) 시작한 task에는 그 키가 없다
    */
   repo_starts?: Record<string, string>
+  /** 마무리 단계 task의 독립 리뷰 (D494~D497). 리뷰를 요청한 마무리 단계 task에만 있다 */
+  review?: TaskReview
+}
+
+/**
+ * 마무리 단계 task의 독립 리뷰 (D494~D497). 리뷰 요청을 받을 때 적고, 끝나면 결과를, 결과를 첫 입력으로 세션을 다시 열면
+ * 그때를 적는다. 결과 파일은 task 디렉터리의 independent-review.md와 .json이다
+ */
+export interface TaskReview {
+  /** 리뷰 요청(handoff status: review_requested)을 받은 때 */
+  requested_at: string
+  /** 그때의 code_review 설정 (D497). 끄면 찾기를 부르지 않고 판정표만 확인한다 */
+  code_review: boolean
+  /** 리뷰가 끝난 때. 실패해도 적는다 */
+  finished_at?: string
+  /** 실패한 호출의 까닭. 성공했으면 없다 */
+  error?: string
+  /** 결과를 첫 입력으로 세션을 다시 연 때 (D496) */
+  resumed_at?: string
+  /** 리뷰 중에 앱을 다시 켜 처음부터 다시 돌린다: 끝나도 세션을 저절로 열지 않는다 (D75, D496) */
+  restarted?: true
 }
 
 /** 승인된 intent (5.3). intent.md 머리글의 version과 같다 */
@@ -429,7 +453,7 @@ export interface DeliverOperation extends OperationBase {
   kind: 'deliver'
   stage: DeliveryStage
   choice: DeliveryChoice
-  /** 전달하는 verify task */
+  /** 전달하는 task: 마무리 단계나 옛 Work의 verify (D493) */
   task_id: string
   /** 커밋 안 된 변경을 어떻게 하는가. 없었으면 null */
   uncommitted: UncommittedAction | null
@@ -815,6 +839,11 @@ export interface WorkState {
   issue?: IssueRecord
   /** 다시 한 Work면 원래 Work의 id (D421). Work에서 쓴 초안으로 만들었을 때 있다 */
   from_work?: string
+  /**
+   * 파이프라인 판 (D501). 2는 verify 없이 마지막 작업 단계가 마무리하는 파이프라인이다(D493). 없으면 verify가 있는 옛
+   * 파이프라인이다. 읽는 쪽은 core/pipeline을 쓴다
+   */
+  pipeline?: 2
   tasks: TaskRecord[]
 }
 
@@ -834,6 +863,8 @@ export type LifecycleEventType =
   | 'task.approved'
   | 'task.interrupted'
   | 'task.resumed'
+  | 'review.requested'
+  | 'review.finished'
   | 'delivery.succeeded'
   | 'delivery.failed'
   | 'pr.items_received'

@@ -1,6 +1,6 @@
 // 커스텀 유형 (5.6.13, D447~D463): 정의 검사, 파이프라인, 상태 기계, context.md, 형식 검사, 승인 방식, 브랜치, 초안, Work 설정
 import { describe, expect, it } from 'vitest'
-import { approvalMode, autoApproveNote } from '../../src/core/approval'
+import { approvalMode, autoApproveNote, taskApprovalMode } from '../../src/core/approval'
 import { branchType, renderBranchRule } from '../../src/core/branch'
 import { checkWorkSettings, mergeWorkSettings } from '../../src/core/config'
 import { CUSTOM_QUESTION_LINE, buildContext, previousInputs } from '../../src/core/context'
@@ -28,6 +28,7 @@ import { checkTask, type TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 import { workTypeLabel, type WorkCustomType, type WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 const TYPE_JSON = JSON.stringify({
   schema_version: 1,
@@ -209,7 +210,23 @@ describe('type.json 검사 (D449, D453, D457)', () => {
 })
 
 describe('커스텀 파이프라인 (D447, D458, D462)', () => {
-  it('intake, 복사한 단계마다 custom, verify 순이다', () => {
+  it('새 Work는 intake, 복사한 단계마다 custom 순이고 마지막 단계가 마무리한다 (D493)', () => {
+    const w = { type: 'custom' as const, custom_type: CUSTOM, pipeline: 2 as const }
+    expect(stagesOf(w)).toEqual([
+      { node: 'intake' },
+      { node: 'custom', step: 'survey' },
+      { node: 'custom', step: 'apply' },
+    ])
+    expect(nextStage(w, { node: 'custom', step: 'apply' })).toBe(WORK_COMPLETE)
+    // 정의에서 찾지 못한 커스텀 단계와 단계가 없는 기록은 리뷰와 검증 없이 완료되지 않게 verify로 간다
+    expect(nextStage(w, { node: 'custom', step: 'gone' })).toEqual({ node: 'verify' })
+    expect(stagesOf({ type: 'custom', pipeline: 2 })).toEqual([
+      { node: 'intake' },
+      { node: 'verify' },
+    ])
+  })
+
+  it('옛 Work는 intake, 복사한 단계마다 custom, verify 순이다 (D501)', () => {
     expect(stagesOf({ type: 'custom', custom_type: CUSTOM })).toEqual([
       { node: 'intake' },
       { node: 'custom', step: 'survey' },
@@ -252,7 +269,7 @@ describe('커스텀 파이프라인 (D447, D458, D462)', () => {
 })
 
 describe('커스텀 Work의 상태 기계 (D458, D462)', () => {
-  it('만들 때 복사한 정의를 work.json에 두고, 승인마다 다음 커스텀 단계, verify, Work 완료로 간다', () => {
+  it('만들 때 복사한 정의를 work.json에 두고, 승인마다 다음 커스텀 단계로 가고 마지막 단계를 승인하면 Work 완료다 (D493)', () => {
     let work = customWork()
     expect(work.type).toBe('custom')
     expect(work.custom_type).toEqual(CUSTOM)
@@ -264,10 +281,15 @@ describe('커스텀 Work의 상태 기계 (D458, D462)', () => {
     work = approveCurrent(work).work
     expect(currentTask(work)).toMatchObject({ node: 'custom', step: 'apply', step_title: '적용' })
     work = approveCurrent(work).work
-    expect(currentTask(work)).toMatchObject({ node: 'verify' })
-    expect(currentTask(work)?.step).toBeUndefined()
-    work = approveCurrent(work).work
     expect(work.status).toBe('completed')
+    expect(work.tasks.map((t) => t.step ?? t.node)).toEqual(['intake', 'survey', 'apply'])
+    // 옛 Work는 마지막 커스텀 단계 뒤에 verify가 있다 (D501)
+    let old = legacy(customWork())
+    for (let i = 0; i < 3; i++) old = approveCurrent(old).work
+    expect(currentTask(old)).toMatchObject({ node: 'verify' })
+    expect(currentTask(old)?.step).toBeUndefined()
+    old = approveCurrent(old).work
+    expect(old.status).toBe('completed')
   })
 
   it('[이 단계 끝나면 멈춤] 뒤 [재개]는 다음 커스텀 단계를 시작한다', () => {
@@ -313,8 +335,14 @@ describe('커스텀 단계의 승인 방식 (D457)', () => {
     expect(approvalMode(MANUAL, {}, 'custom', 'claude')).toBe('manual')
   })
 
-  it('자동 승인이 켜진 단계는 Stop에서 카운트다운을 시작한다', () => {
-    let work = approveCurrent(customWork()).work
+  it('자동 승인이 켜진 단계는 Stop에서 카운트다운을 시작한다. 마무리 단계인 마지막 단계는 늘 수동이다 (D457, D498)', () => {
+    const final = approveCurrent(approveCurrent(customWork()).work).work
+    const last = currentTask(final)
+    expect(last).toMatchObject({ node: 'custom', step: 'apply' })
+    if (!last) throw new Error('task 없음')
+    expect(taskApprovalMode(MANUAL, final, last)).toBe('manual')
+    // 옛 Work의 마지막 커스텀 단계는 마무리 단계가 아니라 정의대로 자동 승인한다
+    let work = approveCurrent(legacy(customWork())).work
     work = approveCurrent(work).work
     const task = currentTask(work)
     if (!task) throw new Error('task 없음')
@@ -379,7 +407,8 @@ describe('커스텀 Work의 context.md (D456, D457)', () => {
     expect(text).toContain('## 커스텀 유형')
     expect(text).toContain('- 이름: 조사 후 적용 (`survey-apply`, 레포 유형)')
     expect(text).toContain('- 설명: 먼저 바꿀 곳을 조사하고 그대로 적용하는 일')
-    expect(text).toContain('- 단계: 의도 정리 → 조사(`survey`) → 적용(`apply`) → 리뷰와 검증')
+    expect(text).toContain('- 단계: 의도 정리 → 조사(`survey`) → 적용(`apply`)')
+    expect(text).not.toContain('→ 리뷰와 검증')
     expect(text).not.toContain('이 단계의 산출물')
   })
 

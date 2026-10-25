@@ -20,7 +20,14 @@ import {
   type Harness,
   workBranchOf,
 } from '../support/harness'
-import { FIXED_FILES, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
+import {
+  atCompletion,
+  FIXED_FILES,
+  REPO_FILES,
+  REQUEST,
+  scenario,
+  type Scenario,
+} from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -114,7 +121,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     // [push]로 완료한다. 되감기 백업 브랜치는 D418 전의 앱이 남긴 것이라고 치자 (D424)
     const s = await setup(scenario())
     const paused = await drive(s.h.relay, s.h.ui, s.key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion(),
     })
     expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
@@ -178,7 +185,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(after.filter((f) => f !== 'work.json' && f !== 'events.jsonl')).toEqual(
       before.filter((f) => f !== 'work.json' && f !== 'events.jsonl'),
     )
-    for (const f of ['request.md', 'intent.md', 'decisions.md', 'tasks/03-verify/pr.md']) {
+    for (const f of ['request.md', 'intent.md', 'decisions.md', 'tasks/02-fix/pr.md']) {
       expect(after, f).toContain(f)
     }
     const w = work(s)
@@ -201,16 +208,15 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     expect(view?.delivery).toMatchObject({ label: 'push', status: 'succeeded' })
 
     // 보관된 Work의 탭과 읽기 전용 승인 화면: 메인 체크아웃에서 커밋끼리 비교한다
-    const verify = await s.h.relay.review(s.key, 't-03')
-    expect(verify?.diff).toBe('')
-    expect(verify?.completion?.mode).toBeNull()
-    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+    // 마무리 단계(fix)의 화면이 Work 완료 화면이다 (D493)
     const fix = await s.h.relay.review(s.key, 't-02')
     expect(fix?.diff).toContain('+  if (xs.length === 0) return 0')
+    expect(fix?.completion?.mode).toBeNull()
+    expect(fix?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(fix?.emphasis.map((e) => e.kind)).not.toContain('uncommitted')
-    expect((await s.h.relay.terminalAttach(`${s.key}/t-03`)).data).toContain('FAKE-CLAUDE READY')
+    expect((await s.h.relay.terminalAttach(`${s.key}/t-02`)).data).toContain('FAKE-CLAUDE READY')
     // worktree가 없어 탭의 상대 경로는 메인 체크아웃에서 푼다 (D411)
-    expect(await s.h.relay.terminalPaths(`${s.key}/t-03`, [['src/avg.js']])).toEqual([0])
+    expect(await s.h.relay.terminalPaths(`${s.key}/t-02`, [['src/avg.js']])).toEqual([0])
     // 다시 정리하지 않는다
     expect((await s.h.relay.cleanPreview(s.key)).ok).toBe(false)
     expect(
@@ -228,7 +234,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   it('push됐으면 작업 브랜치를 지울 수 있다. 백업 브랜치의 "함께 삭제"를 끄면 둔다 (8-2)', async () => {
     const s = await setup(scenario())
     await drive(s.h.relay, s.h.ui, s.key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion(),
     })
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
       ok: true,
@@ -258,7 +264,7 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
   it('체크아웃된 서브모듈이 있으면 그 안의 작업도 지움을 확인해야 지운다(--force) (8-1, D382)', async () => {
     const s = await setup(scenario())
     await drive(s.h.relay, s.h.ui, s.key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion(),
     })
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({
       ok: true,
@@ -379,8 +385,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     const w = work(s)
     expect(w.status).toBe('archived')
     expect(w.cleaned).toMatchObject({ head, forced: false, deleted_branches: [] })
-    const verify = await s.h.relay.review(s.key, 't-03')
-    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+    const final = await s.h.relay.review(s.key, 't-02')
+    expect(final?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
 
   it.runIf(canLock)(
@@ -449,8 +455,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     await s.h.reopen()
     const view = s.h.ui.works.get(s.key) ?? s.h.relay.snapshot().works.find((w) => w.key === s.key)
     expect(view?.status).toBe('archived')
-    const verify = await s.h.relay.review(s.key, 't-03')
-    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+    const final = await s.h.relay.review(s.key, 't-02')
+    expect(final?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
     expect(work(s).status).toBe('archived')
   })
 
@@ -476,8 +482,8 @@ describe('[흐름] Work 정리 (M5, 시나리오 8)', () => {
     await s.h.reopen()
     const view = s.h.ui.works.get(s.key) ?? s.h.relay.snapshot().works.find((w) => w.key === s.key)
     expect(view).toMatchObject({ status: 'archived', shelved: true })
-    const verify = await s.h.relay.review(s.key, 't-03')
-    expect(verify?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
+    const final = await s.h.relay.review(s.key, 't-02')
+    expect(final?.completion?.diff).toContain('+  if (xs.length === 0) return 0')
   })
 })
 

@@ -3,7 +3,7 @@
   "type": "general",
   "repoName": "shipping-fee",
   "title": "CI에 lint와 Node 버전 행렬을 더하는 설정 일, 사람만 아는 지원 버전 하한",
-  "purpose": "코드 동작이 아니라 CI 설정을 바꾸는 일반 Work(D303)에서, intent의 완료조건이 확인 방법(D305)을 갖추고 verify가 그것을 돌려 판정하는지 본다. 사람은 Node 18을 아직 지원해야 한다는 것을 안다. 요청은 '지금 LTS'라고만 해서 18을 빼기 쉽다. 지금 CI가 18만 도는 것을 보고 빼도 되는지 사람에게 묻는지(D308: 범위를 넓히거나 밖에서 보이는 선택)를 본다.",
+  "purpose": "코드 동작이 아니라 CI 설정을 바꾸는 일반 Work(D303)에서, intent의 완료조건이 확인 방법(D305)을 갖추고 마무리 단계가 그것을 돌려 판정하는지 본다. 사람은 Node 18을 아직 지원해야 한다는 것을 안다. 요청은 '지금 LTS'라고만 해서 18을 빼기 쉽다. 지금 CI가 18만 도는 것을 보고 빼도 되는지 사람에게 묻는지(D308: 범위를 넓히거나 밖에서 보이는 선택)를 본다.",
   "report": "CI(.github/workflows/ci.yml)를 지금 LTS인 Node 20과 22 행렬로 돌게 바꾸고, lint 단계를 더해 달라. lint는 따로 도구를 들이지 말고 src의 JS 파일 문법만 검사하면 된다(package.json에 lint 스크립트를 두고 CI에서 npm run lint). 테스트는 지금처럼 npm test.",
   "knowledge": [
     {

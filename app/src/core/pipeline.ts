@@ -2,6 +2,7 @@
 // 유형마다 경로는 하나이고 앞으로만 간다 (D227, D418). 순서에 기대는 함수는 유형을 함께 받는다 (I57).
 // PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서에 없고 다음 단계가 없다.
 // 커스텀 유형(D447)은 노드 custom을 단계 수만큼 지나고, 단계마다의 이름과 산출물은 work.json의 custom_type에서 읽는다 (D458, D462).
+// 새 Work(pipeline: 2)는 verify 없이 마지막 작업 단계(마무리 단계)가 Work를 마무리하고(D493), 옛 Work는 verify를 지난다 (D501).
 import type { SkillName } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { CustomStep, TaskRecord, WorkState, WorkType } from '../shared/work'
@@ -16,23 +17,46 @@ export interface NodeInfo {
 }
 
 /**
- * 유형별 파이프라인 순서 (3.1, D227, D232). Work는 그 유형의 순서를 앞으로만 모두 지난다 (D418). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
+ * 유형별 파이프라인 순서 (3.1, D227, D232, D493). Work는 그 유형의 순서를 앞으로만 모두 지난다 (D418). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
  * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), spec은 주제 목록과 문답과 설계 문서 쓰기를 함께 하고(D350, D352),
- * execute는 진행 방식을 정하지 않고 계획과 작업을 함께 하고(D302), verify는 리뷰와 최종 검증을 함께 한다 (D229)
+ * execute는 진행 방식을 정하지 않고 계획과 작업을 함께 한다(D302). 마지막 단계가 리뷰 반영과 최종 판정을 함께 한다 (D493)
  */
 export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
-  bugfix: ['intake', 'fix', 'verify'],
-  feature: ['intake', 'design', 'implement', 'verify'],
-  refactor: ['intake', 'refactor', 'verify'],
-  spec: ['intake', 'spec', 'verify'],
-  general: ['intake', 'execute', 'verify'],
+  bugfix: ['intake', 'fix'],
+  feature: ['intake', 'design', 'implement'],
+  refactor: ['intake', 'refactor'],
+  spec: ['intake', 'spec'],
+  general: ['intake', 'execute'],
   // 커스텀 단계는 단계마다 custom이 하나씩 든다. 실제 순서는 stagesOf가 Work의 custom_type에서 만든다
-  custom: ['intake', 'custom', 'verify'],
+  custom: ['intake', 'custom'],
+}
+
+/** 옛 Work의 파이프라인 (D501): 끝에 verify(리뷰와 최종 검증, D229)가 있다 */
+export const LEGACY_PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
+  bugfix: [...PIPELINES.bugfix, 'verify'],
+  feature: [...PIPELINES.feature, 'verify'],
+  refactor: [...PIPELINES.refactor, 'verify'],
+  spec: [...PIPELINES.spec, 'verify'],
+  general: [...PIPELINES.general, 'verify'],
+  custom: [...PIPELINES.custom, 'verify'],
+}
+
+/** 새 Work가 work.json에 적는 파이프라인 판 (D501) */
+export const PIPELINE_VERSION = 2
+
+/** verify가 있는 옛 파이프라인의 Work인가 (D501): work.json에 pipeline: 2가 없다 */
+export function legacyPipeline(work: Pick<WorkState, 'pipeline'>): boolean {
+  return work.pipeline !== PIPELINE_VERSION
 }
 
 /** Work의 업무 유형. work.json에 type이 없으면 버그 수정이다 (D256, I58) */
 export function workType(work: Pick<WorkState, 'type'>): WorkType {
   return work.type ?? 'bugfix'
+}
+
+/** Work의 노드 순서: 새 Work는 PIPELINES, 옛 Work는 LEGACY_PIPELINES (D501) */
+export function pipelineOf(work: Pick<WorkState, 'type' | 'pipeline'>): readonly NodeName[] {
+  return (legacyPipeline(work) ? LEGACY_PIPELINES : PIPELINES)[workType(work)]
 }
 
 /** 그 유형의 파이프라인에 있는 노드인가 */
@@ -79,15 +103,15 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
 }
 
 /**
- * 모든 파이프라인 노드. 노드 이름이 맞는지만 볼 때 쓴다 (I57). 어떤 노드가 드는지는 PIPELINES에서 파생해 따로 고치지
- * 않고, 순서는 NODE_INFO(화면 목록의 순서)를 따른다
+ * 모든 파이프라인 노드. 노드 이름이 맞는지만 볼 때 쓴다 (I57). 어떤 노드가 드는지는 PIPELINES와 옛 Work의
+ * LEGACY_PIPELINES(verify)에서 파생해 따로 고치지 않고, 순서는 NODE_INFO(화면 목록의 순서)를 따른다
  */
 export const ALL_NODES: readonly NodeName[] = (Object.keys(NODE_INFO) as TaskNode[]).filter(
   (n): n is NodeName =>
-    Object.values(PIPELINES).some((p) => (p as readonly TaskNode[]).includes(n)),
+    Object.values(LEGACY_PIPELINES).some((p) => (p as readonly TaskNode[]).includes(n)),
 )
 
-/** verify의 기본 다음 단계 (3.2) */
+/** 마지막 단계의 기본 다음 단계 (3.2) */
 export const WORK_COMPLETE = 'complete'
 
 export type NextStep = NodeName | typeof WORK_COMPLETE
@@ -96,8 +120,8 @@ export type NextStep = NodeName | typeof WORK_COMPLETE
 export const order = (type: WorkType, node: NodeName) => PIPELINES[type].indexOf(node)
 
 /**
- * 기본 다음 단계 (3.2): 그 유형의 파이프라인에서 node 다음 단계. verify 다음은 Work 완료다. 파이프라인에 없는
- * 노드는 다음 단계가 없어 Work 완료로 본다. 커스텀 유형은 단계가 여럿이라 nextStage를 쓴다
+ * 기본 다음 단계 (3.2): 새 파이프라인(PIPELINES)에서 node 다음 단계. 마지막 단계 다음은 Work 완료다. 파이프라인에 없는
+ * 노드는 다음 단계가 없어 Work 완료로 본다. 커스텀 유형과 옛 Work는 nextStage를 쓴다
  */
 export function defaultNext(type: WorkType, node: NodeName): NextStep {
   const i = order(type, node)
@@ -111,17 +135,19 @@ export interface Stage {
 }
 
 /**
- * Work의 파이프라인 자리 순서. 기본 유형은 PIPELINES이고, 커스텀 유형은 intake, 복사한 단계마다 custom, verify다
- * (D447, D458). 커스텀인데 custom_type이 없으면(깨진 기록) 가운데 단계 없이 intake, verify다
+ * Work의 파이프라인 자리 순서. 기본 유형은 pipelineOf이고, 커스텀 유형은 intake, 복사한 단계마다 custom이다(옛 Work는 끝에
+ * verify, D447, D458, D501). 커스텀인데 단계가 없으면(깨진 기록) 가운데 단계 없이 intake, verify다: 리뷰와 검증 없이
+ * 완료되지 않게 한다
  */
-export function stagesOf(work: Pick<WorkState, 'type' | 'custom_type'>): Stage[] {
+export function stagesOf(work: Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>): Stage[] {
   const type = workType(work)
-  if (type !== 'custom') return PIPELINES[type].map((node) => ({ node }))
+  if (type !== 'custom') return pipelineOf(work).map((node) => ({ node }))
   const steps = work.custom_type?.steps ?? []
+  const verify: Stage[] = legacyPipeline(work) || !steps.length ? [{ node: 'verify' }] : []
   return [
     { node: 'intake' },
     ...steps.map((s): Stage => ({ node: 'custom', step: s.id })),
-    { node: 'verify' },
+    ...verify,
   ]
 }
 
@@ -129,12 +155,12 @@ export function stagesOf(work: Pick<WorkState, 'type' | 'custom_type'>): Stage[]
 const sameStage = (a: Stage, b: Stage) => a.node === b.node && (a.step ?? '') === (b.step ?? '')
 
 /**
- * 기본 다음 단계 (3.2)를 Work에서 정한다: 기본 유형은 defaultNext와 같고, 커스텀 유형은 다음 커스텀 단계나 verify다.
- * 파이프라인에 없는 자리는 Work 완료다. 다만 정의에서 찾지 못한 커스텀 단계(깨진 기록)는 verify로 보낸다: 리뷰와 검증 없이
- * 완료되지 않게 한다
+ * 기본 다음 단계 (3.2)를 Work에서 정한다: stagesOf의 다음 자리다. 커스텀 유형은 다음 커스텀 단계, 마지막이면 Work 완료(옛 Work는
+ * verify)다. 파이프라인에 없는 자리는 Work 완료다. 다만 정의에서 찾지 못한 커스텀 단계(깨진 기록)는 verify로 보낸다: 리뷰와
+ * 검증 없이 완료되지 않게 한다
  */
 export function nextStage(
-  work: Pick<WorkState, 'type' | 'custom_type'>,
+  work: Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>,
   from: Stage,
 ): Stage | typeof WORK_COMPLETE {
   const stages = stagesOf(work)
@@ -148,6 +174,29 @@ export const stageOf = (task: Pick<TaskRecord, 'node' | 'step'>): Stage | null =
   isPipelineNode(task.node)
     ? { node: task.node, ...(task.step !== undefined ? { step: task.step } : {}) }
     : null
+
+type PipelineWork = Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>
+
+/**
+ * 승인 화면이 Work 완료 화면인 task인가 (시나리오 7-3): 다음 자리가 Work 완료인 파이프라인 task. 새 Work는 마무리 단계이고
+ * (D493), 옛 Work는 verify다 (D501). intake는 아니다
+ */
+export function completesWork(
+  work: PipelineWork,
+  task: Pick<TaskRecord, 'node' | 'step'>,
+): boolean {
+  const stage = stageOf(task)
+  if (!stage || stage.node === 'intake') return false
+  return stage.node === 'verify' || nextStage(work, stage) === WORK_COMPLETE
+}
+
+/**
+ * 마무리 단계 task인가 (D493): 새 Work의 마지막 작업 단계다. 판정표를 쓰고 독립 리뷰를 받아 반영한 뒤 pr.md와 지식을 쓴다
+ * (5.6.14). 옛 Work의 verify와 깨진 기록이 보낸 verify는 아니다
+ */
+export function finishesWork(work: PipelineWork, task: Pick<TaskRecord, 'node' | 'step'>): boolean {
+  return !legacyPipeline(work) && task.node !== 'verify' && completesWork(work, task)
+}
 
 /** 커스텀 단계 task의 단계 정의. 커스텀 단계가 아니거나 정의에 없으면 undefined다 */
 export function customStep(

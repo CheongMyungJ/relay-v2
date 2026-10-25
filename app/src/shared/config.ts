@@ -97,6 +97,8 @@ export interface AppConfig {
   knowledge_review_engine: AgentEngine
   /** 지식 검토의 모델. 비우면 엔진의 기본(claude는 sonnet, codex는 CLI 설정)이다 (D334) */
   knowledge_review_model: string
+  /** 마무리 단계의 독립 리뷰에서 코드 리뷰(찾기)를 한다. 끄면 판정표 확인만 한다 (D495, D497) */
+  code_review: boolean
   /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
   theme: ThemeChoice
   /** [새 세션] 창의 폴더 기본값 (D398). 빈 글이면 <RELAY_HOME>/home/이다. 바꾸면 다음에 만드는 세션부터 쓴다 */
@@ -111,6 +113,8 @@ export interface WorkSettings {
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   /** 대응 자동 시작 (D154, 5.1.1) */
   respond_auto_start?: boolean
+  /** 독립 리뷰의 코드 리뷰 (D497, 5.1.1) */
+  code_review?: boolean
 }
 
 /**
@@ -123,6 +127,7 @@ export interface WorkSettingsPatch {
   custom_auto_approve?: Record<string, boolean>
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   respond_auto_start?: boolean | null
+  code_review?: boolean | null
 }
 
 /**
@@ -246,6 +251,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   reply_signature: '— relay(AI)가 작성함',
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
+  code_review: true,
   theme: 'system',
   session_dir: '',
 }

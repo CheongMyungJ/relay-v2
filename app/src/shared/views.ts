@@ -527,6 +527,7 @@ export type BadgeKind =
   | 'mergeable'
   | 'session_ended'
   | 'working'
+  | 'reviewing'
   | 'idle'
   | 'queued'
   | 'pr_waiting'
@@ -632,6 +633,11 @@ export interface TaskView {
    * 기다리지 않고 onActivity로 따로 온다
    */
   activity: ActivityView | null
+  /**
+   * 마무리 단계의 독립 리뷰 (D495, D496): running은 리뷰가 도는 중, ready는 끝났지만 결과로 세션을 아직 다시 열지 않음(앱을
+   * 다시 켰거나 다시 열지 못함. [재개]가 결과를 첫 입력으로 준다). 그 밖에는 null. codeReview는 그때의 설정이다 (D497)
+   */
+  review?: { state: 'running' | 'ready'; codeReview: boolean } | null
 }
 
 /**
@@ -644,6 +650,13 @@ export interface ActivityView {
   since: number
   /** 이번 턴의 마지막 도구. 아직 없으면 null */
   tool: ToolActivityView | null
+  /**
+   * 독립 리뷰 중(D502)이면 지금 호출의 이름("찾기", "확인"). since는 그 호출을 시작한 때이고 tool은 그 호출의 마지막
+   * 도구다. 작업 중인 task는 없다
+   */
+  phase?: string
+  /** 독립 리뷰 중의 최근 도구 (오래된 것부터, 지금 것을 빼고). Codex는 도구를 받지 않아 없다 */
+  recent?: readonly string[]
 }
 
 export interface ToolActivityView {
@@ -854,6 +867,11 @@ export interface ReviewView {
   /** [요약] 탭 맨 위의 이 단계 핵심 (D223). 의도 정리, 원인 분석과 수정, 리뷰와 검증만 있다 */
   lead: StageLead | null
   artifacts: Artifact[]
+  /**
+   * 독립 리뷰의 진행 기록 (D502): 호출마다 find.log, check.log. 산출물이 아니라 이슈 기록에는 넣지 않는다. 독립 리뷰를
+   * 요청하지 않은 task는 없다
+   */
+  reviewLogs?: Artifact[]
   /** 이 task의 변경 (task 시작 커밋 → 작업 트리) */
   diff: string
   /**
@@ -932,6 +950,11 @@ export interface Completion {
    * 묶음 Work가 아니면 없다
    */
   repos?: RepoCompletion[]
+  /**
+   * 마무리 단계의 독립 리뷰 (D495, D497): ok(코드 리뷰와 확인을 함), off(코드 리뷰를 끔, 판정표만 확인), failed(호출이 실패함,
+   * error에 까닭), none(리뷰를 받지 않고 승인할 수 있게 됨, 형식 오류를 무시한 때 등). 옛 Work의 verify는 null이다
+   */
+  review: { state: 'ok' | 'off' | 'failed' | 'none'; error?: string } | null
 }
 
 /** 묶음 Work의 승인 화면에서 레포 하나의 변경 (D475) */
