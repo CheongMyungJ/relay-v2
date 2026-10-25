@@ -320,8 +320,8 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
           onClose={() => setEnding(false)}
         >
           <p>
-            Work를 완료(머지 없이)로 바꿉니다. GitHub의 PR은 건드리지 않습니다. 끝낸 뒤에는 이 PR을
-            읽지 않습니다.
+            이 PR을 머지 없이 끝냅니다. 모든 PR이 머지되거나 끝나면 Work가 완료됩니다. GitHub의 PR은
+            건드리지 않습니다. 끝낸 뒤에는 이 PR을 읽지 않습니다.
           </p>
         </ConfirmDialog>
       ) : null}

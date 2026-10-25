@@ -916,7 +916,7 @@ function PrSection({
           className={tab === 'task' ? 'active' : ''}
           onClick={() => setTab('task')}
         >
-          {respond ? task.label : '리뷰와 검증 결과'}
+          {respond ? task.label : `${task.label} 결과`}
         </button>
       </div>
       {pr ? <PrPanel key={pr.repo} work={work} pr={pr} /> : body}

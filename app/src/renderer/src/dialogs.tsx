@@ -244,6 +244,13 @@ export function ProjectSettingsDialog({
   return (
     <Modal title={`프로젝트 설정 · ${project.name}`} onClose={onClose}>
       <div className="dim">{project.repoPath}</div>
+      {project.parent ? (
+        <div className="notice">
+          예전 서브모듈 프로젝트입니다. 여기 설정은 이 프로젝트에 남은 Work에만 쓰입니다. 새 Work는
+          메인 프로젝트에서 만들고, 그 Work의 이 서브모듈 설정은 메인 프로젝트 설정의 서브모듈별
+          설정에서 정합니다 (D483).
+        </div>
+      ) : null}
       <label className="form-col">
         <span>받을 봇</span>
         <textarea
@@ -302,10 +309,10 @@ export function ProjectSettingsDialog({
       </label>
       <div className="dim">
         새 Work의 작업 브랜치 이름입니다. 자리: {'{work-id}'}(w-20261021-001), {'{date}'}(20261021),
-        {' {seq}'}(001), {'{type}'}(fix, feat, refactor, spec, chore), {'{slug}'}(새 Work에서 적는
-        짧은 이름, 비우면 앞 구분자와 함께 빠짐). 예: {'{type}/{date}-{seq}-{slug}'}. 끝에는 앱이
-        임의의 영문·숫자 4자를 붙입니다. 비우면 relay/{'{work-id}'}입니다. 바꾸면 다음에 만드는
-        Work부터 따릅니다 (D426, D427).
+        {' {seq}'}(001), {'{type}'}(fix, feat, refactor, spec, chore. 커스텀 유형은 그 id),{' '}
+        {'{slug}'}(새 Work에서 적는 짧은 이름, 비우면 앞 구분자와 함께 빠짐). 예:{' '}
+        {'{type}/{date}-{seq}-{slug}'}. 끝에는 앱이 임의의 영문·숫자 4자를 붙입니다. 비우면 relay/
+        {'{work-id}'}입니다. 바꾸면 다음에 만드는 Work부터 따릅니다 (D426, D427).
       </div>
       {subPaths.length ? (
         <div className="form-col">
@@ -995,7 +1002,9 @@ export function NewWorkDialog({
       <details>
         <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
         <h3>이 Work의 자동 승인 (Claude Code)</h3>
-        <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
+        <div className="dim">
+          {AGENT_APPROVAL_NOTICE} 마지막 단계(Work 완료 화면)는 늘 수동이라 켜도 쓰이지 않습니다.
+        </div>
         <AutoApproveOverrides config={config} type={type} value={auto} onChange={setAuto} />
         {chosenCustom ? (
           <CustomAutoApprove
@@ -1256,6 +1265,9 @@ function Groups<K extends string>({
   )
 }
 
+/** 설정 줄의 단계 id 표시. verify는 옛 Work에만 있어 그렇게 적는다 (D501) */
+const skillNote = (skill: string) => (skill === 'verify' ? 'verify, 옛 Work만' : skill)
+
 // ---------- 질문 방식 (5.6.1, D26, D72) ----------
 
 type Overrides = Partial<Record<QuestionSkill, QuestionMode>>
@@ -1294,7 +1306,7 @@ function QuestionModes({
       row={(skill, title) => (
         <label key={skill} className="form-row">
           <span>
-            {title} <span className="dim">({skill})</span>
+            {title} <span className="dim">({skillNote(skill)})</span>
           </span>
           <select
             aria-label={`${title} 질문 방식`}
@@ -1546,7 +1558,7 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
       <h3>독립 리뷰 (Work 마무리)</h3>
       <div className="dim">
         마지막 단계가 리뷰를 요청할 때의 값을 씁니다. 끄면 판정표만 확인하고 Work 완료 화면과 PR
-        초안에 코드 리뷰를 하지 않았다고 남깁니다.
+        초안에 코드 리뷰를 하지 않았다고 남깁니다. 옛 Work(verify가 있는 Work)에는 쓰지 않습니다.
       </div>
       <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
       <h3>질문 방식</h3>
@@ -1912,7 +1924,7 @@ export function SettingsDialog({
                 return (
                   <div key={skill} className="form-row agent-step">
                     <span>
-                      {title} <span className="dim">({skill})</span>
+                      {title} <span className="dim">({skillNote(skill)})</span>
                     </span>
                     <div className="agent-step-selects">
                       <select
@@ -1963,7 +1975,7 @@ export function SettingsDialog({
             row={(skill, title) => (
               <label key={skill} className="form-row">
                 <span>
-                  {title} <span className="dim">({skill})</span>
+                  {title} <span className="dim">({skillNote(skill)})</span>
                 </span>
                 <select
                   aria-label={`${title} 질문 방식`}
@@ -2427,14 +2439,14 @@ export function CleanDialog({
                 {!b.exists
                   ? '브랜치가 없습니다'
                   : b.pushed && b.merged
-                    ? 'origin에 push됐고 기준 브랜치에 머지됐습니다'
+                    ? 'origin에 push됐고 머지 대상에 머지됐습니다'
                     : b.pushed
                       ? 'origin에 push됐습니다'
                       : b.merged
-                        ? '기준 브랜치에 머지됐습니다'
+                        ? '머지 대상에 머지됐습니다'
                         : preview.merged && b.deletable && b.lost.length === 0
                           ? '머지한 PR에 모든 커밋이 들어 있습니다 (squash·rebase 머지)'
-                          : '원격에도 기준 브랜치에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
+                          : '원격에도 머지 대상에도 없습니다. 이 브랜치에만 있는 커밋이 있습니다'}
               </div>
               {b.lost.length ? (
                 <>
@@ -2508,7 +2520,7 @@ export function CleanDialog({
           ))}
           {preview.backups.length ? (
             <section>
-              <h3>되감기 백업 브랜치</h3>
+              <h3>예전 되감기의 백업 브랜치</h3>
               <ul className="files">
                 {preview.backups.map((n) => (
                   <li key={n}>{n}</li>
@@ -2524,7 +2536,7 @@ export function CleanDialog({
                 함께 삭제
               </label>
               <div className="dim">
-                지우면 폐기된 task의 [변경]이 가리키는 커밋을 나중에 git이 치울 수 있습니다.
+                지우면 예전에 폐기된 task의 [변경]이 가리키는 커밋을 나중에 git이 치울 수 있습니다.
               </div>
             </section>
           ) : null}
@@ -2763,8 +2775,8 @@ export function AddRepoDialog({ work, onClose }: { work: WorkView; onClose: () =
     <Modal title={`레포 추가 · ${work.workId}`} onClose={onClose}>
       <p className="dim">
         고른 서브모듈의 worktree를 메인 worktree 안의 그 자리에 작업 브랜치{' '}
-        <code>{work.branch}</code>로 만듭니다. 지금 세션에는 터미널에서 알리고, 다음 단계부터는 앱이
-        알립니다.
+        <code>{work.branch}</code>로 만듭니다. 지금 세션에는 앱이 알리지 않으니 터미널에서 직접
+        알리세요. 다음 단계부터는 앱이 안내에 넣습니다.
       </p>
       {subs === null ? (
         <div className="dim">읽는 중…</div>
