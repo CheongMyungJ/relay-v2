@@ -65,6 +65,7 @@ const api: RelayApi = {
   closeSide: (workKey) => ipcRenderer.invoke(IPC.closeSide, workKey),
   workFiles: (workKey, rel) => ipcRenderer.invoke(IPC.workFiles, workKey, rel),
   readWorkFile: (workKey, rel) => ipcRenderer.invoke(IPC.readWorkFile, workKey, rel),
+  workFileChanges: (workKey) => ipcRenderer.invoke(IPC.workFileChanges, workKey),
   saveWorkFile: (workKey, rel, text, hash) =>
     ipcRenderer.invoke(IPC.saveWorkFile, workKey, rel, text, hash),
   defaultSessionDir: () => ipcRenderer.invoke(IPC.defaultSessionDir),
@@ -111,7 +112,7 @@ const api: RelayApi = {
     resize: (key, cols, rows) => ipcRenderer.invoke(IPC.terminalResize, key, cols, rows),
     onData: (key, cb) => subscribe(IPC.terminalData(key), cb),
     paths: (key, groups) => ipcRenderer.invoke(IPC.terminalPaths, key, groups),
-    open: (key, path) => ipcRenderer.invoke(IPC.terminalOpen, key, path),
+    open: (key, path, external) => ipcRenderer.invoke(IPC.terminalOpen, key, path, external),
     fileFor: (file) => webUtils.getPathForFile(file),
     saveImage: (data, mime) => ipcRenderer.invoke(IPC.terminalSaveImage, data, mime),
   },

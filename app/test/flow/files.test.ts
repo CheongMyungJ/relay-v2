@@ -1,9 +1,10 @@
-// [흐름] Work의 [파일] 탭 (D464~D468): 명령이 그 Work의 worktree를 보고, 정리한 Work는 worktree가 없다고 답한다. 경로
+// [흐름] Work의 [파일] 탭 (D464~D468, D490): 명령이 그 Work의 worktree를 보고, 바뀐 파일은 그 Work의 기준 커밋과 견주며,
+// 정리한 Work는 worktree가 없다고 답한다. 경로
 // 검사, 링크, 줄 끝, 바뀐 파일 알리기의 세부는 [어댑터] `test/adapters/files.test.ts`가 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import { REPO_FILES, REQUEST, scenario } from '../support/scenarios'
 
 let h: Harness | undefined
@@ -53,6 +54,23 @@ describe('[파일] 탭 (D464~D468)', () => {
     // Windows의 git은 체크아웃을 CRLF로 둘 수 있다(줄 끝을 지키는 것은 [어댑터]가 본다)
     expect(text(path.join(tree, 'README.md'))).toBe('# 고침\n')
     expect(text(path.join(repo, 'README.md'))).toBe('# 샘플\n')
+    // 바뀐 파일 (D490): 기준 커밋 뒤에 커밋한 것, 커밋 안 한 것, 추적하지 않는 것. 메인 체크아웃의 변경은 보지 않는다
+    fs.writeFileSync(path.join(tree, 'src', 'avg.js'), 'export const avg = () => 0\n')
+    git(tree, 'commit', '-q', '-am', '고침')
+    fs.rmSync(path.join(tree, 'package.json'))
+    fs.mkdirSync(path.join(tree, 'docs'))
+    fs.writeFileSync(path.join(tree, 'docs', 'new.md'), '# 새\n')
+    fs.writeFileSync(path.join(repo, 'main-only.txt'), 'x\n')
+    expect(await hh.relay.workFileChanges(key)).toEqual({
+      ok: true,
+      changes: [
+        { path: 'README.md', status: 'M' },
+        { path: 'docs/new.md', status: 'A' },
+        { path: 'package.json', status: 'D' },
+        { path: 'src/avg.js', status: 'M' },
+      ],
+    })
+    expect(await hh.relay.workFileChanges('none/w-1')).toMatchObject({ ok: false })
     expect(await hh.relay.workFiles('none/w-1', '')).toEqual({
       ok: false,
       error: 'worktree가 없습니다 (정리한 Work)',
@@ -79,5 +97,6 @@ describe('[파일] 탭 (D464~D468)', () => {
     })
     expect(await hh.relay.readWorkFile(key, 'README.md')).toMatchObject({ ok: false })
     expect(await hh.relay.saveWorkFile(key, 'README.md', 'x', null)).toMatchObject({ ok: false })
+    expect(await hh.relay.workFileChanges(key)).toMatchObject({ ok: false })
   })
 })

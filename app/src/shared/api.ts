@@ -20,9 +20,11 @@ import type {
   CustomTypeFiles,
   CustomTypeList,
   CustomTypeView,
+  FileChangesResult,
   FileListResult,
   FileReadResult,
   FileSaveResult,
+  FilesOpenTarget,
   TidyView,
   PrItemAction,
   ProjectInspection,
@@ -79,8 +81,11 @@ export interface TerminalApi {
    * 터미널의 폴더에서 푼다
    */
   paths(key: string, groups: string[][]): Promise<(number | null)[]>
-  /** 경로 글의 파일을 연다. 안전한 형식이 아니면 폴더에서 보여 준다 (D411, D412). 주소는 openExternal로 연다 */
-  open(key: string, path: string): Promise<void>
+  /**
+   * 경로 글의 파일을 연다. 안전한 형식이 아니면 폴더에서 보여 준다 (D411, D412). 주소는 openExternal로 연다.
+   * external이 아니고 그 Work worktree 안의 글 파일이면 열지 않고 [파일] 탭에서 열 자리를 돌려준다 (D491)
+   */
+  open(key: string, path: string, external: boolean): Promise<FilesOpenTarget | null>
   /** 끌어 놓거나 붙여넣은 파일의 경로. 디스크에 없는 것(브라우저의 그림 등)은 빈 글이다 (D410) */
   fileFor(file: File): string
   /** 붙여넣은 그림을 저장하고 경로를 돌려준다 (D410) */
@@ -209,6 +214,8 @@ export interface RelayApi {
   workFiles(workKey: string, rel: string): Promise<FileListResult>
   /** [파일] 탭에서 연 파일 (D466). 글이 아니거나 너무 크면 크기만 돌려준다 */
   readWorkFile(workKey: string, rel: string): Promise<FileReadResult>
+  /** [파일] 탭 트리의 바뀐 파일 표시 (D490): Work가 기준 커밋 뒤에 더하거나 고치거나 지운 파일 */
+  workFileChanges(workKey: string): Promise<FileChangesResult>
   /** [파일] 탭의 [저장] (D467). hash는 열 때 받은 값이고, null이면 연 뒤 바뀐 파일을 덮어쓴다 */
   saveWorkFile(
     workKey: string,
@@ -349,6 +356,7 @@ export const IPC = {
   workFiles: 'files:list',
   readWorkFile: 'files:read',
   saveWorkFile: 'files:save',
+  workFileChanges: 'files:changes',
   defaultSessionDir: 'session:default-dir',
   createSession: 'session:create',
   openSession: 'session:open',

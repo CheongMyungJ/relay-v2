@@ -227,6 +227,12 @@ export async function changedPaths(
   return changes
 }
 
+/** 추적하지 않는 파일 가운데 무시하지 않는 것 (git ls-files --others --exclude-standard -z). 폴더 안의 것도 하나씩 나온다 */
+export async function untrackedPaths(dir: string, opts?: GitOptions): Promise<string[]> {
+  const out = await git(dir, ['ls-files', '--others', '--exclude-standard', '-z'], opts)
+  return out.split('\0').filter((p) => p !== '')
+}
+
 /**
  * 커밋 안 된 변경 (git status --porcelain). 추적하지 않는 파일도 넣는다. 서브모듈 안의 수정과 추적하지 않는 파일은
  * 넣지 않고(--ignore-submodules=dirty), 서브모듈이 가리키는 커밋이 바뀐 것만 넣는다(git 문서 git-status) (D382)

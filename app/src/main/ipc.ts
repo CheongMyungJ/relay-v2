@@ -503,6 +503,9 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.workFiles, async (_e, workKey: unknown, rel: unknown) =>
     (await ready).workFiles(text(workKey), text(rel)),
   )
+  ipcMain.handle(IPC.workFileChanges, async (_e, workKey: unknown) =>
+    (await ready).workFileChanges(text(workKey)),
+  )
   ipcMain.handle(IPC.readWorkFile, async (_e, workKey: unknown, rel: unknown) =>
     (await ready).readWorkFile(text(workKey), text(rel)),
   )
@@ -612,13 +615,23 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
     const tries = groups.slice(0, 50).map((g) => texts(g).slice(0, 4))
     return (await ready).terminalPaths(text(key), tries)
   })
-  ipcMain.handle(IPC.terminalOpen, async (_e, key: unknown, raw: unknown) => {
-    const target = await (await ready).terminalTarget(text(key), text(raw))
+  // Work worktree 안의 글 파일은 열지 않고 [파일] 탭에서 열 자리를 돌려준다. Shift를 더하면(external) OS 앱으로 연다 (D491)
+  ipcMain.handle(IPC.terminalOpen, async (_e, key: unknown, raw: unknown, external: unknown) => {
+    const relay = await ready
+    if (external !== true) {
+      const files = await relay.terminalFilesTarget(text(key), text(raw))
+      if (files) return files
+    }
+    const target = await relay.terminalTarget(text(key), text(raw))
     if (!target) throw new Error(`열 수 있는 파일이 아님: ${text(raw)}`)
     // 안전한 형식이 아니면 실행하지 않고 폴더에서 보여 준다
-    if (!target.open) return shell.showItemInFolder(target.path)
+    if (!target.open) {
+      shell.showItemInFolder(target.path)
+      return null
+    }
     const error = await shell.openPath(target.path)
     if (error) throw new Error(error)
+    return null
   })
   // 붙여넣거나 끌어 놓은 그림 (D410). 엔진이 받지 않는 형식은 PNG로 바꾼다
   ipcMain.handle(IPC.terminalSaveImage, async (_e, data: unknown, mime: unknown) => {

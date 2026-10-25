@@ -1,12 +1,20 @@
-// [스모크] Work의 [파일] 탭 (D464~D468): 탭 줄 끝의 [파일]을 누르면 worktree의 트리가 보이고, 패널은 지금 task 그대로다.
-// 마크다운은 그려 보이고 [편집]으로 고쳐 Ctrl+S로 저장한다. 다른 파일로 옮길 때 고친 것을 묻고, 연 뒤 바뀐 파일은 덮어쓰기
-// 전에 알린다. 다른 탭에 다녀와도 고치던 글이 남는다. 읽기·쓰기의 세부는 [어댑터], 명령의 연결은 [흐름]이 본다.
+// [스모크] Work의 [파일] 탭 (D464~D468, D490~D492): 탭 줄 끝의 [파일]을 누르면 worktree의 트리가 보이고, 패널은 지금
+// task 그대로다. 마크다운은 그려 보이고 [편집]으로 고쳐 Ctrl+S로 저장한다. 연 파일은 탭으로 여럿 두고, 고친 탭을 닫을 때
+// 묻고, 연 뒤 바뀐 파일은 덮어쓰기 전에 알린다. 다른 탭에 다녀와도 고치던 글이 남는다. 트리는 Work가 바꾼 파일을 표시하고
+// 지운 파일도 보인다. 터미널에서 Ctrl+클릭한 worktree의 글 파일은 [파일] 탭에서 연다. 읽기·쓰기의 세부는 [어댑터], 명령의
+// 연결은 [흐름], 표시와 탭의 규칙은 [단위]가 본다.
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test'
 import { makeRepo } from '../support/repo'
-import { REPO_FILES, REQUEST, scenario } from '../support/scenarios'
+import { REPO_FILES, REQUEST, scenario, steps } from '../support/scenarios'
 
 const isWin = process.platform === 'win32'
 const APP_DIR = path.resolve(__dirname, '../..')
@@ -29,7 +37,16 @@ test.beforeAll(async () => {
     'README.md': '# 샘플 안내\n\n- 첫 항목\n- 둘째 항목\n',
   }))
   const scenarioFile = path.join(root, 'scenario.json')
-  fs.writeFileSync(scenarioFile, JSON.stringify(scenario()))
+  // 의도 정리 세션이 터미널에 worktree의 파일 경로를 보인다 (D491)
+  const [prompt, ...rest] = steps('intake')
+  const s = scenario({
+    'work-start': [
+      ...(prompt ? [prompt] : []),
+      { do: 'print', text: 'Read test/avg.test.js' },
+      ...rest,
+    ],
+  })
+  fs.writeFileSync(scenarioFile, JSON.stringify(s))
   const env = {
     ...process.env,
     CLAUDE_BIN: FAKE,
@@ -42,11 +59,21 @@ test.beforeAll(async () => {
   app = exe
     ? await electron.launch({ executablePath: exe, env })
     : await electron.launch({ args: [APP_DIR], env })
-  await app.evaluate(({ dialog }, dir) => {
+  // 실제로 열지 않고 OS 앱으로 연 경로를 모은다. Windows는 .js를 열지 않고 폴더에서 보여 준다(D412)
+  await app.evaluate(({ dialog, shell }, dir) => {
     dialog.showOpenDialog = (() =>
       Promise.resolve({ canceled: false, filePaths: [dir] })) as typeof dialog.showOpenDialog
     dialog.showMessageBox = (() =>
       Promise.resolve({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox
+    const opened: string[] = []
+    ;(globalThis as unknown as { opened: string[] }).opened = opened
+    shell.openPath = (p: string) => {
+      opened.push(p)
+      return Promise.resolve('')
+    }
+    shell.showItemInFolder = (p: string) => {
+      opened.push(p)
+    }
   }, repo)
 })
 
@@ -64,7 +91,7 @@ function worktree(): string {
   return path.join(trees, work ?? '')
 }
 
-test('[파일] 탭에서 worktree의 파일을 보고, 마크다운을 그려 보이고, 고쳐 저장한다 (D464~D468)', async () => {
+test('[파일] 탭에서 worktree의 파일을 보고, 마크다운을 그려 보이고, 고쳐 저장한다. 바뀐 파일 표시, 탭, 터미널에서 열기 (D464~D468, D490~D492)', async () => {
   const win = await app.firstWindow()
   await expect(win.locator('.layout')).toBeVisible()
   await win.locator('.sidebar').getByRole('button', { name: '프로젝트 추가' }).click()
@@ -128,13 +155,33 @@ test('[파일] 탭에서 worktree의 파일을 보고, 마크다운을 그려 �
   await expect(win.locator('.file-mode')).toHaveCount(0)
   await win.screenshot({ path: 'test-results/files-code.png' })
 
-  // 고친 채 다른 파일을 고르면 묻는다
+  // 연 파일은 탭으로 남는다. 고친 채 다른 파일을 열어도 묻지 않고, 탭을 오가도 고친 글이 남는다 (D492)
+  const fileTabs = win.getByRole('tablist', { name: '연 파일' })
+  await expect(fileTabs.getByRole('tab')).toHaveText(['README.md', 'avg.js'])
+  await expect(fileTabs.getByRole('tab', { name: 'avg.js' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
   await code.fill('export const avg = () => 0\n')
   await tree.getByRole('treeitem', { name: 'README.md' }).click()
+  await expect(fileTabs.getByRole('tab', { name: 'README.md' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(preview.locator('h1')).toHaveText('고친 안내')
+  await expect(win.locator('.file-tab-dirty')).toHaveCount(1)
+  await fileTabs.getByRole('tab', { name: 'avg.js' }).click()
+  await expect(code).toHaveValue('export const avg = () => 0\n')
+
+  // 고친 탭을 닫으면 묻는다
+  await fileTabs.getByRole('button', { name: 'src/avg.js 닫기' }).click()
   const banner = win.locator('.file-banner')
   await expect(banner).toContainText('저장하지 않은 변경이 있습니다')
   await banner.getByRole('button', { name: '취소' }).click()
   await expect(code).toHaveValue('export const avg = () => 0\n')
+  // 고치지 않은 탭은 바로 닫는다
+  await fileTabs.getByRole('button', { name: 'README.md 닫기' }).click()
+  await expect(fileTabs.getByRole('tab')).toHaveText(['avg.js'])
 
   // 다른 탭에 다녀와도 고치던 글이 남는다
   await win.getByRole('tab', { name: /의도 정리/ }).click()
@@ -152,4 +199,79 @@ test('[파일] 탭에서 worktree의 파일을 보고, 마크다운을 그려 �
   expect(fs.readFileSync(path.join(worktree(), 'src', 'avg.js'), 'utf8')).toBe(
     'export const avg = () => 0\n',
   )
+
+  // Work가 바꾼 파일을 트리에 표시한다 (D490): 고친 파일과 그것을 담은 폴더, 지운 파일은 그 자리에 줄을 그어 보인다
+  fs.rmSync(path.join(worktree(), 'package.json'))
+  await win.getByRole('button', { name: '새로 고침' }).click()
+  const row = (name: string) => tree.getByRole('treeitem', { name, exact: true })
+  await expect(row('README.md')).toHaveClass(/changed-M/)
+  await expect(row('README.md').locator('.file-mark')).toHaveText('M')
+  await expect(row('avg.js')).toHaveClass(/changed-M/)
+  await expect(row('src')).toHaveClass(/changed-M/)
+  await expect(row('test')).not.toHaveClass(/changed-/)
+  await expect(row('package.json')).toHaveClass(/deleted/)
+  await expect(row('package.json')).toHaveAttribute('aria-disabled', 'true')
+  await expect(win.locator('.file-tree-head')).toContainText('바뀐 파일 3')
+  await expect(fileTabs.locator('.file-tab.active')).toHaveClass(/changed-M/)
+  await win.screenshot({ path: 'test-results/files-changes.png' })
+
+  // 터미널에서 Ctrl+클릭한 worktree의 글 파일은 [파일] 탭에서 연다. 담은 폴더를 펼친다 (D491)
+  await win.getByRole('tab', { name: /의도 정리/ }).click()
+  const word = await wordAt(win, 'Read test/avg.test.js', 'test/avg.test.js')
+  await win.mouse.move(word.x, word.y)
+  await expect(win.locator('.terminal-host:not([hidden]) .xterm')).toHaveAttribute(
+    'title',
+    'Ctrl+클릭으로 열기',
+  )
+  await win.keyboard.down('Control')
+  await win.mouse.click(word.x, word.y)
+  await win.keyboard.up('Control')
+  await expect(filesTab).toHaveAttribute('aria-selected', 'true')
+  await expect(fileTabs.getByRole('tab', { name: 'avg.test.js' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(win.getByLabel('test/avg.test.js 편집')).toHaveValue(/test\('평균'/)
+  await expect(row('test')).toHaveAttribute('aria-expanded', 'true')
+  await expect(row('avg.test.js')).toHaveAttribute('aria-selected', 'true')
+  expect(await opened()).toEqual([])
+
+  // Shift를 더하면 OS 앱으로 연다. 탭을 옮기는 사이 마우스가 그대로라 링크를 다시 알아보게 옮겼다 온다
+  await win.getByRole('tab', { name: /의도 정리/ }).click()
+  await win.mouse.move(word.x, word.y + 60)
+  await win.mouse.move(word.x, word.y)
+  await expect(win.locator('.terminal-host:not([hidden]) .xterm')).toHaveAttribute(
+    'title',
+    'Ctrl+클릭으로 열기',
+  )
+  await win.keyboard.down('Control')
+  await win.keyboard.down('Shift')
+  await win.mouse.click(word.x, word.y)
+  await win.keyboard.up('Shift')
+  await win.keyboard.up('Control')
+  await expect.poll(opened).toEqual([path.join(worktree(), 'test', 'avg.test.js')])
+  await expect(filesTab).toHaveAttribute('aria-selected', 'false')
 })
+
+const opened = () =>
+  app.evaluate(() => (globalThis as unknown as { opened: string[] }).opened.slice())
+
+/** 터미널 줄에 보인 낱말의 가운데 자리 */
+async function wordAt(win: Page, line: string, word: string): Promise<{ x: number; y: number }> {
+  const row = win.locator('.terminal-host:not([hidden]) .xterm-rows > div', { hasText: line })
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  return row.evaluate((el, word) => {
+    const doc = el.ownerDocument
+    const walker = doc.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = n.textContent?.indexOf(word) ?? -1
+      if (i < 0) continue
+      const range = doc.createRange()
+      range.setStart(n, i)
+      range.setEnd(n, i + word.length)
+      const r = range.getBoundingClientRect()
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 }
+    }
+    throw new Error(`터미널 줄에 ${word}가 없음`)
+  }, word)
+}

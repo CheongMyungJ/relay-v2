@@ -20,7 +20,7 @@ import {
   submoduleList,
   submodulesAt,
 } from '../adapters/git'
-import { listFiles, readTextFile, writeTextFile } from '../adapters/files'
+import { listFiles, readTextFile, relativeFile, writeTextFile } from '../adapters/files'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
 import { procedureText } from '../adapters/claude'
 import {
@@ -101,9 +101,11 @@ import type {
   CustomTypeFiles,
   CustomTypeList,
   CustomTypeView,
+  FileChangesResult,
   FileListResult,
   FileReadResult,
   FileSaveResult,
+  FilesOpenTarget,
   MergeInput,
   NewWorkInput,
   NewWorkRepo,
@@ -1850,6 +1852,12 @@ export class Relay {
       : Promise.resolve({ ok: false, error: NO_WORKTREE })
   }
 
+  /** [파일] 탭 트리의 바뀐 파일 (D490) */
+  workFileChanges(workKey: string): Promise<FileChangesResult> {
+    const w = this.works.get(workKey)
+    return w ? w.filesChanges() : Promise.resolve({ ok: false, error: NO_WORKTREE })
+  }
+
   // ---------- 터미널 ----------
 
   /**
@@ -1928,6 +1936,25 @@ export class Relay {
     const bit = (st.mode & 0o111) !== 0
     const open = opensSafely(abs, dir, bit) && opensSafely(real, dir, bit)
     return open ? { path: real, open } : { path: abs, open }
+  }
+
+  /**
+   * Ctrl+클릭한 경로를 [파일] 탭에서 열지 (D491). Work의 터미널(task, 곁 세션, 정리 세션)이고 그 Work worktree 안의 글
+   * 파일(1 MB 이하 UTF-8)이면 열 자리, 아니면 null이다(OS 앱으로 연다). 기본 세션과 정리한 Work는 [파일] 탭이 없다
+   */
+  async terminalFilesTarget(key: string, raw: string): Promise<FilesOpenTarget | null> {
+    const i = key.lastIndexOf('/')
+    const workKey = i > 0 ? key.slice(0, i) : ''
+    const w = workKey.startsWith('sessions/') ? undefined : this.works.get(workKey)
+    const root = w?.filesRoot()
+    if (!w || !root) return null
+    const found = await this.resolveLink(w.cwd(), raw)
+    if (!found?.st.isFile()) return null
+    // 화면에 보인 경로(링크 그대로)를 먼저 본다. 그 경로가 worktree 밖이어도 링크를 따라간 실제 자리가 안이면 연다
+    const rel = (await relativeFile(root, found.path)) ?? (await relativeFile(root, found.real))
+    if (!rel) return null
+    const file = await readTextFile(root, rel)
+    return file.ok && file.kind === 'text' ? { workKey, path: rel } : null
   }
 
   /**
