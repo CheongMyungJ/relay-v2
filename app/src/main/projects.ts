@@ -1,6 +1,6 @@
 // 프로젝트 등록 (시나리오 0). 레포를 점검하고(D67) project.json을 만든다.
 // git 레포 루트, claude 로그인, 중복 등록은 실패하면 막고, origin과 gh(로그인과 버전, D198)는 경고만 한다.
-// 서브모듈이 있으면 relay가 다루지 않는 것을 경고한다(D382).
+// 서브모듈이 있으면 새 Work에서 고칠 레포로 고를 수 있음을 알린다(D470).
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
 import type { AgentEngine } from '../shared/agent'
@@ -150,17 +150,17 @@ async function inspect(
   const gh = await checkGh(o.ghBin, env, originUrl)
   checks.push(gh.item)
 
-  // 서브모듈은 막지 않고 relay가 다루지 않는 것을 알린다. 서브모듈이 없으면 줄도 없다 (D382). context.md와 정리와
-  // 같은 기준(.gitmodules에 있고 index에서 gitlink인 것)으로 본다 (D384)
+  // 서브모듈은 막지 않고, 새 Work의 고칠 레포 표에서 고를 수 있음과 고르지 않은 서브모듈을 다루는 법을 알린다
+  // (D382, D470). 서브모듈이 없으면 줄도 없다. context.md와 정리와 같은 기준(.gitmodules에 있고 index에서
+  // gitlink인 것)으로 본다 (D384)
   const submodules = root ? await submodulePaths(root, { env }).catch(() => []) : []
   if (submodules.length > 0) {
     checks.push({
       id: 'submodules',
-      label: '서브모듈이 없는가',
-      ok: false,
+      label: '서브모듈',
+      ok: true,
       blocking: false,
-      detail:
-        '서브모듈이 있습니다. 메인 레포의 Work는 worktree에 서브모듈을 받지 않고, 서브모듈 안의 변경을 커밋·전달·되감기하지 않습니다. [Work 정리]는 서브모듈 안의 작업도 함께 지웁니다. 서브모듈을 고치려면 새 Work의 대상에서 그 서브모듈을 고릅니다',
+      detail: `${submodules.join(', ')}. 새 Work의 고칠 레포 표에서 고르면 메인 레포와 함께 고치고 레포마다 전달합니다. 고르지 않은 서브모듈은 worktree에 받지 않고 그 안의 변경을 커밋·전달하지 않으며, [Work 정리]는 그 안의 작업도 함께 지웁니다`,
     })
   }
 

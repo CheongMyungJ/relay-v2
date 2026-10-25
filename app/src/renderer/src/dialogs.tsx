@@ -1836,7 +1836,7 @@ export function SettingsDialog({
             </label>
             <label
               className="form-row"
-              title="verify가 지식을 바꾸면 앱이 따로 부르는 짧은 검토 호출의 CLI. Work의 엔진과 따로 고른다 (D300, D334)"
+              title="마무리 단계(옛 Work는 verify)가 지식을 바꾸면 앱이 따로 부르는 짧은 검토 호출의 CLI. Work의 엔진과 따로 고른다 (D300, D334)"
             >
               <span>지식 검토 엔진</span>
               <select

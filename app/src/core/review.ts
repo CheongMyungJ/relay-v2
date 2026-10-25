@@ -407,7 +407,7 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '기존 테스트 변경',
       lines: [
         ...input.tests,
-        '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 verify를 다시 돌리지 않습니다 (D180).',
+        '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 독립 리뷰와 완료조건 판정을 다시 하지 않습니다 (D180).',
       ],
     })
   }
