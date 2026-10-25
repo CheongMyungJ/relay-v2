@@ -71,6 +71,16 @@ async function start(s: Scenario, env: Record<string, string> = {}, config = {})
   return { h, repo, projectId, workKey, workId, workDir }
 }
 
+/** 프로세스가 살아 있는가 */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function work(workDir: string): WorkState {
   return JSON.parse(read(path.join(workDir, 'work.json'))) as WorkState
 }
@@ -894,6 +904,27 @@ describe('[흐름] 독립 리뷰를 돌리지 못할 때 (D495)', () => {
     } finally {
       fs.rmSync(skills, { recursive: true, force: true })
     }
+  })
+})
+
+describe('[흐름] 독립 리뷰 중에 앱을 끌 때 (D496)', () => {
+  it('도는 리뷰 호출을 끝내고, 그 프로세스가 끝난 뒤에 끝난다: worktree를 잡고 있지 않다 (Windows의 EBUSY)', async () => {
+    const s = await start(scenario(), { FAKE_CLAUDE_INDEPENDENT_MS: '60000' })
+    const pidFile = path.join(s.h.root, 'scenario.json.independent-find-1.pid')
+    await s.h.ui.until(
+      () => s.h.ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval' || null,
+      'intake 승인 대기',
+    )
+    expect(await s.h.relay.approve(s.workKey, 't-01', {})).toEqual({ ok: true })
+    await s.h.ui.until(() => fs.existsSync(pidFile) || null, '리뷰 호출 시작', 30_000)
+    const pid = Number(read(pidFile))
+    expect(alive(pid)).toBe(true)
+    expect(s.h.ui.works.get(s.workKey)?.tasks[1]?.status).toBe('reviewing')
+    const t0 = Date.now()
+    await s.h.relay.close()
+    // 60초 기다리는 리뷰 호출을 끊었다: 끝을 기다리지 않고 바로 끝낸다
+    expect(Date.now() - t0).toBeLessThan(15_000)
+    expect(alive(pid)).toBe(false)
   })
 })
 

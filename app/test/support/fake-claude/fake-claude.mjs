@@ -68,6 +68,8 @@ if (argv[0] === '-p') {
     if (file) {
       fs.writeFileSync(`${file}.independent-${kind}-${n}.txt`, prompt)
       fs.writeFileSync(`${file}.independent-${kind}-${n}.json`, JSON.stringify(argv))
+      // 앱을 끌 때 이 호출을 끝내고 기다리는지 보는 시험이 읽는다
+      fs.writeFileSync(`${file}.independent-${kind}-${n}.pid`, String(process.pid))
     }
     const stream = argv[argv.indexOf('--output-format') + 1] === 'stream-json'
     const data =

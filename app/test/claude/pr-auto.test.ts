@@ -459,10 +459,11 @@ describe.runIf(enabled)('[실제] 자동 대응 (M11, 실제 claude와 실제 gh
           dry ? { ...fix, 'ci-fail': 'relay M11 dry\n' } : fix,
           'relay M11 시험: 자동 대응',
         )
+        // 둘째 대응 task는 t-04다: intake(t-01), 마무리 단계인 fix(t-02), 첫 대응(t-03) 다음 (D493)
         const w = await openPrWork(
           c,
           dry
-            ? { ...claude, tasks: { ...claude.tasks, 'pr-respond': DRY_RESPOND, 't-05': DRY_ASK } }
+            ? { ...claude, tasks: { ...claude.tasks, 'pr-respond': DRY_RESPOND, 't-04': DRY_ASK } }
             : claude,
           'relay M11 시험 (자동 대응): 수량의 합 totalQty를 더한다',
         )

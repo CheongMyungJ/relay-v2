@@ -732,6 +732,8 @@ export class WorkRunner {
   private readonly resumeInput = new Map<string, ResumeInput>()
   /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
   private readonly reviews = new Map<string, AbortController>()
+  /** 도는 독립 리뷰가 끝나는 때 (호출 프로세스가 끝남). 앱 종료가 worktree를 놓기 전에 기다린다 */
+  private readonly reviewRuns = new Map<string, Promise<void>>()
   /** 도는 독립 리뷰 호출의 진행 (D502). 기록하지 않고 리뷰가 도는 동안만 둔다 */
   private readonly reviewProgress = new Map<string, ReviewProgress>()
   /** task마다 자리를 잡아 세션을 띄우기 시작한 때. 진행 표시의 "세션을 띄우는 중"을 여기서부터 센다 (D216) */
@@ -1326,7 +1328,7 @@ export class WorkRunner {
     const controller = new AbortController()
     this.reviews.set(taskId, controller)
     const started = Date.now()
-    void ended
+    const run = ended
       .then(() =>
         controller.signal.aborted
           ? undefined
@@ -1348,7 +1350,18 @@ export class WorkRunner {
         const t = this.task(taskId)
         if (t?.status === 'reviewing')
           this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(t) })
+        if (this.reviewRuns.get(taskId) === run) this.reviewRuns.delete(taskId)
       })
+    this.reviewRuns.set(taskId, run)
+  }
+
+  /**
+   * 끊은 독립 리뷰들이 끝나기를 기다린다: 호출 프로세스가 worktree를 cwd로 잡고 있어, 앞서 끝내지 않으면 Windows에서
+   * worktree를 지우지 못한다(EBUSY). 처리 줄 밖에서 기다린다: 리뷰의 마지막 넣기가 처리 줄에 들어가 있다. KILL_WAIT_MS까지만
+   */
+  private async reviewsIdle(): Promise<void> {
+    const runs = [...this.reviewRuns.values()]
+    if (runs.length) await Promise.race([Promise.all(runs), sleep(KILL_WAIT_MS)])
   }
 
   /** 돌리지 못한 독립 리뷰를 실패한 결과로 끝낸다 (D495): 결과 글에 까닭을 쓰고 review.finished를 넣는다 */
@@ -4585,9 +4598,10 @@ export class WorkRunner {
     this.closing = true
     this.drafts.stop()
     this.stopPrTimers()
-    // 도는 독립 리뷰를 끊는다. 다음 실행 때 처음부터 다시 돌린다 (D496)
+    // 도는 독립 리뷰를 끊는다. 다음 실행 때 처음부터 다시 돌린다 (D496). 호출 프로세스가 끝나기를 함께 기다린다
     for (const r of this.reviews.values()) r.abort()
-    return this.enqueue(async () => {
+    const reviewsIdle = this.reviewsIdle()
+    const ended = this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
       if (task && this.live.has(task.id)) {
@@ -4605,6 +4619,7 @@ export class WorkRunner {
         this.endSide(),
       ])
     })
+    return Promise.all([ended, reviewsIdle]).then(() => undefined)
   }
 
   /**
@@ -4620,6 +4635,7 @@ export class WorkRunner {
     this.closing = true
     this.stopPrTimers()
     for (const r of this.reviews.values()) r.abort()
+    await this.reviewsIdle()
     await this.prIdle()
     await this.issueIdle()
     return this.enqueue(async () => {
