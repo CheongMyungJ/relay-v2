@@ -1,11 +1,12 @@
-// [실제] 실제 claude로 작은 일반 Work가 intake → execute → verify를 지나 끝까지 간다
+// [실제] 실제 claude로 작은 일반 Work가 intake → execute(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M18, I91, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - work-start가 머리글 없는 intent 초안에 일반의 기본 완료조건 둘과, 줄마다 확인 방법을 쓴다 (D304, D305)
 // - 읽기 쉬움처럼 명령으로 확인할 수 없는 조건은 `확인: 사람`으로 둔다 (D306)
 // - execute가 execution.md 네 절에 완료조건별 자체 확인을 적고 커밋한다 (D309, D310)
-// - verify가 사람 확인 항목을 물어 판정하고(D311), 일반 pr.md(주요 결정)를 쓴다 (D313)
+// - execute가 독립 리뷰를 요청해 받고(D494~D496), 사람 확인 항목을 물어 판정하고(D311), 일반 pr.md(주요 결정)를
+//   쓴다 (D313, D500)
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 앱 설정은
-// 기본값(실행 자동)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
+// 기본값(실행은 마무리 단계라 늘 수동, D498)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 general로 고른다.
 // 결과는 test-results/claude/general/와 general.md에 남긴다.
 import { execFileSync } from 'node:child_process'
@@ -201,14 +202,19 @@ function inspect(
   )
   need(out === KEPT, `범위 밖 동작이 바뀜: slugify('Hello Big World') = ${JSON.stringify(out)}`)
 
-  const pr = readIn('verify', 'pr.md')
+  need(
+    Boolean(task('execute')?.review?.resumed_at),
+    'execute가 독립 리뷰를 받아 다시 열리지 않음 (D494~D496)',
+  )
+  need(readIn('execute', 'independent-review.md') !== null, 'independent-review.md 없음 (D495)')
+  const pr = readIn('execute', 'pr.md')
   need(pr !== null, 'pr.md 없음')
   if (pr !== null) {
     const names = sectionNames(pr)
     need(names.includes('주요 결정'), 'pr.md에 ## 주요 결정 없음 (D313)')
     notes.push(`pr.md 절: ${names.join(', ')}`)
   }
-  const verification = readIn('verify', 'verification.md')
+  const verification = readIn('execute', 'verification.md')
   if (verification !== null) {
     const verdicts = sectionText(verification, '완료조건 판정') ?? ''
     // 사람 확인 항목은 사람에게 물어 판정하고 근거에 적는다 (D311)
@@ -254,15 +260,11 @@ describe.runIf(enabled)('[실제] 실제 claude로 일반 (M18, 8.4)', () => {
     console.log(text)
   })
 
-  it('작은 일반 Work가 intake → execute → verify → Work 완료로 간다', async () => {
+  it('작은 일반 Work가 intake → execute(마무리) → Work 완료로 간다', async () => {
     result = await run()
     expect(result.drive.reason).toBeNull()
     expect(result.drive.status).toBe('completed')
-    expect(result.drive.tasks.map((t) => t.label)).toEqual([
-      '01 의도 정리',
-      '02 실행',
-      '03 리뷰와 검증',
-    ])
+    expect(result.drive.tasks.map((t) => t.label)).toEqual(['01 의도 정리', '02 실행'])
     expect(result.drive.tasks.filter((t) => t.forced)).toEqual([])
     expect(result.problems).toEqual([])
   })

@@ -31,6 +31,7 @@ import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 import type { WorkRepo, WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 let clock = 0
 const at = () => `2026-10-24T10:${String(clock++ % 60).padStart(2, '0')}:00+09:00`
@@ -80,17 +81,20 @@ const MANUAL: AppConfig = {
 
 const apply = (work: WorkState, e: MachineEvent) => transition(work, e, MANUAL)
 
+/** 묶음 Work. 옛 파이프라인(intake → fix → verify, D501)으로 전달까지 간다 */
 function bundleWork(opts: { mainFixed?: boolean; repos?: WorkRepo[] } = {}): WorkState {
-  return createWork({
-    type: 'bugfix',
-    workId: 'w-20261024-001',
-    baseBranch: 'main',
-    baseCommit: 'main0001',
-    branch: 'relay/w-20261024-001-aaaa',
-    repos: opts.repos ?? [LIB],
-    ...(opts.mainFixed ? { mainFixed: true } : {}),
-    at: at(),
-  }).work
+  return legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20261024-001',
+      baseBranch: 'main',
+      baseCommit: 'main0001',
+      branch: 'relay/w-20261024-001-aaaa',
+      repos: opts.repos ?? [LIB],
+      ...(opts.mainFixed ? { mainFixed: true } : {}),
+      at: at(),
+    }).work,
+  )
 }
 
 /** task를 띄우고 승인 대기로 둔다. 묶음 Work의 서브모듈 시작 커밋을 함께 알린다 */

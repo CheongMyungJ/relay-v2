@@ -1,6 +1,6 @@
 // [흐름] 커스텀 유형 (docs/implementation.md M30, D447~D463). 가짜 claude로 레포의 두 단계 커스텀 유형 Work가
-// intake → 조사 → 적용 → verify → Work 완료로 가고, Work를 만들 때 복사한 정의로 끝까지 도는 것(D458), 단계별 자동 승인
-// 기본값(D457), 같은 id의 레포 유형이 이기는 것(D451), 깨진 유형을 막는 것(D460), 업무 유형 화면의 명령(D459)을 본다.
+// intake → 조사 → 적용(마무리, D493) → Work 완료로 가고, Work를 만들 때 복사한 정의로 끝까지 도는 것(D458), 단계별 자동 승인
+// 기본값(D457)과 마무리 단계는 늘 수동임(D498), 같은 id의 레포 유형이 이기는 것(D451), 깨진 유형을 막는 것(D460), 업무 유형 화면의 명령(D459)을 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -16,6 +16,7 @@ import {
   REPO_FILES,
   REVIEW_NONE,
   customSteps,
+  finishingSteps,
   generalIntentDraft,
   steps,
   type Scenario,
@@ -35,7 +36,7 @@ const TYPE = {
   name: '조사 후 적용',
   description: '먼저 바꿀 곳을 조사하고 그대로 적용하는 일',
   steps: [
-    { id: 'survey', title: '조사', sections: ['조사한 곳', '적용 계획'], auto_approve: false },
+    { id: 'survey', title: '조사', sections: ['조사한 곳', '적용 계획'], auto_approve: true },
     { id: 'apply', title: '적용', auto_approve: true },
   ],
 }
@@ -49,7 +50,10 @@ function writeType(dir: string, def: object = TYPE, extra: Record<string, string
   for (const [name, text] of Object.entries(extra)) fs.writeFileSync(path.join(dir, name), text)
 }
 
-/** 두 커스텀 단계의 시나리오: 단계는 task id(t-02, t-03)로 고른다. intake와 verify는 일반과 같은 intent·판정이다 (D455, D456) */
+/**
+ * 두 커스텀 단계의 시나리오: 단계는 task id(t-02, t-03)로 고른다. intake와 마무리(적용 단계의 리뷰 요청과 리뷰를 받은 뒤)는
+ * 일반과 같은 intent·판정이다 (D455, D456, D493)
+ */
 function customScenario(): Scenario {
   const intake = steps('intake').map((st) =>
     st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: generalIntentDraft() } : st,
@@ -61,13 +65,14 @@ function customScenario(): Scenario {
         ? { ...st, text: GENERAL_PR }
         : st,
   )
+  const apply = finishingSteps(customSteps('apply'), GENERAL_VERDICTS, verify)
   return {
     tasks: {
       'work-start': intake,
       't-02': customSteps('survey', { sections: ['조사한 곳', '적용 계획'], commit: false }),
-      't-03': customSteps('apply'),
-      verify,
+      't-03': apply.own,
     },
+    reviewed: { 't-03': apply.reviewed },
   }
 }
 
@@ -108,7 +113,7 @@ function events(dir: string): LifecycleEvent[] {
 }
 
 describe('[흐름] 커스텀 유형 (M30)', () => {
-  it('레포 유형으로 intake → 조사 → 적용(자동 승인) → verify → [완료만]. 단계마다 사람이 쓴 절차를 받는다 (D447, D452, D457)', async () => {
+  it('레포 유형으로 intake → 조사(자동 승인) → 적용(마무리, 늘 수동) → [완료만]. 단계마다 사람이 쓴 절차를 받는다 (D447, D452, D457, D493, D498)', async () => {
     const s = await setup(customScenario())
     writeType(s.repoType, TYPE, { 'intake.md': '조사할 범위를 제약에 적는다.\n' })
     const base = git(s.repo, 'rev-parse', 'main')
@@ -124,9 +129,8 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
     expect(result.tasks.map((t) => [t.label, t.bounces, t.auto])).toEqual([
       ['01 의도 정리', 0, false],
-      ['02 조사', 0, false],
-      ['03 적용', 0, true],
-      ['04 리뷰와 검증', 0, false],
+      ['02 조사', 0, true],
+      ['03 적용', 0, false],
     ])
 
     const w = work(dir)
@@ -138,9 +142,8 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
     expect(w.custom_type?.hash).toMatch(/^sha256:/)
     expect(w.tasks.map((t) => [t.id, t.node, t.step ?? null, t.approved_by])).toEqual([
       ['t-01', 'intake', null, 'human'],
-      ['t-02', 'custom', 'survey', 'human'],
-      ['t-03', 'custom', 'apply', 'auto'],
-      ['t-04', 'verify', null, 'human'],
+      ['t-02', 'custom', 'survey', 'auto'],
+      ['t-03', 'custom', 'apply', 'human'],
     ])
     expect(events(dir)[0]).toMatchObject({
       type: 'work.created',
@@ -154,7 +157,6 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
       '01-intake',
       '02-survey',
       '03-apply',
-      '04-verify',
     ])
     expect(read(path.join(dir, 'tasks', '02-survey', 'survey.md'))).toContain('## 적용 계획')
     expect(fs.readdirSync(path.join(dir, 'type')).sort()).toEqual([
@@ -176,26 +178,28 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
       `${CUSTOM_PROCEDURE_HEAD}\n\n조사한 대로 바꾸고 커밋한다.\n`,
     )
     expect(instructions('03-apply')).not.toContain('고친 절차')
-    expect(instructions('04-verify')).toContain('artifacts of the custom steps')
-    expect(instructions('04-verify')).not.toContain('`execution.md`')
+    // 마무리 절차는 마지막 단계인 적용에만 붙는다 (D493)
+    expect(instructions('03-apply')).toMatch(/^## Finishing the Work$/m)
+    expect(instructions('03-apply')).not.toContain('`execution.md`')
+    expect(instructions('02-survey')).not.toMatch(/^## Finishing the Work$/m)
 
-    // context.md: 유형과 단계, 이 단계의 산출물. verify는 두 단계의 산출물 경로를 받는다
+    // context.md: 유형과 단계, 이 단계의 산출물. 적용은 앞 단계의 산출물 경로와 마무리 절을 받는다
     const surveyCtx = read(path.join(dir, 'tasks', '02-survey', 'context.md'))
     expect(surveyCtx).toContain('- 업무 유형: 조사 후 적용 (커스텀 유형 `survey-apply`)')
-    expect(surveyCtx).toContain('- 단계: 의도 정리 → 조사(`survey`) → 적용(`apply`) → 리뷰와 검증')
+    expect(surveyCtx).toContain('- 단계: 의도 정리 → 조사(`survey`) → 적용(`apply`)\n')
     expect(surveyCtx).toContain(
       '- 이 단계의 산출물: `survey.md`, 절 `## 조사한 곳`, `## 적용 계획`',
     )
-    const verifyCtx = read(path.join(dir, 'tasks', '04-verify', 'context.md'))
-    expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-survey', 'survey.md'))
-    expect(verifyCtx).toContain(path.join(dir, 'tasks', '03-apply', 'apply.md'))
+    const applyCtx = read(path.join(dir, 'tasks', '03-apply', 'context.md'))
+    expect(applyCtx).toContain(path.join(dir, 'tasks', '02-survey', 'survey.md'))
+    expect(applyCtx).toContain('## 마무리\n')
     expect(read(path.join(dir, 'decisions.md'))).toMatch(/^## t-02 custom:survey — /m)
 
     const skills = s.h
       .records()
       .filter((x) => x['type'] === 'start' && !x['resume'])
       .map((x) => x['skill'])
-    expect(skills).toEqual(['work-start', 'custom', 'custom', 'verify'])
+    expect(skills).toEqual(['work-start', 'custom', 'custom'])
     // 적용 단계의 커밋. 조사 단계는 커밋하지 않았다
     expect(git(s.tree(key), 'log', '--format=%s', `${base}..HEAD`)).toBe('chore: apply 단계')
     expect(s.h.ui.works.get(key)?.customType).toMatchObject({ id: 'survey-apply', source: 'repo' })

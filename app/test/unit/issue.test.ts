@@ -32,6 +32,7 @@ import type { TaskCheck } from '../../src/core/validate'
 import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 import type { IssueRecord, LifecycleEvent, TaskRecord, WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 let clock = 0
 const at = () => `2026-10-05T10:${String(clock++ % 60).padStart(2, '0')}:00+09:00`
@@ -72,15 +73,18 @@ const VALID: TaskCheck = {
 
 const apply = (work: WorkState, event: MachineEvent): Transition => transition(work, event, MANUAL)
 
+/** 옛 Work (intake → fix → verify, D501): task마다의 코멘트를 세 단계로 본다 */
 function newWork(issue: NewWork['issue'] | null = { linked: null, mark: 'w-1-abcd' }): WorkState {
-  return createWork({
-    type: 'bugfix',
-    workId: 'w-20261005-001',
-    baseBranch: 'main',
-    baseCommit: 'base0001',
-    ...(issue ? { issue } : {}),
-    at: at(),
-  }).work
+  return legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20261005-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      ...(issue ? { issue } : {}),
+      at: at(),
+    }).work,
+  )
 }
 
 /** 지금 task를 띄우고 Stop을 받아 승인 대기로 둔 뒤 승인한다 */

@@ -18,18 +18,22 @@ import {
 } from '../../src/shared/agent'
 import type { WorkState } from '../../src/shared/work'
 import type { Handoff } from '../../src/shared/contracts'
+import { legacy } from '../support/legacy'
 
 const at = '2026-09-30T10:00:00Z'
 const codex = { ...DEFAULT_CONFIG, agent_engine: 'codex' as const }
+// 옛 Work(D501): fix를 승인하면 verify를 만든다. 엔진은 새로 만드는 task에 그 순간의 설정을 쓴다
 const makeWork = (engine: AgentEngine = 'claude') =>
-  createWork({
-    type: 'bugfix',
-    engine,
-    workId: 'w-20260930-001',
-    baseBranch: 'main',
-    baseCommit: 'base',
-    at,
-  }).work
+  legacy(
+    createWork({
+      type: 'bugfix',
+      engine,
+      workId: 'w-20260930-001',
+      baseBranch: 'main',
+      baseCommit: 'base',
+      at,
+    }).work,
+  )
 
 const handoff: Handoff = {
   status: 'awaiting_approval',

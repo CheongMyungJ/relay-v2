@@ -43,6 +43,7 @@ import { DEFAULT_CONFIG, type AppConfig } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 import type { PrItem } from '../../src/shared/pr'
 import type { TaskRecord, WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 // ---------- 도움 ----------
 
@@ -124,13 +125,15 @@ const HEAD = 'head0001'
 
 /** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9). 파이프라인의 단계는 자동 승인을 끈 설정으로 지난다 */
 function inPr(settings: WorkState['settings'] = {}): WorkState {
-  let work = createWork({
-    type: 'bugfix',
-    workId: 'w-20260929-011',
-    baseBranch: 'main',
-    baseCommit: 'base0001',
-    at: at(),
-  }).work
+  let work = legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20260929-011',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work,
+  )
   for (const check of [valid(), valid()]) {
     work = approve(stop(launch(work), check, DEFAULT_CONFIG).work, check).work
   }

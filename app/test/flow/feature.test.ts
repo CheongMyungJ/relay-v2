@@ -1,6 +1,6 @@
 // [흐름] 기능 추가 유형 (docs/implementation.md M14, I61). 가짜 claude로 기능 추가 Work가
-// intake → design → implement → verify → Work 완료로 가고, 설계와 계획의 기본 수동 승인과 켰을 때의 자동 승인,
-// 구현의 기본 자동 승인을 본다. 버그 수정 흐름은 flow.test.ts가 본다.
+// intake → design → implement(마무리, D493) → Work 완료로 가고, 설계와 계획의 기본 수동 승인과 켰을 때의 자동 승인,
+// 마무리 단계인 구현은 자동 승인을 켜도 사람이 승인함을 본다. 버그 수정 흐름은 flow.test.ts가 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -8,7 +8,7 @@ import { parseFrontMatter } from '../../src/core/validate'
 import type { AppConfig } from '../../src/shared/config'
 import type { LifecycleEvent, WorkState, WorkType } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import { git, harness, makeRepo, register, settle, sleep, type Harness } from '../support/harness'
 import {
   FEATURE_FILES,
   FEATURE_REQUEST,
@@ -16,8 +16,20 @@ import {
   REPO_FILES,
   featureIntentDraft,
   featureScenario,
+  steps,
   type Scenario,
+  type Step,
 } from '../support/scenarios'
+
+const ALL_OFF = {
+  fix: false,
+  design: false,
+  implement: false,
+  refactor: false,
+  spec: false,
+  execute: false,
+  respond: false,
+}
 
 let h: Harness | undefined
 
@@ -78,7 +90,7 @@ function events(dir: string): LifecycleEvent[] {
 const statuses = (w: WorkState) => w.tasks.map((t) => [t.id, t.node, t.status, t.reason])
 
 describe('[흐름] 기능 추가 유형 (M14)', () => {
-  it('intake → design → implement → verify → [완료만]. intent 확정본에 type: feature를 붙인다 (D232, D236)', async () => {
+  it('intake → design → implement(마무리) → [완료만]. intent 확정본에 type: feature를 붙인다 (D232, D236, D493)', async () => {
     const s = await setup(featureScenario())
     const key = await s.create()
     const dir = s.dir(key)
@@ -90,7 +102,6 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
       ['01 의도 정리', 0, false],
       ['02 설계와 계획', 0, false],
       ['03 구현', 0, false],
-      ['04 리뷰와 검증', 0, false],
     ])
 
     const w = work(dir)
@@ -99,8 +110,8 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'design', 'approved', 'default'],
       ['t-03', 'implement', 'approved', 'default'],
-      ['t-04', 'verify', 'approved', 'default'],
     ])
+    expect(w.tasks[2]?.review).toMatchObject({ code_review: true, resumed_at: expect.any(String) })
     expect(s.h.ui.works.get(key)?.type).toBe('feature')
     expect(events(dir)[0]).toMatchObject({ type: 'work.created', payload: { type: 'feature' } })
 
@@ -115,7 +126,6 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
       base.slice(0, 7),
       base.slice(0, 7),
       base.slice(0, 7),
-      git(tree, 'rev-parse', 'HEAD').slice(0, 7),
     ])
     expect(git(tree, 'log', '--format=%s', `${base}..HEAD`).split('\n')).toEqual([
       'feat: median',
@@ -128,28 +138,31 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
     for (const [task, file] of [
       ['02-design', 'design.md'],
       ['03-implement', 'implement.md'],
-      ['04-verify', 'verification.md'],
+      ['03-implement', 'verification.md'],
+      ['03-implement', 'pr.md'],
+      ['03-implement', 'independent-review.md'],
     ] as const) {
       expect(fs.existsSync(path.join(dir, 'tasks', task, file)), file).toBe(true)
     }
 
-    // context.md: 업무 유형과 기능 추가의 다음 단계 (D236, 3.2). verify는 design.md와 implement.md 경로를 받는다
+    // context.md: 업무 유형과 기능 추가의 다음 단계 (D236, 3.2). 마무리 단계인 implement만 마무리 절이 있다 (D493)
     const designCtx = read(path.join(dir, 'tasks', '02-design', 'context.md'))
     expect(designCtx).toContain('- 업무 유형: 기능 추가·변경 (`feature`)')
     expect(designCtx).not.toContain('선택 가능한 다음 단계')
-    const verifyCtx = read(path.join(dir, 'tasks', '04-verify', 'context.md'))
-    expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-design', 'design.md'))
-    expect(verifyCtx).toContain(path.join(dir, 'tasks', '03-implement', 'implement.md'))
+    expect(designCtx).not.toContain('## 마무리\n')
+    const implementCtx = read(path.join(dir, 'tasks', '03-implement', 'context.md'))
+    expect(implementCtx).toContain(path.join(dir, 'tasks', '02-design', 'design.md'))
+    expect(implementCtx).toContain('## 마무리\n')
 
-    // 배포한 스킬: design, implement (5.6.3)
+    // 배포한 스킬: design, implement (5.6.3). implement는 리뷰 결과로 다시 열었을 뿐 새로 시작하지 않았다
     const skills = s.h
       .records()
       .filter((r) => r['type'] === 'start' && !r['resume'])
       .map((r) => r['skill'])
-    expect(skills).toEqual(['work-start', 'design', 'implement', 'verify'])
+    expect(skills).toEqual(['work-start', 'design', 'implement'])
   })
 
-  it('앱 기본값: 설계와 계획은 사람이 승인하고 구현은 자동 승인한다. 설계와 계획의 자동 승인은 켤 수 있다 (D234, D249)', async () => {
+  it('앱 기본값: 설계와 계획은 사람이 승인한다. 구현은 마무리 단계라 자동 승인을 켜도 사람이 승인한다. 설계와 계획의 자동 승인은 켤 수 있다 (D234, D249, D493)', async () => {
     const s = await setup(
       featureScenario(),
       { auto_approve_countdown_sec: 1 } as Partial<AppConfig>,
@@ -161,16 +174,14 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
     expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
       ['01 의도 정리', false],
       ['02 설계와 계획', false],
-      ['03 구현', true],
-      ['04 리뷰와 검증', false],
+      ['03 구현', false],
     ])
     await settle(s.h, key)
     const by = work(s.dir(key)).tasks.map((t) => [t.node, t.approved_by])
     expect(by).toEqual([
       ['intake', 'human'],
       ['design', 'human'],
-      ['implement', 'auto'],
-      ['verify', 'human'],
+      ['implement', 'human'],
     ])
     await h?.close()
     h = undefined
@@ -194,7 +205,52 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
       ['01 의도 정리', false],
       ['02 설계와 계획', true],
       ['03 구현', false],
-      ['04 리뷰와 검증', false],
     ])
+  })
+
+  it('Stop 없이 세션이 끝나도 유효한 handoff가 있으면 승인 대기로 알린다. 이 경로는 자동 승인하지 않는다 (3.3, D146)', async () => {
+    // 마무리 단계가 아닌 설계와 계획 단계로 본다: 자동 승인을 켰어도 세션 종료로 온 승인 대기는 사람이 승인한다
+    const design = steps('design').map((st): Step => (st.do === 'stop' ? { do: 'exit' } : st))
+    const s = await setup(featureScenario({ design }), {
+      auto_approve: { ...ALL_OFF, design: true },
+      auto_approve_countdown_sec: 1,
+    })
+    const key = await s.create()
+    const dir = s.dir(key)
+    const ui = s.h.ui
+    await drive(s.h.relay, ui, key, { pauseAt: (t) => t.node === 'design' })
+    const task = await ui.until(
+      () => {
+        const t = ui.works.get(key)?.tasks[1]
+        return t && !t.live && t.status !== 'working' ? t : null
+      },
+      '세션 종료',
+      60_000,
+    )
+    expect(task).toMatchObject({ id: 't-02', status: 'awaiting_approval', countdown: null })
+    expect(ui.notices.map((n) => n.body)).toEqual([
+      '01 의도 정리: 승인 대기',
+      '02 설계와 계획: 승인 대기',
+    ])
+    // 카운트다운 초가 지나도 자동 승인하지 않는다
+    await sleep(2_000)
+    await settle(s.h, key)
+    expect(work(dir).tasks[1]).toMatchObject({
+      status: 'awaiting_approval',
+      session: { alive: false },
+    })
+    expect(
+      events(dir)
+        .filter((e) => e.task_id === 't-02')
+        .map((e) => [e.type, e.payload]),
+    ).toEqual([
+      ['task.started', expect.anything()],
+      ['task.first_output', expect.anything()],
+      ['task.first_hook', expect.anything()],
+      ['task.awaiting_approval', { reason: 'session_ended' }],
+    ])
+    // 사람은 승인하고 다음 단계로 간다
+    const result = await drive(s.h.relay, ui, key)
+    expect(result, ui.dump()).toMatchObject({ status: 'completed' })
   })
 })

@@ -14,7 +14,10 @@
     "risks"
   ],
   "properties": {
-    "status": { "enum": ["awaiting_approval", "blocked"] },
+    "status": {
+      "description": "review_requested는 마무리 단계(Work의 마지막 작업 단계)가 판정표를 쓴 뒤 독립 리뷰를 요청할 때 task마다 한 번 쓴다(D494).",
+      "enum": ["awaiting_approval", "blocked", "review_requested"]
+    },
     "blocked_reason": {
       "oneOf": [
         { "type": "null" },

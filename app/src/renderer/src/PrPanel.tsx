@@ -473,11 +473,12 @@ function MergeDialog({ work, pr, onClose }: { work: WorkView; pr: PrView; onClos
           <div className="dim">그사이 PR에 새 커밋이 생기면 머지하지 않습니다.</div>
           {info.stale ? (
             <div className="notice fail" role="alert" aria-label="판정표 경고">
-              <strong>판정표는 대응 전 코드 기준입니다.</strong> verify 뒤에 코드가 바뀌었습니다:
+              <strong>판정표는 대응 전 코드 기준입니다.</strong> Work를 마무리한 뒤 코드가
+              바뀌었습니다:
               {info.stale.rounds ? ` 커밋을 push한 대응 라운드 ${info.stale.rounds}개` : ''}
               {info.stale.rounds && info.stale.synced ? ',' : ''}
               {info.stale.synced ? ` 받은 원격 커밋 ${info.stale.synced}개` : ''}. 대응 뒤에는
-              verify를 다시 돌리지 않고, 대응 task의 테스트 실행과 CI로 갈음합니다 (D180).
+              판정을 다시 하지 않고, 대응 task의 테스트 실행과 CI로 갈음합니다 (D180).
               {info.verdicts.length ? (
                 <table className="verdicts">
                   <thead>

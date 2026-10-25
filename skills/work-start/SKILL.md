@@ -95,9 +95,9 @@ Scope (`비목표`) and completion criteria (`완료조건`). This step has no h
 - Always start with these default items. No test command item: only the document changes.
   `- [ ] 대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다` / `- [ ] 문서의 서술이 서로, 그리고 지금 코드와 어긋나지 않는다` / `- [ ] 정하지 않고 남긴 것은 문서의 따로 둔 절에 이유와 함께 있다`
 - Then add what the design must decide, as "<무엇>을 정한다", one per line (e.g. "PR 머지 조건을 정한다"). Not how to decide it. Agree on this list with the human: it is the scope of this Work.
-- No check method (` — 확인: …`) on any line: verify judges them by reading the document and the diff.
+- No check method (` — 확인: …`) on any line: they are judged by reading the document and the diff.
 <!-- /type -->
-- One verifiable sentence per line. Never include push or PR. They happen after verify, so verify cannot judge them.
+- One verifiable sentence per line. Never include push or PR. They happen after the Work completes, so they cannot be judged.
 
 ## Done when
 

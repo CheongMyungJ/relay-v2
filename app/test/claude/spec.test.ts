@@ -1,11 +1,12 @@
 // [실제] 실제 claude로 설계 유형 (docs/implementation.md M20, I110, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - spec: 작은 설계 Work 하나가 intake → spec → verify → Work 완료로 간다. work-start가 대상 문서를 `제약`에 적고(D351)
+// - spec: 작은 설계 Work 하나가 intake → spec(마무리, D493) → Work 완료로 간다. work-start가 대상 문서를 `제약`에 적고(D351)
 //   "정한다" 완료조건과 기본 항목 셋을 쓰며(D354, D355), spec이 주제 목록을 물은 뒤 주제마다 질문 묶음을 내고(D357)
-//   대상 문서만 커밋하며 코드 파일은 바꾸지 않고(D350), spec.md에 주제 목록이 있다. verify는 설계 pr.md를 쓴다 (D364)
+//   대상 문서만 커밋하며 코드 파일은 바꾸지 않고(D350), spec.md에 주제 목록이 있다. spec은 독립 리뷰를 받고 설계 pr.md를
+//   쓴다 (D364, D494~D500)
 // - spec-follow: 설계 문서가 있는 레포에서 요청에 그 경로를 적은 기능 추가 Work의 intake만 돌려, intent `제약`에 경로가
 //   "의 결정을 따른다"로 옮겨졌는지 본다 (D369, D373)
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 앱 설정은 기본값(설계
-// 문답 자동)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
+// 문답은 마무리 단계라 늘 수동, D498)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 spec, spec-follow로 고른다.
 // 결과는 test-results/claude/spec/, spec-follow/와 spec.md에 남긴다.
 import fs from 'node:fs'
@@ -218,7 +219,7 @@ function inspectSpec(
     notes.push(`주제 목록: ${(sectionText(spec, '주제 목록') ?? '').replace(/\n/g, ' / ')}`)
   }
 
-  // 대상 문서만 커밋하고 코드는 바꾸지 않는다 (D350, D355). 지식 파일은 verify가 커밋할 수 있다 (D361)
+  // 대상 문서만 커밋하고 코드는 바꾸지 않는다 (D350, D355). 지식 파일은 마무리 단계가 커밋할 수 있다 (D361, D500)
   const changed = git(tree, 'diff', '--name-only', base, 'HEAD').split('\n').filter(Boolean)
   notes.push(`바뀐 파일: ${changed.join(', ') || '없음'}`)
   if (target) need(changed.includes(target), `대상 문서(${target})가 커밋되지 않음`)
@@ -226,7 +227,10 @@ function inspectSpec(
   need(outside.length === 0, `대상 문서와 지식 밖의 파일을 바꿈: ${outside.join(', ')}`)
   need(git(tree, 'status', '--porcelain') === '', '커밋 안 된 변경이 남음')
 
-  const pr = readIn('verify', 'pr.md')
+  const final = work.tasks.findLast((t) => t.node === 'spec' && t.status === 'approved')
+  need(Boolean(final?.review?.resumed_at), 'spec이 독립 리뷰를 받아 다시 열리지 않음 (D494~D496)')
+  need(readIn('spec', 'independent-review.md') !== null, 'independent-review.md 없음 (D495)')
+  const pr = readIn('spec', 'pr.md')
   need(pr !== null, 'pr.md 없음')
   if (pr !== null) {
     const names = sectionNames(pr)
@@ -234,7 +238,7 @@ function inspectSpec(
       need(names.includes(s), `pr.md에 ## ${s} 없음 (D364)`)
     notes.push(`pr.md 절: ${names.join(', ')}`)
   }
-  const verification = readIn('verify', 'verification.md')
+  const verification = readIn('spec', 'verification.md')
   if (verification !== null) {
     const names = sectionNames(verification)
     need(names.includes('문서 밖 파일 변경'), 'verification.md에 ## 문서 밖 파일 변경 없음 (D374)')
@@ -299,7 +303,7 @@ describe.runIf(runs('spec') || runs('spec-follow'))('[실제] 실제 claude로 �
     console.log(text)
   })
 
-  it.runIf(runs('spec'))('작은 설계 Work가 intake → spec → verify → Work 완료로 간다', async () => {
+  it.runIf(runs('spec'))('작은 설계 Work가 intake → spec(마무리) → Work 완료로 간다', async () => {
     const r = await run('spec', {
       type: 'spec',
       request: SPEC_REQUEST,
@@ -309,11 +313,7 @@ describe.runIf(runs('spec') || runs('spec-follow'))('[실제] 실제 claude로 �
     results.push(r)
     expect(r.drive.reason).toBeNull()
     expect(r.drive.status).toBe('completed')
-    expect(r.drive.tasks.map((t) => t.label)).toEqual([
-      '01 의도 정리',
-      '02 설계 문답',
-      '03 리뷰와 검증',
-    ])
+    expect(r.drive.tasks.map((t) => t.label)).toEqual(['01 의도 정리', '02 설계 문답'])
     expect(r.drive.tasks.filter((t) => t.forced)).toEqual([])
     expect(r.problems).toEqual([])
   })

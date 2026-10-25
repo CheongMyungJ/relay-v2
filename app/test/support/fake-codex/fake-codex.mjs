@@ -26,18 +26,13 @@ if (argv[0] === 'login') {
 
 // codex exec (지식 검토 호출, D300, D334): 표준 입력의 프롬프트를 남기고 시나리오의 review[n](n번째 호출, 없으면 문제
 // 없음)을 -o 파일에 쓴다. --output-schema 파일이 있어야 한다. 받은 인자는 <시나리오>.review-args.json에 남긴다.
-// 가짜 claude와 같은 호출 수 파일을 쓴다. FAKE_CODEX_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다
+// 가짜 claude와 같은 호출 수 파일을 쓴다. FAKE_CODEX_REVIEW_FAIL이 있으면 종료 코드 1로 끝난다.
+// 독립 리뷰(D495)는 스키마에 candidates가 있는 호출이다: later가 있으면 찾기, 없으면 확인이다. 가짜 claude와 같은 파일
+// (<시나리오>.independent-<찾기|확인>-<n>.txt·.json)에 남기고 시나리오의 independent.find·check(없으면 지적·이의 없음)를 쓴다
 if (argv[0] === 'exec') {
   const prompt = fs.readFileSync(0, 'utf8')
   const file = env.FAKE_CODEX_SCENARIO
   const scenario = file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
-  const counter = `${file ?? path.join(process.cwd(), 'fake-codex')}.review-count`
-  const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0
-  fs.writeFileSync(counter, String(n + 1))
-  if (file) {
-    fs.writeFileSync(`${file}.review-${n + 1}.txt`, prompt)
-    fs.writeFileSync(`${file}.review-args.json`, JSON.stringify(argv))
-  }
   const opt = (name) => {
     const i = argv.indexOf(name)
     return i >= 0 ? argv[i + 1] : undefined
@@ -48,11 +43,35 @@ if (argv[0] === 'exec') {
     process.stderr.write('가짜 codex exec: --output-schema 파일과 -o가 필요함\n')
     process.exit(2)
   }
-  if (env.FAKE_CODEX_REVIEW_FAIL) {
+  const shape = JSON.parse(fs.readFileSync(schema, 'utf8'))
+  const kind = shape.properties?.candidates
+    ? 'later' in shape.properties
+      ? 'find'
+      : 'check'
+    : null
+  const counter = `${file ?? path.join(process.cwd(), 'fake-codex')}.${kind ? `independent-${kind}` : 'review'}-count`
+  const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0
+  fs.writeFileSync(counter, String(n + 1))
+  if (file && kind) {
+    fs.writeFileSync(`${file}.independent-${kind}-${n + 1}.txt`, prompt)
+    fs.writeFileSync(`${file}.independent-${kind}-${n + 1}.json`, JSON.stringify(argv))
+  } else if (file) {
+    fs.writeFileSync(`${file}.review-${n + 1}.txt`, prompt)
+    fs.writeFileSync(`${file}.review-args.json`, JSON.stringify(argv))
+  }
+  if (env.FAKE_CODEX_REVIEW_FAIL && !kind) {
     process.stderr.write('가짜 실패\n')
     process.exit(1)
   }
-  fs.writeFileSync(out, JSON.stringify(scenario.review?.[n] ?? { issues: [] }))
+  fs.writeFileSync(
+    out,
+    JSON.stringify(
+      kind
+        ? (scenario.independent?.[kind] ??
+            (kind === 'find' ? { candidates: [], later: [] } : { candidates: [], objections: [] }))
+        : (scenario.review?.[n] ?? { issues: [] }),
+    ),
+  )
   process.stdout.write(`${JSON.stringify({ type: 'thread.started', thread_id: randomUUID() })}\n`)
   process.stdout.write(
     `${JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 900, cached_input_tokens: 100, output_tokens: 40 } })}\n`,
@@ -298,7 +317,10 @@ await steps(
         ? (scenario.sessionResumeCodex ?? scenario.sessionResume)
         : side
           ? (scenario.sideResumeCodex ?? scenario.sideResume)
-          : scenario.resume?.[context.skill]) ?? [])
+          : resumePrompt?.startsWith('relay: 독립 리뷰가 끝났습니다')
+            ? // 독립 리뷰 결과로 다시 연 마무리 세션 (D496)
+              scenario.reviewed?.[context.skill]
+            : scenario.resume?.[context.skill]) ?? [])
     : context.skill
       ? (scenario.tasks?.[context.skill] ?? [])
       : session

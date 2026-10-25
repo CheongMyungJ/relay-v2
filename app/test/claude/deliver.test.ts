@@ -1,8 +1,8 @@
 // [실제] 실제 claude로 전달과 정리 (docs/implementation.md M5, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - 실제 리뷰와 검증 스킬이 쓴 pr.md를 앱이 PR의 제목과 본문으로 읽는다 (D62)
+// - 실제 마무리 단계(수정)가 쓴 pr.md를 앱이 PR의 제목과 본문으로 읽는다 (D62, D500)
 // - 마무리 안내 문구가 [push]·[PR 생성]을 가리켜도 에이전트는 push하거나 PR을 만들지 않는다 (D17, D104)
 // - 첫 프롬프트 없이 연 정리 세션([AI 세션 열기], 7-5)이 사람의 요청을 받아 일하고, 턴이 끝나면 Stop 훅이 온다
-// S 요청 레포에서 리뷰와 검증이 승인 대기가 되면 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을
+// S 요청 레포에서 마무리 단계가 독립 리뷰를 받고 승인 대기(Work 완료 화면)가 되면 사람 역할이 worktree에 커밋 안 된 메모를 남기고 [PR 생성]을
 // 누른다. 커밋 안 된 변경의 선택지에서 [AI 세션 열기]로 정리 세션을 열어 메모를 지워 달라고 하고, 턴이 끝나
 // git status가 깨끗해지면 [정리 끝 → push/PR 진행]을 누른다. 앱이 push하고 PR을 만들면 Work는 PR 진행이 된다(D152).
 // [머지 없이 끝내기](D179)로 완료한 뒤 [Work 정리]로 worktree를 지운다.
@@ -29,7 +29,7 @@ import {
   sleep,
   workBranchOf,
 } from '../support/harness'
-import { scenario, type Scenario } from '../support/scenarios'
+import { atCompletion, scenario, type Scenario } from '../support/scenarios'
 import { S_CASE } from './repos'
 import { redact, ScreenUi } from './screen'
 
@@ -50,7 +50,7 @@ const READY_HINT = /for agents|for shortcuts|shift\+tab to cycle/i
 
 /** 가짜 claude의 시나리오 (dry): 기본 경로와, 정리 세션에서 사람의 요청대로 메모를 지운다 */
 const DRY: Scenario = {
-  tasks: scenario().tasks,
+  ...scenario(),
   cleanup: [
     { do: 'waitEnter' },
     { do: 'prompt' },
@@ -161,7 +161,7 @@ async function run(): Promise<Result> {
         () => (cleanupTerm ? ui.handleDialogs(h.relay, cleanupTerm) : undefined),
       )
 
-    // 1. 리뷰와 검증이 승인 대기가 될 때까지
+    // 1. 마무리 단계가 독립 리뷰를 받고 승인 대기(Work 완료 화면)가 될 때까지 (D493)
     const first = await drive(h.relay, ui, key, {
       force: true,
       nudge: NUDGE,
@@ -170,19 +170,22 @@ async function run(): Promise<Result> {
       tick: async (task) => {
         if (task.status !== 'asking') await ui.handleDialogs(h.relay, task.terminal)
       },
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion('fix'),
     })
     tasks.push(...first.tasks)
-    if (first.status !== 'paused') throw new Error(`리뷰와 검증 전에 멈춤: ${first.reason ?? ''}`)
+    if (first.status !== 'paused')
+      throw new Error(`Work 완료 화면 전에 멈춤: ${first.reason ?? ''}`)
     await settle(h, key)
-    const verify = load().tasks.at(-1)
-    if (verify?.node !== 'verify') throw new Error('지금 task가 리뷰와 검증이 아님')
+    const final = load().tasks.at(-1)
+    if (final?.node !== 'fix') throw new Error('지금 task가 마무리 단계(수정)가 아님')
+    if (!final.review?.resumed_at)
+      throw new Error('마무리 단계가 독립 리뷰를 받아 다시 열리지 않음 (D496)')
     claudeVersion = load().tasks[0]?.claude_version ?? null
-    const verifyDir = path.join(workDir, 'tasks', taskDirName(verify))
-    const context = fs.readFileSync(path.join(verifyDir, 'context.md'), 'utf8')
+    const finalDir = path.join(workDir, 'tasks', taskDirName(final))
+    const context = fs.readFileSync(path.join(finalDir, 'context.md'), 'utf8')
     const closing = /\[완료만\], \[push\], \[PR 생성\] 중 하나를/.test(context)
     notes.push(
-      `리뷰와 검증의 마무리 안내 문구가 [완료만], [push], [PR 생성]을 가리킨다: ${closing ? '예' : '아니오'}`,
+      `마무리 단계의 마무리 안내 문구가 [완료만], [push], [PR 생성]을 가리킨다: ${closing ? '예' : '아니오'}`,
     )
     if (!closing) throw new Error('마무리 안내 문구에 전달 버튼이 없음')
     // 에이전트는 push하거나 PR을 만들지 않는다 (D17)
@@ -191,7 +194,7 @@ async function run(): Promise<Result> {
       `승인 전 원격에 Work 브랜치가 있다(에이전트가 push함): ${pushedByAgent ? '예' : '아니오'}`,
     )
     if (pushedByAgent) throw new Error('에이전트가 Work 브랜치를 push함')
-    const pr = prText(fs.readFileSync(path.join(verifyDir, 'pr.md'), 'utf8'))
+    const pr = prText(fs.readFileSync(path.join(finalDir, 'pr.md'), 'utf8'))
     if (!pr.ok) throw new Error(`pr.md를 읽지 못함: ${pr.error}`)
     notes.push(
       `pr.md 제목: ${pr.title}`,
@@ -215,7 +218,7 @@ async function run(): Promise<Result> {
 
     // 3. [AI 세션 열기]: 기록하지 않는 정리 세션에서 메모를 지워 달라고 한다
     const opened = await timed(
-      '[AI 세션 열기]: verify 세션을 끝내고 정리 세션을 연다',
+      '[AI 세션 열기]: 마무리 세션을 끝내고 정리 세션을 연다',
       async () => {
         const r = await h.relay.openCleanup(key, 'pr')
         if (!r.ok) throw new Error(`[AI 세션 열기] 실패: ${r.error}`)
@@ -235,7 +238,7 @@ async function run(): Promise<Result> {
     // 정리 세션은 task가 아니다
     if (load().tasks.length !== first.tasks.length) throw new Error('정리 세션이 task로 기록됨')
 
-    // 4. [정리 끝 → push/PR 진행]: push하고 가짜 gh로 PR을 만든다. verify를 승인하고 Work는 PR 진행이 된다(D152)
+    // 4. [정리 끝 → push/PR 진행]: push하고 가짜 gh로 PR을 만든다. 마무리 단계를 승인하고 Work는 PR 진행이 된다(D152)
     const done = await timed('[정리 끝 → push/PR 진행]: 세션 끝내기, push, PR', () =>
       h.relay.finishCleanup(key),
     )
@@ -261,13 +264,13 @@ async function run(): Promise<Result> {
     const sameText = create.length === 1 && title === pr.title && create[0]?.body === pr.body
     notes.push(`가짜 gh의 pr create가 pr.md의 제목과 본문을 받았다: ${sameText ? '예' : '아니오'}`)
     if (!sameText) throw new Error('PR 제목이나 본문이 pr.md와 다름')
-    const approved = work.tasks.find((t) => t.id === verify.id)
+    const approved = work.tasks.find((t) => t.id === final.id)
     const decisions = fs.readFileSync(path.join(workDir, 'decisions.md'), 'utf8')
     notes.push(
-      `리뷰와 검증: ${approved?.status ?? '없음'}, decisions.md에 ${verify.id}가 있다: ${decisions.includes(verify.id) ? '예' : '아니오'}`,
+      `마무리 단계: ${approved?.status ?? '없음'}, decisions.md에 ${final.id}가 있다: ${decisions.includes(final.id) ? '예' : '아니오'}`,
     )
-    if (approved?.status !== 'approved' || !decisions.includes(verify.id)) {
-      throw new Error('리뷰와 검증의 승인 기록이 없음')
+    if (approved?.status !== 'approved' || !decisions.includes(final.id)) {
+      throw new Error('마무리 단계의 승인 기록이 없음')
     }
 
     // 5. [머지 없이 끝내기]로 Work를 완료한다(D179). 머지는 PR 시험(pr, pr-auto)이 본다
@@ -293,7 +296,7 @@ async function run(): Promise<Result> {
     if (!c.ok) throw new Error(`정리 실패: ${c.error}`)
     await settle(h, key)
     const archived = load()
-    const kept = fs.existsSync(path.join(verifyDir, 'pr.md'))
+    const kept = fs.existsSync(path.join(finalDir, 'pr.md'))
     notes.push(
       `정리 뒤: ${archived.status}, worktree 없음 ${fs.existsSync(tree) ? '아니오' : '예'}, 산출물 남음 ${kept ? '예' : '아니오'}`,
     )

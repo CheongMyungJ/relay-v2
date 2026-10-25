@@ -30,7 +30,12 @@ export interface RunOptions {
   timeoutMs?: number
   /** 표준 입력에 쓸 내용. 주면 다 쓴 뒤 닫는다 (gh api --input -) */
   input?: string
+  /** 끊으면 프로세스를 끝내고 error에 "멈춤"을 적는다 (독립 리뷰의 [Work 포기], D496) */
+  signal?: AbortSignal
 }
+
+/** 끊어서 끝낸 명령의 error */
+export const ABORTED = '멈춤'
 
 const MAX_BUFFER = 64 * 1024 * 1024
 
@@ -47,6 +52,7 @@ export function run(
   const tree = process.platform === 'win32'
   return new Promise((resolve) => {
     let timedOut = false
+    let aborted = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const child = execFile(
       spec.file,
@@ -61,7 +67,10 @@ export function run(
       },
       (err: ExecFileException | null, stdout: string, stderr: string) => {
         if (timer) clearTimeout(timer)
-        if (timedOut) {
+        opts.signal?.removeEventListener('abort', abort)
+        if (aborted) {
+          resolve({ code: null, stdout, stderr, error: ABORTED })
+        } else if (timedOut) {
           resolve({ code: null, stdout, stderr, error: `시간 초과 (${timeout / 1000}초)` })
         } else if (!err) {
           resolve({ code: 0, stdout, stderr })
@@ -82,6 +91,18 @@ export function run(
         })
       }, timeout)
     }
+    function abort() {
+      aborted = true
+      if (tree && child.pid !== undefined) {
+        execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {
+          // 이미 끝났으면 실패한다
+        })
+      } else {
+        child.kill()
+      }
+    }
+    if (opts.signal?.aborted) abort()
+    else opts.signal?.addEventListener('abort', abort, { once: true })
     if (opts.input !== undefined) {
       // 받는 쪽이 먼저 끝나 파이프가 닫히면(EPIPE) 오류를 내지 않는다: 결과는 종료 코드로 본다
       child.stdin?.on('error', () => {})

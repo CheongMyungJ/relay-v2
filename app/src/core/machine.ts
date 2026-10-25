@@ -50,19 +50,20 @@ import type {
 import {
   REVIEWABLE,
   approvalGate,
-  approvalMode,
+  taskApprovalMode,
   autoApproveHolds,
   type AutoApproveInput,
 } from './approval'
 import { canClean } from './cleanup'
-import { mergeWorkSettings } from './config'
+import { codeReviewOn, mergeWorkSettings } from './config'
 import { commitMessage, deliveryStart, stashMessage, stoppedVerify } from './delivery'
 import { cardDone, focusLane, laneOf, prCards, repoTarget, unfocusLane } from './repos'
 import {
   NODE_INFO,
+  PIPELINE_VERSION,
   RESPOND,
   WORK_COMPLETE,
-  customStep,
+  finishesWork,
   isPipelineNode,
   nextStage,
   stageOf,
@@ -153,6 +154,22 @@ export interface SessionTiming extends TaskEvent {
 /** 세션 상한 때문에 띄우지 못해 대기열에 넣었다 (D18). main이 넣는다 */
 export interface TaskQueued extends TaskEvent {
   type: 'task.queued'
+}
+
+/**
+ * 마무리 단계의 독립 리뷰가 끝났다 (D495, D496). main이 결과 파일(independent-review.md, .json)을 쓴 뒤 넣는다. 실패한 호출이
+ * 있으면 error에 까닭을 적는다(그래도 결과 파일은 있다)
+ */
+export interface ReviewFinished extends TaskEvent {
+  type: 'review.finished'
+  /** 실패한 호출의 까닭. 모두 성공했으면 없다 */
+  error?: string
+  /** 확인을 지난 지적 수 */
+  findings: number
+  /** 판정표 이의 수 */
+  objections: number
+  /** 리뷰에 걸린 ms */
+  ms: number
 }
 
 /** 훅 신호 (시나리오 3). type은 Claude Code의 훅 이벤트 이름이다 */
@@ -716,6 +733,7 @@ export type MachineEvent =
   | SessionFailed
   | SessionTiming
   | TaskQueued
+  | ReviewFinished
   | UserPromptSubmitted
   | ToolUse
   | NotificationSent
@@ -781,9 +799,18 @@ export type Effect =
    * 세션 상한을 넘으면 main이 대기열에 넣는다 (D18)
    */
   | { type: 'startTask'; taskId: string; node: TaskNode; reason: StartReason }
-  /** 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4). 상한은 startTask와 같다 */
-  /** 끝난 세션을 --resume으로 다시 연다. continue면 이어서 하라는 첫 입력을 준다 (중단됨의 [재개], D218) */
-  | { type: 'resumeTask'; taskId: string; continue: boolean }
+  /**
+   * 끝난 세션을 같은 옵션과 --resume <세션 id>로 다시 연다 (시나리오 3-4). 상한은 startTask와 같다. input은 첫 입력이다:
+   * continue는 이어서 하라는 것(중단됨의 [재개], D218), review는 독립 리뷰 결과를 읽고 이어 하라는 것(D496), null은 입력 없음
+   */
+  | { type: 'resumeTask'; taskId: string; input: ResumeInput }
+  /**
+   * 마무리 단계의 독립 리뷰를 돌린다 (D495). codeReview면 찾기도 부른다(D497). endSession이면 Stop 훅에 답한 뒤 세션을 먼저
+   * 끝낸다(D496). main은 끝나면 review.finished를 넣는다
+   */
+  | { type: 'startReview'; taskId: string; codeReview: boolean; endSession: boolean }
+  /** 도는 독립 리뷰를 멈춘다: [Work 포기] */
+  | { type: 'cancelReview'; taskId: string }
   /** 대기열에서 뺀다 */
   | { type: 'dequeue'; taskId: string }
   /** Stop 훅에 {"decision":"block","reason":…}로 답해 형식 오류를 되돌린다 (D21) */
@@ -865,6 +892,9 @@ export type Effect =
    */
   | { type: 'publishIssue' }
 
+/** 다시 연 세션의 첫 입력 (D218, D496) */
+export type ResumeInput = 'continue' | 'review' | null
+
 export interface Transition {
   work: WorkState
   effects: Effect[]
@@ -939,7 +969,17 @@ export function permissionWarning(task: TaskRecord): boolean {
  */
 function launchable(task: TaskRecord): boolean {
   if (task.session?.alive) return false
-  return task.status === 'working' || task.status === 'queued' || RESUMABLE.includes(task.status)
+  return (
+    task.status === 'working' ||
+    task.status === 'queued' ||
+    RESUMABLE.includes(task.status) ||
+    reviewDone(task)
+  )
+}
+
+/** 독립 리뷰가 끝났고 결과로 세션을 아직 다시 열지 않았다 (D496). 그 세션을 다시 열 때 첫 입력이 리뷰 결과다 */
+function reviewDone(task: TaskRecord): boolean {
+  return task.review?.finished_at !== undefined && task.review.resumed_at === undefined
 }
 
 /**
@@ -1033,15 +1073,95 @@ function log(
 const unchanged = (work: WorkState, rejected?: string): Transition =>
   rejected === undefined ? { work, effects: [] } : { work, effects: [], rejected }
 
-/** 형식 검사로 정한 표시: 유효한 handoff면 승인 대기나 막힘, 아니면 null (3.3, 시나리오 3의 Stop) */
-function handoffStatus(check: CheckSummary): 'awaiting_approval' | 'blocked' | null {
+/**
+ * 형식 검사로 정한 표시: 유효한 handoff면 승인 대기나 막힘, 아니면 null (3.3, 시나리오 3의 Stop). 마무리 단계의 리뷰
+ * 요청(D494)은 review_requested다. 그 표시는 부른 쪽이 정한다(Stop과 세션 종료는 리뷰를 시작한다)
+ */
+function handoffStatus(
+  check: CheckSummary,
+): 'awaiting_approval' | 'blocked' | 'review_requested' | null {
   if (!isValid(check)) return null
+  if (check.status === 'review_requested') return 'review_requested'
   return check.status === 'blocked' ? 'blocked' : 'awaiting_approval'
 }
 
-/** 세션 없이 남는 task의 표시: 유효한 handoff면 승인 대기나 막힘(3.3), 아니면 중단됨 */
+/** 세션이 살아 있을 때의 표시: 유효한 handoff면 승인 대기나 막힘, 아니면(리뷰 요청 포함) 대기다 */
+function liveStatus(check: CheckSummary): TaskStatus {
+  const status = handoffStatus(check)
+  return status === null || status === 'review_requested' ? 'idle' : status
+}
+
+/** 세션 없이 남는 task의 표시: 유효한 handoff면 승인 대기나 막힘(3.3), 아니면(리뷰 요청 포함) 중단됨 */
 function withoutSession(check: CheckSummary | undefined | null): TaskStatus {
-  return (check ? handoffStatus(check) : null) ?? 'interrupted'
+  const status = check ? handoffStatus(check) : null
+  return status === null || status === 'review_requested' ? 'interrupted' : status
+}
+
+/**
+ * 마무리 단계의 리뷰 요청 (D494~D497). 리뷰를 아직 요청하지 않은 마무리 단계 task만 받는다(형식 검사가 막지만 다시 본다).
+ * 세션이 살아 있으면 닫고(live), 그때의 code_review 설정으로 독립 리뷰를 시작한다. task는 독립 리뷰 중이다
+ */
+function requestReview(
+  work: WorkState,
+  task: TaskRecord,
+  at: string,
+  check: CheckSummary,
+  config: AppConfig,
+  live: boolean,
+): Transition | null {
+  if (task.review || !finishesWork(work, task)) return null
+  const codeReview = codeReviewOn(config, work.settings)
+  const next: TaskRecord = {
+    ...omit(task, 'countdown', 'auto_hold'),
+    status: 'reviewing',
+    bounce_count: 0,
+    check,
+    review: { requested_at: at, code_review: codeReview },
+    ...(task.session && live ? { session: { ...task.session, alive: false, ended_at: at } } : {}),
+  }
+  return {
+    work: withTask(work, next),
+    effects: [
+      log(work, at, 'review.requested', { code_review: codeReview }, task),
+      { type: 'startReview', taskId: task.id, codeReview, endSession: live },
+    ],
+  }
+}
+
+/**
+ * 독립 리뷰가 끝났다 (D495, D496). 결과를 적고, 진행 중인 Work면 같은 대화를 결과를 첫 입력으로 다시 연다. 리뷰 중에 앱을
+ * 다시 켰으면(restarted) 저절로 열지 않고 중단됨으로 두어 [재개]가 같은 첫 입력을 준다 (D75)
+ */
+function reviewFinished(work: WorkState, task: TaskRecord, e: ReviewFinished): Transition {
+  const review = task.review
+  if (task.status !== 'reviewing' || !review || review.finished_at !== undefined) {
+    return unchanged(work)
+  }
+  const done: TaskRecord = {
+    ...task,
+    review: { ...review, finished_at: e.at, ...(e.error ? { error: e.error } : {}) },
+  }
+  const logged = log(
+    work,
+    e.at,
+    'review.finished',
+    {
+      code_review: review.code_review,
+      ok: e.error === undefined,
+      findings: e.findings,
+      objections: e.objections,
+      ms: e.ms,
+      ...(e.error ? { error: e.error } : {}),
+    },
+    task,
+  )
+  if (work.status !== 'active' || review.restarted || !task.session || task.session.id === '') {
+    return { work: withTask(work, { ...done, status: 'interrupted' }), effects: [logged] }
+  }
+  return {
+    work: withTask(work, done),
+    effects: [logged, { type: 'resumeTask', taskId: task.id, input: 'review' }],
+  }
 }
 
 /** 키를 뺀 사본 */
@@ -1085,15 +1205,9 @@ function holdsNow(
       : holds
 }
 
-/** task의 승인 방식. 커스텀 단계는 그 단계의 정의를 함께 본다 (D457) */
+/** task의 승인 방식. 커스텀 단계는 그 단계의 정의를 함께 보고, Work 완료 화면인 task는 늘 수동이다 (D457, D498) */
 function taskApproval(config: AppConfig, work: WorkState, task: TaskRecord) {
-  return approvalMode(
-    config,
-    work.settings,
-    task.node,
-    knownTaskEngine(task),
-    customStep(work, task),
-  )
+  return taskApprovalMode(config, work, task)
 }
 
 /**
@@ -1269,6 +1383,8 @@ export function createWork(input: NewWork): Transition {
       ? { issue: newIssueRecord(input.issue.linked, input.issue.mark, input.issue.from) }
       : {}),
     ...(input.fromWork ? { from_work: input.fromWork } : {}),
+    // 마지막 작업 단계가 마무리하는 파이프라인 (D493, D501)
+    pipeline: PIPELINE_VERSION,
     tasks: [],
   }
   const intake = {
@@ -1626,13 +1742,13 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
         work: withTask(work, {
           ...omit(task, 'countdown', 'auto_hold'),
           check,
-          status: handoffStatus(check) ?? 'idle',
+          status: liveStatus(check),
         }),
         effects: [],
       }
     }
     case 'session.ended':
-      return sessionEnded(work, task, { ...event, type: 'SessionEnd' })
+      return sessionEnded(work, task, { ...event, type: 'SessionEnd' }, config)
     case 'session.started':
       return sessionStarted(work, task, event)
     case 'session.resumed':
@@ -1643,6 +1759,8 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return sessionTiming(work, task, event)
     case 'task.queued':
       return queued(work, task, event)
+    case 'review.finished':
+      return reviewFinished(work, task, event)
     case 'approve':
       return approve(work, task, event)
     case 'autoApprove':
@@ -1657,7 +1775,7 @@ function taskTransition(work: WorkState, event: TaskMachineEvent, config: AppCon
       return checkUpdated(work, task, event)
     case 'SessionEnd':
     case 'pty.exit':
-      return sessionEnded(work, task, event)
+      return sessionEnded(work, task, event, config)
     default:
       return hook(work, task, event, config)
   }
@@ -1700,12 +1818,15 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
     return unchanged(work, `${task.id}는 다시 열 수 있는 상태가 아님`)
   }
   const check = summarize(e.check)
-  const status = handoffStatus(check) ?? 'idle'
+  // 독립 리뷰가 끝난 task는 결과를 첫 입력으로 다시 열었다 (D496). 세션이 그 입력으로 바로 일하므로 작업 중이다
+  const review = reviewDone(task) && task.review ? { ...task.review, resumed_at: e.at } : undefined
+  const status: TaskStatus = review ? 'working' : liveStatus(check)
   const session = omit(task.session, 'ended_at', 'process_started_at', 'app_ended')
   const resumed: TaskRecord = {
     ...omit(unqueued(task), 'error'),
     status,
     check,
+    ...(review ? { review } : {}),
     ...versionRecord(task, e),
     session: {
       ...session,
@@ -1727,6 +1848,7 @@ function sessionResumed(work: WorkState, task: TaskRecord, e: SessionResumed): T
         ...(taskEngine(task) === 'claude'
           ? { claude_version: e.engineVersion ?? e.claudeVersion }
           : {}),
+        ...(review ? { input: 'review' } : {}),
       },
       task,
     ),
@@ -1835,7 +1957,12 @@ function followSession(task: TaskRecord, e: HookSignal & { type: string }): Task
 function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig): Transition {
   const check = summarize(e.check)
   const bounces = e.stopHookActive ? task.bounce_count : 0
-  const status = handoffStatus(check)
+  const found = handoffStatus(check)
+  // 마무리 단계가 판정표를 쓰고 독립 리뷰를 요청했다: 세션을 닫고 리뷰를 돌린다 (D494, D496)
+  const requested =
+    found === 'review_requested' ? requestReview(work, task, e.at, check, config, true) : null
+  if (requested) return requested
+  const status = found === 'review_requested' ? null : found
   if (status) {
     const entered = status === 'awaiting_approval' && task.status !== 'awaiting_approval'
     // 턴이 끝날 때마다 자동 승인을 새로 판정한다 (D131)
@@ -1884,7 +2011,12 @@ function stop(work: WorkState, task: TaskRecord, e: Stopped, config: AppConfig):
  * SessionEnd의 reason이 clear나 resume이면 CLI가 계속 돌므로 세션 종료로 보지 않는다 (D110).
  * 다시 연 세션이 있으면 앞 프로세스의 늦은 PTY 종료는 무시한다.
  */
-function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Transition {
+function sessionEnded(
+  work: WorkState,
+  task: TaskRecord,
+  e: SessionEnded,
+  config: AppConfig,
+): Transition {
   if (e.type === 'SessionEnd' && e.reason !== undefined && SESSION_CONTINUES.includes(e.reason)) {
     return unchanged(work)
   }
@@ -1902,7 +2034,14 @@ function sessionEnded(work: WorkState, task: TaskRecord, e: SessionEnded): Trans
     }
   }
   const check = e.check ? summarize(e.check) : null
-  const status = check ? handoffStatus(check) : null
+  const found = check ? handoffStatus(check) : null
+  // Stop 없이 끝났어도 리뷰 요청이 유효하면 리뷰를 시작한다 (D146, D494). 세션은 이미 끝났다
+  const requested =
+    check && found === 'review_requested'
+      ? requestReview(work, { ...task, session }, e.at, check, config, false)
+      : null
+  if (requested) return requested
+  const status = found === 'review_requested' ? null : found
   if (check && status) {
     return {
       work: withTask(work, { ...task, session, status, check }),
@@ -2111,10 +2250,14 @@ function resume(work: WorkState, task: TaskRecord): Transition {
   }
   if (task.session?.id === '')
     return unchanged(work, 'Codex 대화 ID를 받지 못해 다시 열 수 없습니다.')
-  // 중단됨의 [재개]는 이어서 하라고 알린다. [세션 재개](세션 종료, 막힘, 승인 대기)는 입력을 기다린다 (D218)
-  const effect: Effect = task.session
-    ? { type: 'resumeTask', taskId: task.id, continue: task.status === 'interrupted' }
-    : start
+  // 중단됨의 [재개]는 이어서 하라고 알린다. [세션 재개](세션 종료, 막힘, 승인 대기)는 입력을 기다린다 (D218).
+  // 독립 리뷰가 끝났는데 결과로 아직 다시 열지 않았으면 결과를 읽고 이어 하라고 알린다 (D496)
+  const input: ResumeInput = reviewDone(task)
+    ? 'review'
+    : task.status === 'interrupted'
+      ? 'continue'
+      : null
+  const effect: Effect = task.session ? { type: 'resumeTask', taskId: task.id, input } : start
   return { work, effects: [effect] }
 }
 
@@ -2238,12 +2381,19 @@ function abandon(work: WorkState, e: Abandon): Transition {
     return unchanged(work, '포기할 수 있는 Work가 아님')
   }
   const task = currentTask(work)
-  const ended = task ? endTask(work, task, e.at, 'abandoned') : null
+  // 독립 리뷰 중인 task는 세션이 없다: 리뷰를 멈추고(D496) 중단됨으로 둔다
+  const reviewing = task?.status === 'reviewing'
+  const ended = task
+    ? reviewing
+      ? { task: { ...task, status: 'interrupted' as const }, effects: [] }
+      : endTask(work, task, e.at, 'abandoned')
+    : null
   const rest = omit(ended ? withTask(work, ended.task) : work, 'stop', 'stop_after_step')
   return {
     work: { ...rest, status: 'abandoned', abandoned_at: e.at },
     effects: [
       ...(ended?.effects ?? []),
+      ...(reviewing ? [{ type: 'cancelReview' as const, taskId: task.id }] : []),
       log(
         work,
         e.at,
@@ -2782,6 +2932,20 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
       : t.session
     // 도는 PR 대응 task도 다른 task처럼 조정한다 (시나리오 9-7)
     if (t !== current || !taskActive(work, t)) return { ...t, session }
+    if (t.status === 'reviewing' && t.review) {
+      // 끝난 리뷰의 세션은 저절로 열지 않는다(D75). 끝나지 않은 리뷰는 처음부터 다시 돌리고, 끝나도 열지 않는다 (D496)
+      if (t.review.finished_at !== undefined) {
+        effects.push(log(work, e.at, 'task.interrupted', { reason: 'app_restart' }, t))
+        return { ...t, session, status: 'interrupted' }
+      }
+      effects.push({
+        type: 'startReview',
+        taskId: t.id,
+        codeReview: t.review.code_review,
+        endSession: false,
+      })
+      return { ...t, session, review: { ...t.review, restarted: true } }
+    }
     if (t.status === 'queued') {
       // 대기열을 비운다 (D78). 세션 없이 남는 표시는 3.3을 따른다(보통 중단됨)
       const status = withoutSession(e.check)
@@ -2795,7 +2959,9 @@ function restarted(work: WorkState, e: AppRestarted, config: AppConfig): Transit
     const running = t.session?.alive === true || (t.status === 'working' && !t.session?.alive)
     if (!running) return { ...t, session }
     const check = e.check ? summarize(e.check) : null
-    const status = check ? handoffStatus(check) : null
+    const found = check ? handoffStatus(check) : null
+    // 리뷰를 요청한 채 꺼졌으면 중단됨이다: [재개]하면 세션이 다시 리뷰를 요청한다 (D75, D494)
+    const status = found === 'review_requested' ? null : found
     if (status) {
       if (status === 'awaiting_approval' && t.status !== 'awaiting_approval') {
         effects.push(

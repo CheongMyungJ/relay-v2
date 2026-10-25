@@ -45,6 +45,7 @@ import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { Handoff } from '../../src/shared/contracts'
 import type { PrItem, PrItemsFile, PrRound } from '../../src/shared/pr'
 import type { WorkState } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 // ---------- 도움 ----------
 
@@ -117,13 +118,15 @@ const HEAD = 'head0001'
 
 /** intake → fix → verify를 지나 [PR 생성]까지 가 PR 진행이 된 Work (M9) */
 function inPr(): WorkState {
-  let work = createWork({
-    type: 'bugfix',
-    workId: 'w-20260929-001',
-    baseBranch: 'main',
-    baseCommit: 'base0001',
-    at: at(),
-  }).work
+  let work = legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20260929-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work,
+  )
   for (const check of [valid(), valid()]) {
     work = approve(stop(launch(work), check), check).work
   }
@@ -288,7 +291,7 @@ describe('PR 진행 중의 액션 바와 배지 (D182, D183)', () => {
     expect(actions(interrupted.work)).toMatchObject({ interrupt: false, resume: true })
     expect(badge(interrupted.work, 'pr_items').kind).toBe('interrupted')
     const resumed = apply(interrupted.work, { type: 'resume', taskId: t?.id ?? '', at: at() })
-    expect(resumed.effects).toEqual([{ type: 'resumeTask', taskId: t?.id, continue: true }])
+    expect(resumed.effects).toEqual([{ type: 'resumeTask', taskId: t?.id, input: 'continue' }])
     const waiting = awaiting()
     expect(badge(waiting, 'pr_items')).toMatchObject({ kind: 'awaiting_approval', hot: true })
   })

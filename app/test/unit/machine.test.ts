@@ -26,6 +26,7 @@ import type {
   TaskStatus,
   WorkState,
 } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 // ---------- 도움 ----------
 
@@ -79,14 +80,17 @@ const ERROR: FormatIssue = {
 
 const INVALID: TaskCheck = { ...MISSING, handoff_present: true, status: 'blocked', errors: [ERROR] }
 
+/** 옛 파이프라인(intake → fix → verify)의 버그 수정 Work (D501). 새 파이프라인의 마무리는 아래 "마무리 단계"에서 본다 */
 function newWork(): WorkState {
-  return createWork({
-    type: 'bugfix',
-    workId: 'w-20260926-001',
-    baseBranch: 'main',
-    baseCommit: 'base0001',
-    at: at(),
-  }).work
+  return legacy(
+    createWork({
+      type: 'bugfix',
+      workId: 'w-20260926-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work,
+  )
 }
 
 /**
@@ -165,6 +169,46 @@ function approve(work: WorkState, check: TaskCheck): Transition {
 const status = (work: WorkState) => currentTask(work)?.status
 const types = (effects: Effect[]) =>
   effects.map((e) => (e.type === 'log' ? `log:${e.event.type}` : e.type))
+
+/** 마무리 단계의 유효한 리뷰 요청 (D494) */
+function requested(): TaskCheck {
+  return { ...valid({ status: 'review_requested' }), status: 'review_requested' }
+}
+
+/** 독립 리뷰가 끝났다 (D495) */
+function reviewed(work: WorkState, error?: string): Transition {
+  return apply(work, {
+    type: 'review.finished',
+    taskId: currentTask(work)?.id ?? '',
+    at: at(),
+    ...(error ? { error } : {}),
+    findings: 2,
+    objections: 1,
+    ms: 1234,
+  })
+}
+
+/** main이 지금 task의 세션을 다시 열었다. check는 다시 연 때의 검사다 */
+function reopened(work: WorkState, check: TaskCheck = requested()): Transition {
+  const task = currentTask(work)
+  return apply(work, {
+    type: 'session.resumed',
+    taskId: task?.id ?? '',
+    at: at(),
+    pid: 3000 + (task?.seq ?? 0),
+    claudeVersion: '2.1.283 (Claude Code)',
+    check,
+  })
+}
+
+/**
+ * 살아 있는 마무리 단계 task를 Work 완료 화면까지 데려간다 (D494~D496): 리뷰 요청, 리뷰 끝, 다시 연 세션, awaiting_approval
+ */
+function finish(work: WorkState, config?: AppConfig): WorkState {
+  const asked = stop(work, requested(), {}, config).work
+  const back = reopened(reviewed(asked).work).work
+  return stop(back, valid(), {}, config).work
+}
 
 // ---------- 시험 ----------
 
@@ -586,7 +630,7 @@ describe('시나리오 3의 신호 표: 신호마다 표시 상태', () => {
     }).work
     expect(currentTask(interrupted)?.session).toMatchObject({ id: 'session-new', alive: false })
     expect(apply(interrupted, { type: 'resume', taskId: 't-01', at: at() }).effects).toEqual([
-      { type: 'resumeTask', taskId: 't-01', continue: true },
+      { type: 'resumeTask', taskId: 't-01', input: 'continue' },
     ])
     const r = apply(interrupted, {
       type: 'session.resumed',
@@ -1170,7 +1214,7 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
     const before = interrupted()
     const r = resume(before)
     expect(r.rejected).toBeUndefined()
-    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-01', continue: true }])
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-01', input: 'continue' }])
     expect(r.work).toBe(before)
     // 다시 연 뒤에는 세션이 살아 있어 다시 누르면 받지 않는다
     expect(resume(resumed(r.work).work).rejected).toMatch(/재개할 수 있는 상태가 아님/)
@@ -1212,12 +1256,12 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
 
   it('세션 종료, 세션 없는 승인 대기와 막힘도 다시 연다. [세션 재개]는 이어서 하라고 알리지 않고 입력을 기다린다 (D218)', () => {
     const ended = apply(running('idle'), { type: 'pty.exit', taskId: 't-01', at: at() }).work
-    expect(resume(ended).effects).toEqual([{ type: 'resumeTask', taskId: 't-01', continue: false }])
+    expect(resume(ended).effects).toEqual([{ type: 'resumeTask', taskId: 't-01', input: null }])
     for (const s of ['awaiting_approval', 'blocked'] as const) {
       const noSession = apply(running(s), { type: 'pty.exit', taskId: 't-01', at: at() }).work
       expect(status(noSession)).toBe(s)
       expect(resume(noSession).effects).toEqual([
-        { type: 'resumeTask', taskId: 't-01', continue: false },
+        { type: 'resumeTask', taskId: 't-01', input: null },
       ])
     }
   })
@@ -1247,7 +1291,7 @@ describe('[재개]와 [세션 재개] (시나리오 3-4, 3-5, 4.4)', () => {
       session: { alive: false, app_ended: 'restart' },
     })
     expect(resume(restarted.work).effects).toEqual([
-      { type: 'resumeTask', taskId: 't-01', continue: true },
+      { type: 'resumeTask', taskId: 't-01', input: 'continue' },
     ])
     // 다시 열면 새 세션이라 지운다
     const again = resumed(resume(restarted.work).work)
@@ -1335,7 +1379,7 @@ describe('handoff 없이 끝난 세션 (시나리오 3-5, D423)', () => {
     expect(Object.keys(actions(ended))).not.toContain('retry')
     const r = apply(ended, { type: 'resume', taskId: 't-02', at: at() })
     expect(r.rejected).toBeUndefined()
-    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-02', continue: false }])
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: 't-02', input: null }])
     expect(r.work.tasks.map((t) => t.id)).toEqual(['t-01', 't-02'])
   })
 })
@@ -1956,7 +2000,7 @@ describe('전달 (시나리오 7, D77, D119, D120)', () => {
     const working = launch(work)
     expect(deliver(working, 'push').rejected).toBe('t-03는 승인할 수 있는 상태가 아님')
     const intake = stop(launch(newWork()), valid()).work
-    expect(deliver(intake, 'push').rejected).toBe('리뷰와 검증의 Work 완료 화면이 아님')
+    expect(deliver(intake, 'push').rejected).toBe('Work 완료 화면이 아님')
     const busy = deliver(atVerify(), 'push').work
     expect(deliver(busy, 'push').rejected).toBe(OPERATION_BLOCKS)
     const done = approve(atVerify(), valid()).work
@@ -3114,7 +3158,7 @@ describe('PR 진행 (시나리오 10, D152~D200)', () => {
   })
 })
 
-describe('기능 추가 (D232~D237, D249)', () => {
+describe('기능 추가 (D232~D237, D249, D493)', () => {
   function featureWork(): WorkState {
     return createWork({
       type: 'feature',
@@ -3139,34 +3183,36 @@ describe('기능 추가 (D232~D237, D249)', () => {
     expect(logged?.type === 'log' && logged.event.payload).toMatchObject({ type: 'feature' })
   })
 
-  it('intake → design → implement → verify → Work 완료로 간다', () => {
+  it('intake → design → implement(마무리) → Work 완료로 간다 (D493)', () => {
     let work = featureWork()
-    for (const node of ['intake', 'design', 'implement', 'verify']) {
+    for (const node of ['intake', 'design']) {
       expect(currentTask(work)?.node).toBe(node)
       work = approve(stop(launch(work), valid()).work, valid()).work
     }
+    expect(currentTask(work)?.node).toBe('implement')
+    work = approve(finish(launch(work)), valid()).work
     expect(work.status).toBe('completed')
     expect(nodes(work)).toEqual([
       ['intake', 'approved'],
       ['design', 'approved'],
       ['implement', 'approved'],
-      ['verify', 'approved'],
     ])
   })
 
-  it('앱 기본값에서 design은 수동, implement는 자동 승인 카운트다운을 시작한다 (D234, D249)', () => {
+  it('앱 기본값에서 design은 수동이고, 마무리 단계인 implement는 자동 승인이 켜져 있어도 늘 수동이다 (D234, D498)', () => {
     let work = approve(stop(launch(featureWork()), valid()).work, valid()).work
     const design = stop(launch(work), valid(), {}, DEFAULT_CONFIG).work
     expect(currentTask(design)).toMatchObject({ node: 'design', status: 'awaiting_approval' })
     expect(currentTask(design)?.countdown).toBeUndefined()
     work = approve(design, valid()).work
-    const implement = stop(launch(work), valid(), {}, DEFAULT_CONFIG).work
-    expect(currentTask(implement)?.node).toBe('implement')
-    expect(currentTask(implement)?.countdown).toBeDefined()
+    const implement = finish(launch(work), DEFAULT_CONFIG)
+    expect(currentTask(implement)).toMatchObject({ node: 'implement', status: 'awaiting_approval' })
+    expect(currentTask(implement)?.countdown).toBeUndefined()
+    expect(currentTask(implement)?.auto_hold).toBeUndefined()
   })
 
-  it('implement가 D418 전 형식의 design 추천을 적어도 자동 승인 조건을 어기지 않고, 승인하면 verify로 간다 (D418, D422)', () => {
-    let work = featureWork()
+  it('옛 Work의 implement는 자동 승인 카운트다운을 시작하고(D249), D418 전 형식의 design 추천을 적어도 자동 승인 조건을 어기지 않고 승인하면 verify로 간다 (D418, D422, D501)', () => {
+    let work = legacy(featureWork())
     for (let i = 0; i < 2; i++) work = approve(stop(launch(work), valid()).work, valid()).work
     const back = valid({ recommended_next: { node: 'design', reason: '설계가 틀림' } })
     const held = stop(launch(work), back, {}, DEFAULT_CONFIG).work
@@ -3381,5 +3427,198 @@ describe('[단위] 새 task에 엔진·모델·추론 수준을 고정 (F6, F8, 
       model: 'gpt-6-sol',
       effort: 'low',
     })
+  })
+})
+
+describe('마무리 단계와 독립 리뷰 (D493~D501)', () => {
+  /** 새 파이프라인의 버그 수정 Work: intake → fix(마무리) */
+  function fresh(type: 'bugfix' | 'spec' = 'bugfix'): WorkState {
+    return createWork({
+      type,
+      workId: 'w-20260926-001',
+      baseBranch: 'main',
+      baseCommit: 'base0001',
+      at: at(),
+    }).work
+  }
+  /** 의도 승인을 지나 fix 세션이 살아 있는 새 Work */
+  function fixing(): WorkState {
+    return launch(approve(stop(launch(fresh()), valid()).work, valid()).work)
+  }
+  const logs = (effects: Effect[]) =>
+    effects.flatMap((e) => (e.type === 'log' ? [[e.event.type, e.event.payload]] : []))
+
+  it('새 Work는 pipeline: 2이고 버그 수정은 intake → fix에서 끝난다 (D493, D501)', () => {
+    const work = fresh()
+    expect(work.pipeline).toBe(2)
+    const done = approve(finish(fixing()), valid()).work
+    expect(done.status).toBe('completed')
+    expect(done.tasks.map((t) => t.node)).toEqual(['intake', 'fix'])
+  })
+
+  it('리뷰 요청 Stop: 세션을 닫고 그때의 code_review로 독립 리뷰를 시작한다 (D494, D496, D497)', () => {
+    const r = stop(fixing(), requested())
+    const task = currentTask(r.work)
+    expect(task).toMatchObject({ node: 'fix', status: 'reviewing', bounce_count: 0 })
+    expect(task?.session?.alive).toBe(false)
+    expect(task?.review).toEqual({ requested_at: expect.any(String), code_review: true })
+    expect(r.effects).toContainEqual({
+      type: 'startReview',
+      taskId: task?.id,
+      codeReview: true,
+      endSession: true,
+    })
+    expect(logs(r.effects)).toContainEqual(['review.requested', { code_review: true }])
+    // Work 설정이 앱 설정보다 앞이다 (D72, D497)
+    const off = fixing()
+    const offWork = { ...off, settings: { ...off.settings, code_review: false } }
+    const r2 = stop(offWork, requested())
+    expect(currentTask(r2.work)?.review?.code_review).toBe(false)
+    expect(r2.effects).toContainEqual(
+      expect.objectContaining({ type: 'startReview', codeReview: false }),
+    )
+  })
+
+  it('리뷰 중에는 [즉시 중단]·[재개]가 없고, 닫은 세션의 늦은 종료는 무시한다', () => {
+    const work = stop(fixing(), requested()).work
+    expect(actions(work)).toMatchObject({ interrupt: false, resume: false })
+    const task = currentTask(work)
+    const exited = apply(work, {
+      type: 'pty.exit',
+      taskId: task?.id ?? '',
+      at: at(),
+      pid: task?.session?.pid ?? 0,
+    })
+    expect(status(exited.work)).toBe('reviewing')
+  })
+
+  it('리뷰가 끝나면 결과를 적고 같은 대화를 결과를 첫 입력으로 다시 연다 (D495, D496)', () => {
+    const asked = stop(fixing(), requested()).work
+    const r = reviewed(asked)
+    const task = currentTask(r.work)
+    expect(task?.review?.finished_at).toBeDefined()
+    expect(task?.review?.error).toBeUndefined()
+    expect(r.effects).toContainEqual({ type: 'resumeTask', taskId: task?.id, input: 'review' })
+    expect(logs(r.effects)).toContainEqual([
+      'review.finished',
+      { code_review: true, ok: true, findings: 2, objections: 1, ms: 1234 },
+    ])
+    // 다시 연 세션은 결과를 첫 입력으로 받아 바로 일한다. 결과로 다시 연 때를 적는다
+    const back = reopened(r.work)
+    expect(status(back.work)).toBe('working')
+    expect(currentTask(back.work)?.review?.resumed_at).toBeDefined()
+    expect(logs(back.effects)).toContainEqual([
+      'task.resumed',
+      expect.objectContaining({ input: 'review' }),
+    ])
+    // 끝난 리뷰가 다시 와도 바꾸지 않는다
+    expect(reviewed(back.work).work).toBe(back.work)
+  })
+
+  it('리뷰가 실패해도 까닭을 적고 다시 연다 (D495)', () => {
+    const r = reviewed(stop(fixing(), requested()).work, '코드 리뷰: 시간 초과')
+    expect(currentTask(r.work)?.review?.error).toBe('코드 리뷰: 시간 초과')
+    expect(logs(r.effects)).toContainEqual([
+      'review.finished',
+      expect.objectContaining({ ok: false, error: '코드 리뷰: 시간 초과' }),
+    ])
+    expect(r.effects).toContainEqual(
+      expect.objectContaining({ type: 'resumeTask', input: 'review' }),
+    )
+  })
+
+  it('다시 열지 못했으면 중단됨이고, [재개]가 리뷰 결과를 첫 입력으로 준다 (D496)', () => {
+    const done = reviewed(stop(fixing(), requested()).work).work
+    const task = currentTask(done)
+    const failed = apply(done, {
+      type: 'session.failed',
+      taskId: task?.id ?? '',
+      at: at(),
+      error: 'claude를 찾지 못함',
+      check: requested(),
+    }).work
+    expect(status(failed)).toBe('interrupted')
+    const r = apply(failed, { type: 'resume', taskId: task?.id ?? '', at: at() })
+    expect(r.effects).toEqual([{ type: 'resumeTask', taskId: task?.id, input: 'review' }])
+  })
+
+  it('리뷰를 받은 뒤 awaiting_approval이면 Work 완료 화면이고, 자동 승인이 켜져 있어도 수동이다 (D498)', () => {
+    const work = finish(fixing(), DEFAULT_CONFIG)
+    expect(currentTask(work)).toMatchObject({ node: 'fix', status: 'awaiting_approval' })
+    expect(currentTask(work)?.countdown).toBeUndefined()
+    // 마무리 단계에서 바로 전달한다 (시나리오 7)
+    const r = apply(work, {
+      type: 'deliver',
+      at: at(),
+      choice: 'push',
+      check: valid(),
+      uncommitted: null,
+    } as MachineEvent)
+    expect(r.rejected).toBeUndefined()
+    expect(r.effects.map((e) => e.type)).toContain('deliver')
+  })
+
+  it('Stop 없이 세션이 끝나도 유효한 리뷰 요청이면 리뷰를 시작한다 (D146, D494)', () => {
+    const work = fixing()
+    const task = currentTask(work)
+    const r = apply(work, {
+      type: 'SessionEnd',
+      taskId: task?.id ?? '',
+      at: at(),
+      reason: 'prompt_input_exit',
+      check: requested(),
+    })
+    expect(status(r.work)).toBe('reviewing')
+    expect(r.effects).toContainEqual(
+      expect.objectContaining({ type: 'startReview', endSession: false }),
+    )
+  })
+
+  it('마무리 단계가 아닌 task의 리뷰 요청은 리뷰를 시작하지 않는다 (D494)', () => {
+    const r = stop(launch(fresh()), requested())
+    expect(currentTask(r.work)).toMatchObject({ node: 'intake', status: 'idle' })
+    expect(r.effects.map((e) => e.type)).not.toContain('startReview')
+    // 옛 Work의 fix도 마무리 단계가 아니다 (D501)
+    const old = launch(approve(stop(launch(legacy(fresh())), valid()).work, valid()).work)
+    expect(currentTask(old)?.node).toBe('fix')
+    expect(status(stop(old, requested()).work)).toBe('idle')
+  })
+
+  it('리뷰 중에 앱을 다시 켜면 끝나지 않은 리뷰는 다시 돌리고, 끝나도 세션을 저절로 열지 않는다 (D75, D496)', () => {
+    const asked = stop(fixing(), requested()).work
+    const task = currentTask(asked)
+    const r = apply(asked, { type: 'app.restarted', at: at(), check: null })
+    expect(currentTask(r.work)).toMatchObject({ status: 'reviewing', review: { restarted: true } })
+    expect(r.effects).toContainEqual({
+      type: 'startReview',
+      taskId: task?.id,
+      codeReview: true,
+      endSession: false,
+    })
+    const done = reviewed(r.work)
+    expect(status(done.work)).toBe('interrupted')
+    expect(done.effects.map((e) => e.type)).not.toContain('resumeTask')
+    const resumed = apply(done.work, { type: 'resume', taskId: task?.id ?? '', at: at() })
+    expect(resumed.effects).toEqual([{ type: 'resumeTask', taskId: task?.id, input: 'review' }])
+    // 리뷰가 끝난 뒤 다시 켜면 중단됨이다
+    const finished = reviewed(asked).work
+    const again = apply(
+      {
+        ...finished,
+        tasks: finished.tasks.map((t) =>
+          t.id === task?.id ? { ...t, status: 'reviewing' as const } : t,
+        ),
+      },
+      { type: 'app.restarted', at: at(), check: null },
+    )
+    expect(status(again.work)).toBe('interrupted')
+  })
+
+  it('[Work 포기]는 도는 리뷰를 멈추고 task는 중단됨이다 (D496)', () => {
+    const asked = stop(fixing(), requested()).work
+    const r = apply(asked, { type: 'abandon', at: at() })
+    expect(r.work.status).toBe('abandoned')
+    expect(status(r.work)).toBe('interrupted')
+    expect(r.effects).toContainEqual({ type: 'cancelReview', taskId: currentTask(asked)?.id })
   })
 })

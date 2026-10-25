@@ -32,6 +32,7 @@ import {
   type PrContext,
   type PrWork,
 } from '../support/pr-scenario'
+import { atCompletion } from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -661,7 +662,7 @@ describe('[흐름] PR 진행 (M9, 시나리오 10)', () => {
     })
     if (!created.ok) throw new Error(created.error)
     await drive(h.relay, h.ui, created.workKey, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion(),
     })
     const taskId = h.ui.works.get(created.workKey)?.current ?? ''
     let review = await h.relay.review(created.workKey, taskId)

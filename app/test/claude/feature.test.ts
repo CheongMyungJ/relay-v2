@@ -1,11 +1,12 @@
-// [실제] 실제 claude로 작은 기능 추가가 intake → design → implement → verify를 지나 끝까지 간다
+// [실제] 실제 claude로 작은 기능 추가가 intake → design → implement(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M14, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - work-start가 머리글 없는 intent 초안에 기능 추가의 기본 완료조건 셋과 인수 조건을 쓴다 (D236, D239, D240)
 // - design이 코드를 바꾸지 않고 design.md 여덟 절을 쓴다 (D243, D244, D431)
 // - implement가 테스트를 먼저 커밋하거나 implement.md에 구현 전 실패를 적는다 (D247, D250)
-// - verify가 verification.md에 나중에 정리할 곳을 두고(D437) 기능 추가 pr.md(동작, 주요 설계 결정)를 쓴다 (D252)
+// - implement가 독립 리뷰를 요청해 받고(D494~D496), verification.md에 나중에 정리할 곳을 두고(D437) 기능 추가
+//   pr.md(동작, 주요 설계 결정)를 쓴다 (D252, D500)
 // 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 앱 설정은
-// 기본값(설계와 계획 수동, 구현 자동)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
+// 기본값(설계와 계획 수동. 구현은 마무리 단계라 늘 수동, D498)이고 자동 승인 카운트다운을 기다린다(awaitAuto).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 feature로 고른다.
 // 결과는 test-results/claude/feature/와 feature.md에 남긴다.
 import fs from 'node:fs'
@@ -17,7 +18,7 @@ import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../support/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../support/harness'
 import { featureScenario } from '../support/scenarios'
-import { S_CASE } from './repos'
+import { S_CASE, S_FEATURE_REQUEST as REQUEST } from './repos'
 import { ScreenUi } from './screen'
 
 const mode = process.env['RELAY_REAL_CLAUDE']
@@ -28,15 +29,6 @@ const OUT = path.join(APP, 'test-results', 'claude')
 const TASK_TIMEOUT_MS = 25 * 60 * 1000
 const NUDGE =
   '이 단계의 절차를 계속해 주세요. 마치면 종료 절차대로 handoff를 쓰고 턴을 끝내 주세요.'
-
-/** 작은 기능: slug 레포(S 요청과 같은 파일)에 최대 길이 옵션을 더한다 */
-const REQUEST = [
-  'slugify(title, { maxLength })에 최대 길이 옵션을 더해 주세요.',
-  '',
-  '결과가 maxLength보다 길면 maxLength 글자에서 자르고, 잘린 끝에 남은 -는 뗍니다.',
-  '옵션이 없으면 지금처럼 자르지 않습니다.',
-  '',
-].join('\n')
 
 interface Result {
   drive: DriveResult
@@ -171,7 +163,12 @@ function inspect(
   const log = git(tree, 'log', '--reverse', '--format=%s', `${base}..HEAD`)
   notes.push(`커밋: ${log.split('\n').filter(Boolean).join(' / ') || '없음'}`)
 
-  const verification = readIn('verify', 'verification.md')
+  need(
+    Boolean(implTask?.review?.resumed_at),
+    'implement가 독립 리뷰를 받아 다시 열리지 않음 (D494~D496)',
+  )
+  need(readIn('implement', 'independent-review.md') !== null, 'independent-review.md 없음 (D495)')
+  const verification = readIn('implement', 'verification.md')
   need(verification !== null, 'verification.md 없음')
   if (verification !== null) {
     need(
@@ -180,7 +177,7 @@ function inspect(
     )
   }
 
-  const pr = readIn('verify', 'pr.md')
+  const pr = readIn('implement', 'pr.md')
   need(pr !== null, 'pr.md 없음')
   if (pr !== null) notes.push(`pr.md 절: ${sectionNames(pr).join(', ')}`)
   return { problems, notes }
@@ -221,7 +218,7 @@ describe.runIf(enabled)('[실제] 실제 claude로 기능 추가 (M14, 8.4)', ()
     console.log(text)
   })
 
-  it('작은 기능이 intake → design → implement → verify → Work 완료로 간다', async () => {
+  it('작은 기능이 intake → design → implement(마무리) → Work 완료로 간다', async () => {
     result = await run()
     expect(result.drive.reason).toBeNull()
     expect(result.drive.status).toBe('completed')
@@ -229,7 +226,6 @@ describe.runIf(enabled)('[실제] 실제 claude로 기능 추가 (M14, 8.4)', ()
       '01 의도 정리',
       '02 설계와 계획',
       '03 구현',
-      '04 리뷰와 검증',
     ])
     expect(result.drive.tasks.filter((t) => t.forced)).toEqual([])
     expect(result.problems).toEqual([])

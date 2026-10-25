@@ -126,7 +126,15 @@ export function appFlags(): string[] {
       model: 'm',
       effort: 'low',
     }),
-    ...claudeJsonArgs({ model: 'm', effort: 'low', system: 's', schema: {} }),
+    // 독립 리뷰 호출은 읽기 도구와 Work 디렉터리를 넘긴다 (D495)
+    ...claudeJsonArgs({
+      model: 'm',
+      effort: 'low',
+      system: 's',
+      schema: {},
+      tools: ['Read'],
+      addDirs: ['d'],
+    }),
   ]
   return [...new Set(args.filter((a) => /^--?[a-z]/.test(a)))].sort()
 }

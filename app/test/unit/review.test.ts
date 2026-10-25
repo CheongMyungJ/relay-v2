@@ -29,6 +29,7 @@ import type {
   TaskStatus,
   WorkState,
 } from '../../src/shared/work'
+import { legacy } from '../support/legacy'
 
 const HANDOFF: Handoff = {
   status: 'awaiting_approval',
@@ -103,12 +104,14 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
       'idle',
       'awaiting_approval',
       'blocked',
+      'reviewing',
       'session_ended',
       'interrupted',
       'approved',
       'discarded',
     ]
     expect(Object.keys(TASK_STATUS_LABEL).sort()).toEqual([...all].sort())
+    expect(TASK_STATUS_LABEL.reviewing).toBe('독립 리뷰 중')
     expect(TASK_STATUS_LABEL.queued).toBe('대기열')
     expect(TASK_STATUS_LABEL.discarded).toBe('폐기됨')
     expect(WORK_STATUS_LABEL.abandoned).toBe('포기')
@@ -155,14 +158,26 @@ describe('task 이름과 머리 띠 (D109, 시나리오 2-5)', () => {
     expect(stopNotice(stopped)).toBe('이 단계 끝나면 멈춤: 01 의도 정리 승인 뒤 멈춤')
   })
 
-  it('[재개]가 할 일을 알린다: 기본 다음 단계. verify에서 멈췄으면 Work 완료 화면에서 전달을 고른다 (3.3, D119)', () => {
-    const work = createWork({
+  it('[재개]가 할 일을 알린다: 기본 다음 단계. Work 완료 task에서 멈췄으면 Work 완료 화면에서 전달을 고른다 (3.3, D119, D493)', () => {
+    const fresh = createWork({
       type: 'bugfix',
       workId: 'w',
       baseBranch: 'main',
       baseCommit: 'c',
       at: 'x',
     }).work
+    // 새 Work의 fix는 마무리 단계다 (D493)
+    expect(
+      resumeHint({
+        ...fresh,
+        status: 'stopped',
+        intent: { version: 1 },
+        tasks: fresh.tasks.map((t) => ({ ...t, node: 'fix' })),
+        stop: { kind: 'after_step', task_id: 't-01' },
+      }),
+    ).toBe('Work 완료 화면에서 전달을 고르면 Work를 완료합니다.')
+    // 아래는 옛 Work (D501)
+    const work = legacy(fresh)
     expect(resumeHint(work)).toBeNull()
     const at = (node: NodeName, stop: WorkState['stop']): WorkState => ({
       ...work,
@@ -776,6 +791,42 @@ describe('강조 영역 (D83, 시나리오 4-2)', () => {
     const both = { 'verification.md': review, 'fix.md': '## 원인\nx\n' }
     expect(stageLead('respond', both)).toBeNull()
     expect(stageLead('intake', both)).toBeNull()
+  })
+
+  it('[요약] 맨 위: 마무리 단계는 제 산출물의 절 뒤에 verification.md의 리뷰 지적과 반영 절을 붙인다 (D223, D499)', () => {
+    const fix = '## 원인\n0으로 나눔\n'
+    const verification = '## 리뷰 지적\n1. [권장] src/avg.js:2 — 주석\n\n## 반영\n1번을 고침\n'
+    const files = { 'fix.md': fix, 'verification.md': verification }
+    expect(stageLead('fix', files, undefined, true)).toEqual({
+      title: '원인',
+      sections: [
+        { title: '원인', text: '0으로 나눔' },
+        { title: '리뷰 지적', text: '1. [권장] src/avg.js:2 — 주석' },
+        { title: '반영', text: '1번을 고침' },
+      ],
+    })
+    // 마무리 단계가 아니면 verification.md를 보지 않는다
+    expect(stageLead('fix', files)).toEqual({
+      title: '원인',
+      sections: [{ title: '원인', text: '0으로 나눔' }],
+    })
+    // 제 산출물에 보일 절이 없으면 리뷰 지적의 제목이다. 리뷰 전(판정표만)이면 제 절만 보인다
+    expect(stageLead('fix', { 'verification.md': verification }, undefined, true)).toEqual({
+      title: '리뷰 지적',
+      sections: [
+        { title: '리뷰 지적', text: '1. [권장] src/avg.js:2 — 주석' },
+        { title: '반영', text: '1번을 고침' },
+      ],
+    })
+    expect(
+      stageLead(
+        'fix',
+        { 'fix.md': fix, 'verification.md': '## 완료조건 판정\n표\n' },
+        undefined,
+        true,
+      ),
+    ).toEqual({ title: '원인', sections: [{ title: '원인', text: '0으로 나눔' }] })
+    expect(stageLead('fix', {}, undefined, true)).toBeNull()
   })
 
   it('[요약] 맨 위: 확인 결과와 들여쓴 실패 시나리오가 붙은 지적도 리뷰 지적과 반영 절을 그 글 그대로 보인다 (D487)', () => {

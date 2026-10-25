@@ -138,6 +138,7 @@ import {
   type Effect,
   type InterruptReason,
   type MachineEvent,
+  type ResumeInput,
 } from '../core/machine'
 import {
   CLEANUP_BLOCKS,
@@ -160,12 +161,40 @@ import {
 import {
   NODE_INFO,
   RESPOND,
+  completesWork,
   customSections,
   customStep,
+  finishesWork,
+  isPipelineNode,
   nodeTitle,
   taskArtifacts,
+  taskTitle,
   workType,
 } from '../core/pipeline'
+import {
+  CHECK_SCHEMA,
+  FIND_SCHEMA,
+  REVIEW_CALL_TIMEOUT_MS,
+  REVIEW_INPUT_DIR,
+  REVIEW_RECORD_FILE,
+  REVIEW_RESULT_FILE,
+  REVIEW_SYSTEM as INDEPENDENT_REVIEW_SYSTEM,
+  REVIEW_TOOLS,
+  checkPrompt,
+  findPrompt,
+  readCheck,
+  readFind,
+  reviewError,
+  reviewMarkdown,
+  reviewPart,
+  reviewResumePrompt,
+  sortFindings,
+  type CallRecord,
+  type ReviewBrief,
+  type ReviewDiff,
+  type ReviewResult,
+} from '../core/independent-review'
+import { VERIFY_NOTES_FILE } from '../core/custom-type'
 import {
   ISSUE_LABEL,
   ISSUE_LABEL_COLOR,
@@ -240,7 +269,9 @@ import {
   bandText,
   bounceNotice,
   changeRange,
+  completionReview,
   emphasis,
+  reviewState,
   handoffSummary,
   hasVisibleText,
   humanNotice,
@@ -422,7 +453,7 @@ import {
   type ReviewInput,
   type ReviewRecord,
 } from '../core/knowledge-review'
-import { claudeJson, findClaude, type CustomSource } from '../adapters/claude'
+import { claudeJson, findClaude, selectType, type CustomSource } from '../adapters/claude'
 import {
   INJECTED_FILE,
   INJECT_LIMIT,
@@ -545,6 +576,12 @@ const CONTEXT_FILE = 'context.md'
 const SETTINGS_FILE = 'task.settings.json'
 const MAX_DIFF_CHARS = 2_000_000
 const KILL_WAIT_MS = 10_000
+
+/** 리뷰 요청 Stop에 답한 뒤 세션을 끝내기까지 기다리는 ms (D496). CLI가 훅의 답을 받고 턴을 마칠 틈이다 */
+const REVIEW_END_DELAY_MS = 500
+
+/** 독립 리뷰의 지침 (skills/_review.md, D495) */
+const REVIEW_GUIDE_FILE = '_review.md'
 
 /** 다시 연 세션의 출력 앞에 넣는 줄. 이전 화면 뒤에 이어 보인다 (시나리오 3-4) */
 const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) ──\x1b[0m\r\n'
@@ -676,7 +713,10 @@ export class WorkRunner {
    * 다시 열 세션에 이어서 하라는 첫 입력을 줄지 (D218). [재개]·[세션 재개]마다 core가 정한 것을 두고, 세션을 다시 열
    * 때 쓴다. 대기열에서 기다리는 동안에도 남는다
    */
-  private readonly resumeContinue = new Map<string, boolean>()
+  /** 다시 열 세션의 첫 입력 (D218, D496). resumeTask가 적고 resumeSession이 한 번 쓴다 */
+  private readonly resumeInput = new Map<string, ResumeInput>()
+  /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
+  private readonly reviews = new Map<string, AbortController>()
   /** task마다 자리를 잡아 세션을 띄우기 시작한 때. 진행 표시의 "세션을 띄우는 중"을 여기서부터 센다 (D216) */
   private readonly launchedAt = new Map<string, number>()
   private readonly problems: string[] = []
@@ -1006,8 +1046,14 @@ export class WorkRunner {
         await this.requestSession(e.taskId)
         return
       case 'resumeTask':
-        this.resumeContinue.set(e.taskId, e.continue)
+        this.resumeInput.set(e.taskId, e.input)
         await this.requestSession(e.taskId)
+        return
+      case 'startReview':
+        this.startReview(e.taskId, e.codeReview, e.endSession)
+        return
+      case 'cancelReview':
+        this.reviews.get(e.taskId)?.abort()
         return
       case 'dequeue':
         this.ctx.pool.remove(this.slotKey(e.taskId))
@@ -1062,15 +1108,20 @@ export class WorkRunner {
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
+      // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
+      ...(finishesWork(this.work, task)
+        ? { finishing: { requested: task.review !== undefined } }
+        : {}),
     })
   }
 
   /**
-   * 묶음 Work의 verify가 쓸 PR 초안 (D476): 기준 커밋 뒤에 커밋이 있는 서브모듈마다 pr/<경로>.md의 내용(없으면 null)과,
-   * 메인을 고쳤는지. 커밋을 세지 못한 레포는 커밋이 있는 것으로 본다. verify가 아니거나 묶음 Work가 아니면 undefined
+   * 묶음 Work의 Work 완료 task(마무리 단계, 옛 Work의 verify)가 쓸 PR 초안 (D476, D500): 기준 커밋 뒤에 커밋이 있는 서브모듈마다
+   * pr/<경로>.md의 내용(없으면 null)과, 메인을 고쳤는지. 커밋을 세지 못한 레포는 커밋이 있는 것으로 본다. Work 완료 task가
+   * 아니거나 묶음 Work가 아니면 undefined
    */
   private async bundleDrafts(task: TaskRecord): Promise<TaskCheckInput['bundleDrafts']> {
-    if (task.node !== 'verify' || !isBundle(this.work)) return undefined
+    if (!completesWork(this.work, task) || !isBundle(this.work)) return undefined
     const drafts: { file: string; text: string | null }[] = []
     for (const r of workRepos(this.work)) {
       const ahead = await countCommits(this.repoTree(r.path), r.base_commit, 'HEAD', {
@@ -1110,7 +1161,7 @@ export class WorkRunner {
     files: Readonly<Record<string, string>>,
   ): Promise<Parameters<typeof knowledgeIssues>[0] | null | undefined> {
     const { env } = this.ctx
-    if (!knowledgeEnabled(env) || task.node !== 'verify') return null
+    if (!knowledgeEnabled(env) || !completesWork(this.work, task)) return null
     const handoff = files[HANDOFF_FILE] ?? ''
     const base = this.work.base_commit
     try {
@@ -1236,6 +1287,201 @@ export class WorkRunner {
     }
   }
 
+  // ---------- 독립 리뷰 (D494~D497) ----------
+
+  /**
+   * 마무리 단계의 독립 리뷰를 시작한다 (D495, D496). endSession이면 Stop 훅에 답한 뒤 리뷰를 요청한 그 세션을 끝낸다: 처리 줄
+   * 안에서 끝내면 답을 기다리는 CLI를 죽이게 된다. 리뷰는 그 세션이 끝난 뒤 처리 줄 밖에서 돌고, 끝나면 review.finished를
+   * 넣는다: 리뷰가 먼저 끝나 다시 연 세션을 늦게 온 종료가 끝내지 않는다. 이미 돌고 있으면 그대로다
+   */
+  private startReview(taskId: string, codeReview: boolean, endSession: boolean): void {
+    const session = endSession ? this.live.get(taskId) : undefined
+    const ended = session
+      ? sleep(REVIEW_END_DELAY_MS)
+          .then(() =>
+            this.enqueue(async () => {
+              if (this.live.get(taskId) === session) await this.endSession(taskId)
+            }),
+          )
+          .catch((e: unknown) => this.problem(`리뷰 전에 세션을 끝내지 못함: ${message(e)}`))
+      : Promise.resolve()
+    if (this.reviews.has(taskId) || this.closing) return
+    const controller = new AbortController()
+    this.reviews.set(taskId, controller)
+    void ended
+      .then(() =>
+        controller.signal.aborted
+          ? undefined
+          : this.runReview(taskId, codeReview, controller.signal),
+      )
+      .catch((e: unknown) => this.problem(`독립 리뷰를 하지 못함: ${message(e)}`))
+      .finally(() => {
+        if (this.reviews.get(taskId) === controller) this.reviews.delete(taskId)
+      })
+  }
+
+  /**
+   * 독립 리뷰 (D495): 변경 파일을 만들고, 찾기(codeReview일 때)와 확인을 차례로 부르고, 결과 글과 기록을 쓴 뒤
+   * review.finished를 넣는다. 호출이 실패해도 결과 글에 까닭을 적고 이어 간다. [Work 포기]로 끊기면 아무것도 넣지 않는다
+   */
+  private async runReview(taskId: string, codeReview: boolean, signal: AbortSignal): Promise<void> {
+    const task = this.task(taskId)
+    if (!task) return
+    const started = Date.now()
+    const { env } = this.ctx
+    const dir = this.files.taskDir(task)
+    const brief = await this.reviewBrief(task, dir)
+    const guide = selectType(
+      await fsp.readFile(path.join(this.ctx.skills, REVIEW_GUIDE_FILE), 'utf8'),
+      workType(this.work),
+    )
+    const engine = taskEngine(task)
+    const bin = engine === 'codex' ? findCodex({ env }) : findClaude({ env })
+    const calls: CallRecord[] = []
+    const call = async (kind: CallRecord['kind'], prompt: string, schema: object) => {
+      const input = {
+        env,
+        cwd: this.worktree,
+        model: task.model ?? '',
+        system: INDEPENDENT_REVIEW_SYSTEM,
+        prompt,
+        schema,
+        timeoutMs: REVIEW_CALL_TIMEOUT_MS,
+        tools: REVIEW_TOOLS,
+        addDirs: [
+          this.files.dir,
+          ...brief.diffs.map((d) => d.dir).filter((d) => d !== this.worktree),
+        ],
+        signal,
+      }
+      const r = !bin
+        ? {
+            data: null,
+            ms: 0,
+            costUsd: null,
+            usage: null,
+            error: `${AGENT_LABELS[engine]}를 찾지 못함`,
+          }
+        : engine === 'codex'
+          ? await codexJson({ ...input, bin })
+          : await claudeJson({ ...input, bin, ...(task.effort ? { effort: task.effort } : {}) })
+      calls.push({ kind, ms: r.ms, cost_usd: r.costUsd, usage: r.usage, error: r.error })
+      return r
+    }
+    let found: ReturnType<typeof readFind> = { candidates: [], later: [] }
+    let findError: string | null = null
+    if (codeReview) {
+      const r = await call('find', findPrompt(reviewPart(guide, 'Finder'), brief), FIND_SCHEMA)
+      found = r.error ? null : readFind(r.data)
+      findError = r.error ?? (found ? null : '구조화된 출력을 읽지 못함')
+      const last = calls[calls.length - 1]
+      if (last) last.count = found?.candidates.length ?? 0
+    }
+    if (signal.aborted) return
+    const candidates = found?.candidates ?? []
+    const verification = path.join(dir, VERIFICATION_FILE)
+    const verificationText = (await readText(verification)) ?? ''
+    const r = await call(
+      'check',
+      checkPrompt(reviewPart(guide, 'Checker'), brief, candidates, {
+        path: verification,
+        text: verificationText,
+      }),
+      CHECK_SCHEMA,
+    )
+    if (signal.aborted) return
+    const checked = r.error ? null : readCheck(r.data, candidates)
+    const checkError = r.error ?? (checked ? null : '구조화된 출력을 읽지 못함')
+    const last = calls[calls.length - 1]
+    if (last) last.count = checked?.findings.length ?? 0
+    // 확인이 실패하면 찾기의 후보를 확인하지 않은 채(가능성) 남긴다: 실제 결함을 버리지 않는다 (D486)
+    const result: ReviewResult = {
+      codeReview,
+      findError,
+      checkError,
+      findings:
+        checked?.findings ??
+        sortFindings(candidates.map((c) => ({ ...c, check: 'plausible' as const, evidence: '' }))),
+      later: found?.later ?? [],
+      objections: checked?.objections ?? [],
+    }
+    await writeFileAtomic(path.join(dir, REVIEW_RESULT_FILE), reviewMarkdown(result))
+    await writeFileAtomic(
+      path.join(dir, REVIEW_RECORD_FILE),
+      `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
+    )
+    const error = reviewError(result)
+    await this.enqueue(() =>
+      this.feed({
+        type: 'review.finished',
+        taskId,
+        at: this.ctx.at(),
+        ...(error ? { error } : {}),
+        findings: result.findings.length,
+        objections: result.objections.length,
+        ms: Date.now() - started,
+      }),
+    )
+  }
+
+  /**
+   * 독립 리뷰의 브리프 재료 (D495): 기준 커밋부터의 변경 파일(레포마다, 추적하지 않는 새 파일 목록과 함께), intent, 앞 단계들과
+   * 이 task의 산출물 경로, 커스텀 유형의 리뷰 관점. 변경 파일은 task 디렉터리의 independent-review/에 쓴다
+   */
+  private async reviewBrief(task: TaskRecord, dir: string): Promise<ReviewBrief> {
+    const env = this.ctx.env
+    const inputDir = path.join(dir, REVIEW_INPUT_DIR)
+    await fsp.rm(inputDir, { recursive: true, force: true })
+    await fsp.mkdir(inputDir, { recursive: true })
+    const sources: { repo: string; dir: string; base: string }[] = [
+      ...(mainEditable(this.work)
+        ? [{ repo: '', dir: this.worktree, base: this.work.base_commit }]
+        : []),
+      ...workRepos(this.work).map((r) => ({
+        repo: r.path,
+        dir: this.repoTree(r.path),
+        base: r.base_commit,
+      })),
+    ]
+    const diffs: ReviewDiff[] = []
+    for (const s of sources) {
+      const file = path.join(
+        inputDir,
+        s.repo ? `${s.repo.replaceAll('/', '__')}.patch` : 'diff.patch',
+      )
+      const [diff, untracked] = await Promise.all([
+        diffFrom(s.dir, s.base, null, { env }).catch(
+          (e: unknown) => `(변경을 읽지 못함: ${message(e)})`,
+        ),
+        untrackedPaths(s.dir, { env }).catch(() => []),
+      ])
+      await writeFileAtomic(file, diff)
+      diffs.push({ ...s, file, untracked })
+    }
+    const artifacts: { title: string; path: string }[] = []
+    for (const t of this.work.tasks) {
+      if (t.status === 'discarded' || !isPipelineNode(t.node) || t.seq > task.seq) continue
+      for (const f of await this.files.artifacts(t)) {
+        if (path.basename(f) === REVIEW_RESULT_FILE) continue
+        artifacts.push({ title: `${taskTitle(this.work, t)} (${t.id})`, path: f })
+      }
+    }
+    const intent = await this.files.readOwned('intent.md')
+    const points =
+      workType(this.work) === 'custom'
+        ? ((await readText(path.join(this.files.customType, VERIFY_NOTES_FILE))) ?? '')
+        : ''
+    return {
+      type: workType(this.work),
+      worktree: this.worktree,
+      intent: intent?.text ?? null,
+      contextPath: path.join(dir, CONTEXT_FILE),
+      artifacts,
+      diffs,
+      reviewPoints: points,
+    }
+  }
+
   /**
    * 지식 검토 호출 (D300). verify의 Stop 훅이 Work 줄에 들어가기 전에 부른다: 모델을 기다리는 동안(최대 REVIEW_TIMEOUT_MS)
    * 이 Work의 다른 명령([즉시 중단], 승인 등)이 막히지 않는다. 같은 입력의 기록이 있거나 task마다 REVIEW_CALL_LIMIT번을
@@ -1243,7 +1489,7 @@ export class WorkRunner {
    */
   private async prepareKnowledgeReview(taskId: string): Promise<void> {
     const task = this.task(taskId)
-    if (!task || task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return
+    if (!task || !completesWork(this.work, task) || !knowledgeEnabled(this.ctx.env)) return
     const input = await this.knowledgeCheckInput(task, await this.files.taskFiles(task))
     if (!input || !this.wantsReview(input, knowledgeIssues(input))) return
     const req = await this.reviewRequest(task, input)
@@ -1340,7 +1586,8 @@ export class WorkRunner {
     task: TaskRecord,
     files: Readonly<Record<string, string>>,
   ): Promise<string> {
-    if (task.node !== 'verify' || !knowledgeEnabled(this.ctx.env)) return turnSnapshot(task, files)
+    if (!completesWork(this.work, task) || !knowledgeEnabled(this.ctx.env))
+      return turnSnapshot(task, files)
     try {
       const entries = await readRepoKnowledge(this.worktree)
       // 바뀌었는지만 보면 되므로 경로와 해시만 든다
@@ -1461,11 +1708,12 @@ export class WorkRunner {
         skill,
         type: workType(this.work),
         ...this.customSource(task),
+        finishing: finishesWork(this.work, task),
       })
       const version = await driver.version(bin, env)
 
-      // verify의 마무리 안내 문구(D104)와 Work 완료 화면의 전달 버튼이 쓸 점검을 새로 한다 (D118)
-      if (task.node === 'verify') await this.recheckProject()
+      // Work 완료 화면이 되는 task의 마무리 안내 문구(D104)와 전달 버튼이 쓸 점검을 새로 한다 (D118, D500)
+      if (completesWork(this.work, task)) await this.recheckProject()
       const settingsPath = await this.writeSettings(task)
       await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
 
@@ -1526,11 +1774,15 @@ export class WorkRunner {
       // 이전 화면을 먼저 보인다. 이 앱에서 돌던 task면 버퍼가 남아 있고, 아니면 pty.log에서 읽는다
       await this.terminalBuffer(task)
       const token = randomBytes(32).toString('hex')
-      // 중단됨의 [재개]는 이어서 하라고 알린다 (D218)
-      const prompt = this.resumeContinue.get(task.id)
-        ? continuePrompt(task.session?.app_ended !== undefined)
-        : undefined
-      this.resumeContinue.delete(task.id)
+      // 중단됨의 [재개]는 이어서 하라고 알리고(D218), 독립 리뷰가 끝난 세션은 결과를 읽고 이어 하라고 알린다 (D496)
+      const input = this.resumeInput.get(task.id)
+      const prompt =
+        input === 'review'
+          ? reviewResumePrompt(path.join(this.files.taskDir(task), REVIEW_RESULT_FILE))
+          : input === 'continue'
+            ? continuePrompt(task.session?.app_ended !== undefined)
+            : undefined
+      this.resumeInput.delete(task.id)
       const instructionsPath =
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       const args = await driver.resumeArgs({
@@ -1583,6 +1835,7 @@ export class WorkRunner {
       skill: NODE_INFO[task.node].skill,
       type: workType(this.work),
       ...this.customSource(task),
+      finishing: finishesWork(this.work, task),
     })
     return deployed.file
   }
@@ -1687,7 +1940,7 @@ export class WorkRunner {
       intent: intent?.text ?? null,
       decisionLog: decisionsWithout(decisions?.text ?? '', discarded),
       ...previousInputs(earlier),
-      ...(task.node === 'verify' ? { delivery: closingButtons(this.checks()) } : {}),
+      ...(completesWork(this.work, task) ? { delivery: closingButtons(this.checks()) } : {}),
       respond: await this.respondInput(task),
       // 서브모듈을 읽지 못하면 안내 없이 간다 (D383)
       submodules,
@@ -1701,7 +1954,7 @@ export class WorkRunner {
     if (!isBundle(this.work)) return null
     const repos = workRepos(this.work)
     const picked = new Set(repos.map((r) => r.path))
-    const verify = task.node === 'verify'
+    const verify = completesWork(this.work, task)
     return {
       main: projectName(this.project),
       mainEditable: mainEditable(this.work),
@@ -1846,7 +2099,7 @@ export class WorkRunner {
           .filter((l) => /^[+-][^+-]/.test(l))
           .join('\n')
         for (const id of identifiersIn(changedLines)) identifiers.add(id)
-        if (task.node === 'verify') {
+        if (completesWork(this.work, task)) {
           for (const c of await changedKnowledge(this.worktree, this.work.base_commit, { env }))
             parts.push(c.text)
         }
@@ -2687,10 +2940,10 @@ export class WorkRunner {
 
   // ---------- 전달 (시나리오 7) ----------
 
-  /** 지금 task가 verify면 그 형식 검사. 전달을 시작할 수 있는지 core/delivery가 판정한다 */
+  /** 지금 task가 Work 완료 task(마무리 단계, 옛 Work의 verify)면 그 형식 검사. 전달을 시작할 수 있는지 core/delivery가 판정한다 */
   private async verifyCheck(): Promise<TaskCheck | null> {
     const task = currentTask(this.work)
-    if (task?.node !== 'verify') return null
+    if (!task || !completesWork(this.work, task)) return null
     return await this.checkOf(task)
   }
 
@@ -4194,6 +4447,8 @@ export class WorkRunner {
     this.closing = true
     this.drafts.stop()
     this.stopPrTimers()
+    // 도는 독립 리뷰를 끊는다. 다음 실행 때 처음부터 다시 돌린다 (D496)
+    for (const r of this.reviews.values()) r.abort()
     return this.enqueue(async () => {
       this.stopCountdown()
       const task = currentTask(this.work)
@@ -4226,6 +4481,7 @@ export class WorkRunner {
     if (this.work.status !== 'archived') return { ok: false, error: '보관된 Work만 지움' }
     this.closing = true
     this.stopPrTimers()
+    for (const r of this.reviews.values()) r.abort()
     await this.prIdle()
     await this.issueIdle()
     return this.enqueue(async () => {
@@ -4376,7 +4632,7 @@ export class WorkRunner {
     const header = check.handoffHeader
     const respond = task.respond ? await this.respondReview(task, files) : null
     let completion: Completion | null = null
-    if (task.node === 'verify') {
+    if (completesWork(this.work, task)) {
       const workDiff = await diffTo(this.work.base_commit)
       // Work 완료 화면 (시나리오 7-3): 승인할 수 있는 verify는 전달 버튼이나(승인하면 멈추면
       // [승인하고 멈춤]), verify에서 멈춘 Work는 전달 버튼이다 (D119)
@@ -4397,6 +4653,7 @@ export class WorkRunner {
         branch: await this.branchInfo(),
         knowledge: await this.knowledgeView(cwd, range?.to ?? null, handoffText ?? ''),
         ...(bundled ? { repos: await this.repoCompletions(workDiff, latest) } : {}),
+        review: completionReview(this.work, task),
       }
     }
     return {
@@ -4432,7 +4689,7 @@ export class WorkRunner {
         live: this.live.has(task.id),
         ...(respond ? { tests: respond.tests, failure: respond.view.failure } : {}),
       }),
-      lead: stageLead(task.node, files, customStep(this.work, task)),
+      lead: stageLead(task.node, files, customStep(this.work, task), finishesWork(this.work, task)),
       artifacts: Object.entries(files)
         .filter(([name]) => isArtifactName(name))
         .map(([name, text]) => ({ name, text })),
@@ -5284,7 +5541,10 @@ export class WorkRunner {
     }
     if (!methods.length) return { ok: false, error: '레포가 허용하는 머지 방식이 없음' }
     // 대응 라운드가 push했거나 원격 커밋을 받았으면 판정표가 대응 전 코드 기준이다 (D180, D206)
-    const verify = [...this.laneWork(lane).tasks].reverse().find((t) => t.node === 'verify')
+    const lw = this.laneWork(lane)
+    const verify = [...lw.tasks]
+      .reverse()
+      .find((t) => t.status !== 'discarded' && completesWork(lw, t))
     const table = verify
       ? verdicts((await this.files.taskFiles(verify))[VERIFICATION_FILE] ?? '')
       : []
@@ -6523,6 +6783,7 @@ export class WorkRunner {
         ? { seconds: t.countdown.seconds, endsAt: this.countdownEnds(t) }
         : null,
       activity: this.activityOf(t),
+      review: reviewState(t),
     }
   }
 

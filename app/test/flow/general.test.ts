@@ -1,5 +1,5 @@
 // [흐름] 일반 유형 (docs/implementation.md M18, I90). 가짜 claude로 일반 Work가
-// intake → execute → verify → Work 완료로 가고, 확인 방법이 빠진 intent 초안의 되돌림(D305, I86), 실행의 기본 자동 승인을
+// intake → execute(마무리, D493) → Work 완료로 가고, 확인 방법이 빠진 intent 초안의 되돌림(D305, I86)을
 // 본다. 다른 유형의 흐름은 flow.test.ts, feature.test.ts, refactor.test.ts가 본다.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -80,7 +80,7 @@ function events(dir: string): LifecycleEvent[] {
 const statuses = (w: WorkState) => w.tasks.map((t) => [t.id, t.node, t.status, t.reason])
 
 describe('[흐름] 일반 유형 (M18)', () => {
-  it('intake → execute → verify → [완료만]. 실행의 커밋과 execution.md, 확정본에 type: general (D302, D303, D310)', async () => {
+  it('intake → execute(마무리) → [완료만]. 실행의 커밋과 execution.md, 확정본에 type: general (D302, D303, D310, D493)', async () => {
     const s = await setup(generalScenario())
     const key = await s.create()
     const dir = s.dir(key)
@@ -91,7 +91,6 @@ describe('[흐름] 일반 유형 (M18)', () => {
     expect(result.tasks.map((t) => [t.label, t.bounces, t.forced])).toEqual([
       ['01 의도 정리', 0, false],
       ['02 실행', 0, false],
-      ['03 리뷰와 검증', 0, false],
     ])
 
     const w = work(dir)
@@ -99,8 +98,8 @@ describe('[흐름] 일반 유형 (M18)', () => {
     expect(statuses(w)).toEqual([
       ['t-01', 'intake', 'approved', 'default'],
       ['t-02', 'execute', 'approved', 'default'],
-      ['t-03', 'verify', 'approved', 'default'],
     ])
+    expect(w.tasks[1]?.review).toMatchObject({ code_review: true, resumed_at: expect.any(String) })
     expect(s.h.ui.works.get(key)?.type).toBe('general')
     expect(events(dir)[0]).toMatchObject({ type: 'work.created', payload: { type: 'general' } })
 
@@ -111,31 +110,34 @@ describe('[흐름] 일반 유형 (M18)', () => {
     const tree = s.tree(key)
     expect(git(tree, 'log', '--format=%s', `${base}..HEAD`)).toBe('docs: README')
     expect(read(path.join(tree, 'README.md'))).toBe(GENERAL_FILES['README.md'])
-    expect(fs.existsSync(path.join(dir, 'tasks', '02-execute', 'execution.md'))).toBe(true)
+    for (const file of ['execution.md', 'verification.md', 'pr.md', 'independent-review.md']) {
+      expect(fs.existsSync(path.join(dir, 'tasks', '02-execute', file)), file).toBe(true)
+    }
 
-    // context.md: 업무 유형과 일반의 다음 단계 (D303, 3.2). verify는 execution.md 경로를 받는다 (D314)
+    // context.md: 업무 유형과 일반의 다음 단계 (D303, 3.2). 마무리 단계라 마무리 절이 있다 (D493)
     const executeCtx = read(path.join(dir, 'tasks', '02-execute', 'context.md'))
     expect(executeCtx).toContain('- 업무 유형: 일반 (`general`)')
     expect(executeCtx).not.toContain('선택 가능한 다음 단계')
-    const verifyCtx = read(path.join(dir, 'tasks', '03-verify', 'context.md'))
-    expect(verifyCtx).toContain(path.join(dir, 'tasks', '02-execute', 'execution.md'))
+    expect(executeCtx).toContain('## 마무리\n')
 
     const skills = s.h
       .records()
       .filter((r) => r['type'] === 'start' && !r['resume'])
       .map((r) => r['skill'])
-    expect(skills).toEqual(['work-start', 'execute', 'verify'])
+    expect(skills).toEqual(['work-start', 'execute'])
 
-    // 공용 스킬은 일반의 구간만 배포한다 (D279): verify에 execution.md는 있고 다른 유형의 산출물은 없다
+    // 공용 스킬과 마무리 절차는 일반의 구간만 배포한다 (D279): execution.md는 있고 다른 유형의 산출물은 없다
     const skillsSrc = path.resolve(__dirname, '../../../skills')
-    const deployed = read(path.join(dir, 'tasks', '03-verify', 'instructions.md'))
+    const deployed = read(path.join(dir, 'tasks', '02-execute', 'instructions.md'))
+    expect(deployed).toContain('## Finishing the Work')
     expect(deployed).toContain('`execution.md`')
     expect(deployed).not.toContain('`fix.md`')
     expect(deployed).not.toContain('`refactor.md`')
     expect(w.tasks.map((t) => t.skill_hash)).toEqual(
       await Promise.all(
-        (['work-start', 'execute', 'verify'] as const).map(
-          async (sk) => `sha256:${sha256(await skillText(skillsSrc, sk, 'general'))}`,
+        (['work-start', 'execute'] as const).map(
+          async (sk) =>
+            `sha256:${sha256(await skillText(skillsSrc, sk, 'general', undefined, sk === 'execute'))}`,
         ),
       ),
     )
@@ -164,7 +166,6 @@ describe('[흐름] 일반 유형 (M18)', () => {
     expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
       ['01 의도 정리', 1],
       ['02 실행', 0],
-      ['03 리뷰와 검증', 0],
     ])
     await settle(s.h, key)
     const bounced = events(dir).filter((e) => e.type === 'task.bounced')

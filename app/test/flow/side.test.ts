@@ -8,7 +8,7 @@ import type { WorkView } from '../../src/shared/views'
 import type { WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
 import { harness, makeRepo, register, settle, type Harness } from '../support/harness'
-import { REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
+import { atCompletion, REPO_FILES, REQUEST, scenario, type Scenario } from '../support/scenarios'
 
 let h: Harness | undefined
 
@@ -242,7 +242,7 @@ describe('곁 세션 (시나리오 11)', () => {
   it('[Work 정리]는 곁 세션을 먼저 끝낸다. 보관된 Work에서는 열지 않는다 (D385, D390)', async () => {
     const s = await setup({ ...scenario(), side: [{ do: 'wait' }] })
     const paused = await drive(s.h.relay, s.h.ui, s.key, {
-      pauseAt: (t) => t.node === 'verify' && t.status === 'awaiting_approval',
+      pauseAt: atCompletion(),
     })
     expect(paused, s.h.ui.dump()).toMatchObject({ status: 'paused' })
     expect(await s.h.relay.deliver(s.key, { choice: 'push', uncommitted: null })).toEqual({

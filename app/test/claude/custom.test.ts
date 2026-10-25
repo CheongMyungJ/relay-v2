@@ -1,11 +1,11 @@
-// [실제] 실제 claude로 작은 커스텀 유형 Work가 intake → 조사 → 작성 → verify를 지나 끝까지 간다
+// [실제] 실제 claude로 작은 커스텀 유형 Work가 intake → 조사 → 작성(마무리, D493)을 지나 끝까지 간다
 // (docs/implementation.md M30, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
 // - work-start가 커스텀 Work의 intent에 일반과 같은 기본 완료조건과 줄마다 확인 방법을 쓴다 (D455)
 // - 커스텀 단계가 공통 바탕 뒤에 붙은 사람의 절차를 따른다: 조사 단계는 코드를 바꾸지 않고, 정의한 절의 산출물을 쓴다
 //   (D452, D453). 작성 단계는 조사 결과대로 바꾸고 커밋한다 (D454)
-// - verify가 커스텀 단계의 산출물을 읽고 일반 pr.md(주요 결정)를 쓴다 (D456)
-// 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 두 커스텀 단계는
-// 유형의 기본값으로 자동 승인하고 카운트다운을 기다린다(awaitAuto).
+// - 마지막 단계인 작성이 독립 리뷰를 요청해 받고(D494~D496) 일반 pr.md(주요 결정)를 쓴다 (D456, D500)
+// 사람 역할: 첫 실행 창은 수락하고(I17), 질문에는 첫 선택지(추천)로 답하고, 승인 대기가 되면 승인한다. 조사 단계는
+// 유형의 기본값으로 자동 승인하고 카운트다운을 기다린다(awaitAuto). 작성 단계는 마무리 단계라 늘 수동이다 (D498).
 // RELAY_REAL_CLAUDE=1이면 실제 claude, dry면 가짜 claude로 도구만 확인한다. RELAY_REAL_CASES의 custom으로 고른다.
 // 결과는 test-results/claude/custom/와 custom.md에 남긴다.
 import fs from 'node:fs'
@@ -16,7 +16,14 @@ import { CHECK_METHOD, intentDraftBody, sectionNames, sectionText } from '../../
 import type { WorkState } from '../../src/shared/work'
 import { drive, type DriveResult } from '../support/driver'
 import { APP, FAKE_CLAUDE, git, harness, makeRepo, register, settle } from '../support/harness'
-import { customSteps, generalScenario } from '../support/scenarios'
+import {
+  customSteps,
+  finishingSteps,
+  GENERAL_VERDICTS,
+  generalAfter,
+  generalScenario,
+  type Scenario,
+} from '../support/scenarios'
 import { S_CASE } from './repos'
 import { ScreenUi } from './screen'
 
@@ -74,8 +81,11 @@ interface Result {
 
 let result: Result | null = null
 
-/** 가짜 claude의 두 커스텀 단계 (dry): 조사는 커밋하지 않고, 작성은 README와 lint 스크립트를 커밋한다 */
-function dryTasks() {
+/**
+ * 가짜 claude의 두 커스텀 단계 (dry): 조사는 커밋하지 않고, 작성은 README와 lint 스크립트를 커밋한 뒤 독립 리뷰를 요청하고
+ * 리뷰를 받은 뒤 일반의 판정과 pr.md로 마무리한다 (D493)
+ */
+function dryScenario(): Scenario {
   const pkg = JSON.parse(S_CASE.files['package.json'] ?? '{}') as {
     scripts?: Record<string, string>
   }
@@ -84,11 +94,20 @@ function dryTasks() {
     'README.md': "# slug\n\n```js\nslugify('Hello') // 'hello'\n```\n\n테스트: `npm test`\n",
     'package.json': JSON.stringify(pkg, null, 2) + '\n',
   }
-  return {
-    't-02': customSteps('survey', { sections: TYPE.steps[0]?.sections ?? [], commit: false }),
-    't-03': customSteps('write').map((st) =>
+  const write = finishingSteps(
+    customSteps('write').map((st) =>
       st.do === 'commit' ? { ...st, files, message: 'docs: README와 lint 스크립트' } : st,
     ),
+    GENERAL_VERDICTS,
+    generalAfter(),
+  )
+  return {
+    tasks: {
+      'work-start': generalScenario().tasks['work-start'] ?? [],
+      't-02': customSteps('survey', { sections: TYPE.steps[0]?.sections ?? [], commit: false }),
+      't-03': write.own,
+    },
+    reviewed: { 't-03': write.reviewed },
   }
 }
 
@@ -99,7 +118,7 @@ async function run(): Promise<Result> {
       ? {
           ui,
           claudeBin: FAKE_CLAUDE,
-          scenario: { tasks: { ...generalScenario().tasks, ...dryTasks() } },
+          scenario: dryScenario(),
           productDefaults: true,
         }
       : { ui, claudeBin: process.env['CLAUDE_BIN'] ?? null, productDefaults: true },
@@ -216,7 +235,15 @@ function inspect(
   need(fs.existsSync(path.join(tree, 'README.md')), 'README.md 없음')
   need(git(tree, 'status', '--porcelain') === '', '커밋 안 된 변경이 남음')
 
-  const pr = readIn('pr.md', 'verify')
+  need(
+    Boolean(writeTask?.review?.resumed_at),
+    '작성 단계가 독립 리뷰를 받아 다시 열리지 않음 (D494~D496)',
+  )
+  need(
+    readIn('independent-review.md', 'custom', 'write') !== null,
+    'independent-review.md 없음 (D495)',
+  )
+  const pr = readIn('pr.md', 'custom', 'write')
   need(pr !== null, 'pr.md 없음')
   if (pr !== null) {
     need(sectionNames(pr).includes('주요 결정'), 'pr.md에 ## 주요 결정 없음 (D456)')
@@ -260,16 +287,11 @@ describe.runIf(enabled)('[실제] 실제 claude로 커스텀 유형 (M30, 8.4)',
     console.log(text)
   })
 
-  it('작은 커스텀 Work가 intake → 조사 → 작성 → verify → Work 완료로 간다', async () => {
+  it('작은 커스텀 Work가 intake → 조사 → 작성(마무리) → Work 완료로 간다', async () => {
     result = await run()
     expect(result.drive.reason).toBeNull()
     expect(result.drive.status).toBe('completed')
-    expect(result.drive.tasks.map((t) => t.label)).toEqual([
-      '01 의도 정리',
-      '02 조사',
-      '03 작성',
-      '04 리뷰와 검증',
-    ])
+    expect(result.drive.tasks.map((t) => t.label)).toEqual(['01 의도 정리', '02 조사', '03 작성'])
     expect(result.drive.tasks.filter((t) => t.forced)).toEqual([])
     expect(result.problems).toEqual([])
   })

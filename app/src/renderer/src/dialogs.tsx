@@ -615,6 +615,7 @@ export function NewWorkDialog({
     if (!on && issue.trim() === originIssue) setIssue('')
   }
   const [modes, setModes] = useState<Overrides>({})
+  const [codeReview, setCodeReview] = useState<boolean | undefined>(undefined)
   const [auto, setAuto] = useState<AutoOverrides>({})
   // 묶음 Work (D470, D472): 메인 레포를 고치는지, 메인 기준 커밋의 서브모듈, 고른 서브모듈과 그 기준
   const [editMain, setEditMain] = useState(true)
@@ -761,6 +762,7 @@ export function NewWorkDialog({
         ? { custom_auto_approve: customAuto }
         : {}),
       ...(Object.keys(question_mode).length ? { question_mode } : {}),
+      ...(codeReview === undefined ? {} : { code_review: codeReview }),
     }
     const issueNumber = issueNumberInput(issue)
     if (issueNumber === undefined) {
@@ -1004,6 +1006,9 @@ export function NewWorkDialog({
         ) : null}
         <h3>이 Work의 질문 방식</h3>
         <QuestionModes config={config} type={type} value={modes} onChange={setModes} />
+        <h3>이 Work의 독립 리뷰</h3>
+        <div className="dim">끄면 마지막 단계의 독립 리뷰가 판정표만 확인합니다.</div>
+        <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
       </details>
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
@@ -1412,6 +1417,39 @@ function CustomAutoApprove({
 }
 
 /**
+ * Work별 독립 리뷰의 코드 리뷰 (D72, D497): 앱 설정 따름, 켜기, 끄기. 리뷰를 요청할 때의 값을 쓴다. 끄면 판정표만 확인한다
+ */
+function CodeReviewOverride({
+  config,
+  value,
+  onChange,
+}: {
+  config: AppConfig | null
+  value: boolean | undefined
+  onChange: (v: boolean | undefined) => void
+}) {
+  return (
+    <div className="form-grid">
+      <label
+        className="form-row"
+        title="마지막 단계가 판정표를 쓰고 리뷰를 요청하면 앱이 따로 띄우는 독립 리뷰의 코드 리뷰. 끄면 판정표만 확인한다 (D495, D497)"
+      >
+        <span>독립 리뷰의 코드 리뷰</span>
+        <select
+          aria-label="독립 리뷰의 코드 리뷰"
+          value={value === undefined ? '' : value ? 'on' : 'off'}
+          onChange={(e) => onChange(e.target.value ? e.target.value === 'on' : undefined)}
+        >
+          <option value="">앱 설정 따름{config ? ` (${onOff(config.code_review)})` : ''}</option>
+          <option value="on">켜기</option>
+          <option value="off">끄기</option>
+        </select>
+      </label>
+    </div>
+  )
+}
+
+/**
  * Work별 대응 자동 시작 (D72, D154): 앱 설정 따름, 켜기, 끄기. 켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 PR을 읽어
  * 새 항목이 들어오면 쌓인 것과 함께 시작한다 (D210)
  */
@@ -1459,6 +1497,7 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
     work.settings.custom_auto_approve ?? {},
   )
   const [autoStart, setAutoStart] = useState<boolean | undefined>(work.settings.respond_auto_start)
+  const [codeReview, setCodeReview] = useState<boolean | undefined>(work.settings.code_review)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
@@ -1472,6 +1511,7 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
         ...(work.customType ? { custom_auto_approve: customAuto } : {}),
         question_mode: only(modes, SKILL_TITLES, work.type),
         respond_auto_start: autoStart ?? null,
+        code_review: codeReview ?? null,
       }),
     )
     setBusy(false)
@@ -1487,8 +1527,8 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
       <h3>자동 승인 (Claude Code)</h3>
       <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
       <div className="dim">
-        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. 리뷰는
-        지적이 없을 때만 자동 승인합니다.
+        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. Work의
+        마지막 단계(Work 완료 화면)는 늘 수동입니다.
       </div>
       <AutoApproveOverrides config={config} type={work.type} value={auto} onChange={setAuto} />
       {work.customType ? (
@@ -1503,6 +1543,12 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
         켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 새 항목이 들어오면 함께 시작합니다.
       </div>
       <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
+      <h3>독립 리뷰 (Work 마무리)</h3>
+      <div className="dim">
+        마지막 단계가 리뷰를 요청할 때의 값을 씁니다. 끄면 판정표만 확인하고 Work 완료 화면과 PR
+        초안에 코드 리뷰를 하지 않았다고 남깁니다.
+      </div>
+      <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
       <h3>질문 방식</h3>
       <div className="dim">질문 방식은 다음에 시작하는 task부터 씁니다.</div>
       <QuestionModes config={config} type={work.type} value={modes} onChange={setModes} />
@@ -1673,6 +1719,7 @@ export function SettingsDialog({
         pr_poll_interval_sec: value.pr_poll_interval_sec,
         respond_auto_start: value.respond_auto_start,
         respond_auto_round_max: value.respond_auto_round_max,
+        code_review: value.code_review,
         reply_signature: value.reply_signature,
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
@@ -1944,7 +1991,8 @@ export function SettingsDialog({
           <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
           <div className="dim">
             켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
-            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 리뷰와 검증은 늘 수동입니다.
+            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 Work의 마지막 단계(Work 완료
+            화면)는 늘 수동입니다.
           </div>
           <Groups
             items={AUTO_APPROVE_TITLES}
@@ -1981,6 +2029,26 @@ export function SettingsDialog({
                 onChange={(e) =>
                   setDraft({ ...value, auto_approve_countdown_sec: Number(e.target.value) })
                 }
+              />
+            </label>
+          </div>
+          <h3>독립 리뷰 (Work 마무리)</h3>
+          <div className="dim">
+            Work의 마지막 단계가 판정표를 쓰고 리뷰를 요청하면 relay가 세션을 닫고 따로 리뷰를 돌린
+            뒤 같은 대화를 다시 엽니다. 판정표 확인은 늘 하고, 코드 리뷰는 여기서 켜고 끕니다.
+            Work마다 바꿀 수 있습니다.
+          </div>
+          <div className="form-grid">
+            <label
+              className="form-row"
+              title="독립 리뷰의 코드 리뷰(찾기와 확인). 끄면 판정표만 확인한다 (D495, D497)"
+            >
+              <span>독립 리뷰의 코드 리뷰</span>
+              <input
+                type="checkbox"
+                aria-label="독립 리뷰의 코드 리뷰"
+                checked={value.code_review}
+                onChange={(e) => setDraft({ ...value, code_review: e.target.checked })}
               />
             </label>
           </div>

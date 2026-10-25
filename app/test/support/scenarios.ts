@@ -1,6 +1,23 @@
 // 가짜 claude의 시나리오 (8.2). 스킬마다 단계 목록을 둔다. 산출물과 handoff는 5.2~5.6의 모양이다.
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type { SkillName } from '../../src/shared/config'
+import type { TaskView } from '../../src/shared/views'
+import type { BuiltinWorkType } from '../../src/shared/work'
+
+/** 유형마다 Work를 마무리하는 마지막 작업 단계 (D493) */
+export const FINAL_NODE: Readonly<Record<BuiltinWorkType, NodeName>> = {
+  bugfix: 'fix',
+  feature: 'implement',
+  refactor: 'refactor',
+  spec: 'spec',
+  general: 'execute',
+}
+
+/** Work 완료 화면이 된 마무리 단계 task (D493): 독립 리뷰를 받은 뒤 승인 대기다. drive의 pauseAt에 쓴다 */
+export const atCompletion =
+  (node: NodeName = 'fix') =>
+  (t: TaskView): boolean =>
+    t.node === node && t.status === 'awaiting_approval'
 
 export type Step =
   | { do: 'prompt'; text?: string }
@@ -80,6 +97,13 @@ export interface Scenario {
   sessionResumeCodex?: object[]
   /** 지식 검토 호출(claude -p, D300)의 n번째 결과. 없으면 문제 없음 */
   review?: { issues: { file: string; kind: string; quote: string; fix: string }[] }[]
+  /**
+   * 독립 리뷰 결과로 다시 연 마무리 세션의 단계 (D496). 스킬 이름이나 task id → 단계. 첫 요청(리뷰 결과 안내)은 가짜 claude가
+   * 먼저 보낸다
+   */
+  reviewed?: Partial<Record<SkillName | string, Step[]>>
+  /** 독립 리뷰 호출(claude -p, D495)의 결과: 찾기와 확인의 구조화된 출력. 없으면 지적·이의 없음 */
+  independent?: { find?: object; check?: object }
 }
 
 // ---------- 시험 레포 ----------
@@ -966,7 +990,7 @@ export function verifyApplied(): Step[] {
 }
 
 /**
- * 기능 추가 시나리오 (3.1, D232): intake → design → implement → verify. intent 초안과 verify의 판정, PR 초안을 기능
+ * 기능 추가 시나리오 (3.1, D232): intake → design → implement(마무리, D493). intent 초안과 마무리의 판정, PR 초안을 기능
  * 추가의 모양으로 바꾼다
  */
 export function featureScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
@@ -980,18 +1004,20 @@ export function featureScenario(override: Partial<Record<SkillName, Step[]>> = {
         ? { ...st, text: FEATURE_PR }
         : st,
   )
-  return {
-    tasks: {
+  return finishing(
+    {
       'work-start': intake,
       design: steps('design'),
       implement: steps('implement'),
       verify,
       ...override,
     },
-  }
+    'implement',
+    FEATURE_VERDICTS,
+  )
 }
 
-/** 리팩터링 시나리오 (3.1, D258): intake → refactor → verify */
+/** 리팩터링 시나리오 (3.1, D258): intake → refactor(마무리) (D493) */
 export function refactorScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   const intake = steps('intake').map((st) =>
     st.do === 'write' && st.file === 'intent.draft.md'
@@ -1005,42 +1031,40 @@ export function refactorScenario(override: Partial<Record<SkillName, Step[]>> = 
         ? { ...st, text: REFACTOR_PR }
         : st,
   )
-  return {
-    tasks: {
-      'work-start': intake,
-      refactor: steps('refactor'),
-      verify,
-      ...override,
-    },
-  }
+  return finishing(
+    { 'work-start': intake, refactor: steps('refactor'), verify, ...override },
+    'refactor',
+    REFACTOR_VERDICTS,
+  )
 }
 
-/** 일반 시나리오 (3.1, D302): intake → execute → verify */
+/** 일반 시나리오 (3.1, D302): intake → execute(마무리) (D493) */
 export function generalScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   const intake = steps('intake').map((st) =>
     st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: generalIntentDraft() } : st,
   )
-  const verify = steps('verify').map((st) =>
+  return finishing(
+    { 'work-start': intake, execute: steps('execute'), verify: generalAfter(), ...override },
+    'execute',
+    GENERAL_VERDICTS,
+  )
+}
+
+/** 일반(과 커스텀) 유형의 마무리에서 리뷰를 받은 뒤의 단계: 지적 없음, 일반의 판정과 pr.md (D493). 옛 verify의 모양이다 */
+export function generalAfter(): Step[] {
+  return steps('verify').map((st) =>
     st.do === 'write' && st.file === 'verification.md'
       ? { ...st, text: REVIEW_NONE + GENERAL_VERDICTS }
       : st.do === 'write' && st.file === 'pr.md'
         ? { ...st, text: GENERAL_PR }
         : st,
   )
-  return {
-    tasks: {
-      'work-start': intake,
-      execute: steps('execute'),
-      verify,
-      ...override,
-    },
-  }
 }
 
 /**
- * 설계 시나리오 (3.1, D350): intake → spec → verify. spec은 주제 목록을 묻고 주제마다 질문 묶음 하나씩(둘) 물은 뒤 설계
- * 문서를 커밋하고 spec.md를 쓴다(D357). 사람의 결정은 by: human이다(D358). verify는 다시 볼 결정을 적은 verification.md와
- * 설계 pr.md를 쓴다 (D362, D364). 사람 역할(driver)은 질문에 첫 선택지(추천)로 답한다
+ * 설계 시나리오 (3.1, D350): intake → spec(마무리, D493). spec은 주제 목록을 묻고 주제마다 질문 묶음 하나씩(둘) 물은 뒤
+ * 설계 문서를 커밋하고 spec.md를 쓴다(D357). 사람의 결정은 by: human이다(D358). 리뷰를 받은 뒤 다시 볼 결정을 적은
+ * verification.md와 설계 pr.md를 쓴다 (D362, D364). 사람 역할(driver)은 질문에 첫 선택지(추천)로 답한다
  */
 export function specScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
   const intake = steps('intake').map((st) =>
@@ -1060,17 +1084,100 @@ export function specScenario(override: Partial<Record<SkillName, Step[]>> = {}):
         ? { ...st, text: SPEC_PR }
         : st,
   )
-  return { tasks: { 'work-start': intake, spec, verify, ...override } }
+  return finishing({ 'work-start': intake, spec, verify, ...override }, 'spec', specVerification())
 }
 
-/** 버그 수정 시나리오 (3.1): intake → fix → verify (D227) */
-export function scenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
-  return {
-    tasks: {
-      'work-start': steps('intake'),
-      fix: steps('fix'),
-      verify: steps('verify'),
-      ...override,
+/**
+ * 마무리 단계의 리뷰 요청 (5.6.14, D494): 단계의 마지막 handoff(awaiting_approval) 앞에 판정표(verification.md)를 쓰고 그
+ * handoff를 review_requested로 바꾼다. awaiting_approval handoff가 없는 단계(막힘, handoff 없이 끝남 등)는 그대로 둔다
+ */
+export function requestReview(list: readonly Step[], verdicts: string): Step[] {
+  const at = list.findLastIndex(
+    (st) =>
+      st.do === 'write' && st.file === 'handoff.md' && /^status: awaiting_approval$/m.test(st.text),
+  )
+  if (at < 0) return [...list]
+  const last = list[at]
+  if (last?.do !== 'write') return [...list]
+  return [
+    ...list.slice(0, at),
+    { do: 'write', file: 'verification.md', text: verdicts },
+    {
+      ...last,
+      text: last.text.replace(/^status: awaiting_approval$/m, 'status: review_requested'),
     },
+    ...list.slice(at + 1),
+  ]
+}
+
+/** handoff 글의 decisions 항목 줄들 (handoff()의 모양) */
+function decisionLines(text: string): string {
+  return /^decisions:\n((?: {2}.*\n)+)/m.exec(text)?.[1] ?? ''
+}
+
+/**
+ * 독립 리뷰 결과로 다시 연 마무리 세션의 단계 (D496): 옛 verify의 단계에서 첫 요청을 뺀 것이다 (가짜 claude가 먼저 보냄).
+ * 마무리 handoff는 리뷰 요청 때의 것을 갈음하므로 request(리뷰 요청 handoff 글)의 결정을 앞에 이어 둔다 (_final.md 11)
+ */
+export function afterReview(list: readonly Step[], request = ''): Step[] {
+  const kept = decisionLines(request)
+  const rest = list[0]?.do === 'prompt' ? list.slice(1) : [...list]
+  if (!kept) return rest
+  return rest.map((st) =>
+    st.do === 'write' && st.file === 'handoff.md' && /^status: awaiting_approval$/m.test(st.text)
+      ? {
+          ...st,
+          text: st.text.replace(/^decisions:(?: \[\])?\n/m, (m) =>
+            m.startsWith('decisions: []') ? `decisions:\n${kept}` : `${m}${kept}`,
+          ),
+        }
+      : st,
+  )
+}
+
+/**
+ * 시나리오의 마무리 (D493): 마지막 작업 단계(final)를 리뷰 요청으로 끝내고, verify 자리의 단계(override.verify가 있으면 그것)를
+ * 리뷰를 받은 뒤의 단계로 둔다. verdicts는 리뷰 요청 때 쓰는 판정표다
+ */
+function finishing(
+  tasks: Partial<Record<SkillName | string, Step[]>>,
+  final: SkillName,
+  verdicts: string,
+): Pick<Scenario, 'tasks' | 'reviewed'> {
+  const { verify, ...rest } = tasks
+  const after = verify ?? steps('verify')
+  const own = rest[final]
+  const done = own ? finishingSteps(own, verdicts, after) : null
+  return {
+    tasks: { ...rest, ...(done ? { [final]: done.own } : {}) },
+    reviewed: { [final]: done?.reviewed ?? afterReview(after) },
   }
+}
+
+/**
+ * 마무리 단계 하나의 단계 (D493): own을 리뷰 요청으로 끝내고(requestReview), after(옛 verify 모양의 단계)를 리뷰를 받은
+ * 뒤의 단계로 만든다(afterReview). 스킬 이름이 아닌 task id로 고르는 시나리오(커스텀 유형)가 쓴다
+ */
+export function finishingSteps(
+  own: readonly Step[],
+  verdicts: string,
+  after: readonly Step[],
+): { own: Step[]; reviewed: Step[] } {
+  const requested = requestReview(own, verdicts)
+  const request = requested.findLast(
+    (st) => st.do === 'write' && /^status: review_requested$/m.test(st.text),
+  )
+  return {
+    own: requested,
+    reviewed: afterReview(after, request?.do === 'write' ? request.text : ''),
+  }
+}
+
+/** 버그 수정 시나리오 (3.1): intake → fix(마무리) (D227, D493). override.verify는 리뷰를 받은 뒤의 fix 단계다 */
+export function scenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+  return finishing(
+    { 'work-start': steps('intake'), fix: steps('fix'), verify: steps('verify'), ...override },
+    'fix',
+    VERDICTS,
+  )
 }

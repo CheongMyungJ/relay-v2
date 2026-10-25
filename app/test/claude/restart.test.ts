@@ -45,8 +45,10 @@ const NUDGE =
 
 /** 가짜 claude의 시나리오 (dry): 첫 세션은 요청을 받고 멈춰 있고, 다시 연 세션이 intake를 마친다 */
 function dryScenario(): Scenario {
+  const base = scenario()
   return {
-    tasks: { ...scenario().tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
+    ...base,
+    tasks: { ...base.tasks, 'work-start': [{ do: 'prompt' }, { do: 'wait' }] },
     // 다시 연 세션은 앱이 준 이어서 하라는 입력(D218)을 받고 intake를 마친다
     resume: { 'work-start': steps('intake').slice(1) },
   }

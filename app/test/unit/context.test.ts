@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { approvalMode } from '../../src/core/approval'
 import {
+  REVIEW_REQUEST_CLOSING,
   buildContext,
   closingMessage,
   previousInputs,
@@ -8,7 +9,8 @@ import {
   type ContextInput,
 } from '../../src/core/context'
 import { createWork, taskDirName, taskId } from '../../src/core/machine'
-import { PIPELINES } from '../../src/core/pipeline'
+import { LEGACY_PIPELINES, PIPELINES } from '../../src/core/pipeline'
+import { legacy } from '../support/legacy'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettings } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 import type { TaskRecord, WorkState, WorkType } from '../../src/shared/work'
@@ -29,13 +31,16 @@ const DECISIONS =
   '## t-01 intake — 2026-09-26 10:05 (사람 승인)\n- [AI] 수정 위치는 둘 — 발급과 검증\n'
 const PREV_HANDOFF = '---\nstatus: awaiting_approval\n---\n## 요약\n재현됨\n'
 
-/** node task를 시작하려는 Work. 앞 단계는 모두 승인되어 있다 */
+/**
+ * node task를 시작하려는 Work. 앞 단계는 모두 승인되어 있다. 기본은 verify가 있는 옛 Work(D501)이고, v2면 마지막 작업 단계가
+ * 마무리하는 새 Work다 (D493)
+ */
 function workAt(
   node: NodeName,
-  opts: { settings?: WorkSettings; type?: WorkType } = {},
+  opts: { settings?: WorkSettings; type?: WorkType; v2?: boolean } = {},
 ): { work: WorkState; task: TaskRecord } {
   const type = opts.type ?? 'bugfix'
-  const created = createWork({
+  const made = createWork({
     type,
     workId: 'w-20260926-001',
     baseBranch: 'main',
@@ -43,8 +48,9 @@ function workAt(
     ...(opts.settings ? { settings: opts.settings } : {}),
     at: '2026-09-26T10:00:00+09:00',
   }).work
+  const created = opts.v2 ? made : legacy(made)
   if (node === 'intake') return { work: created, task: created.tasks[0] as TaskRecord }
-  const order = PIPELINES[type]
+  const order = (opts.v2 ? PIPELINES : LEGACY_PIPELINES)[type]
   const tasks = order.slice(0, order.indexOf(node) + 1).map((n, i) => ({
     ...(created.tasks[0] as TaskRecord),
     id: taskId(i + 1),
@@ -331,6 +337,46 @@ describe('context.md: verify (D229)', () => {
     ])
     const text = section(buildContext(input('verify', previous)), '필요한 산출물')
     expect(text).toBe(`- t-02 fix: ${T}\\02-fix\\fix.md`)
+  })
+})
+
+describe('context.md: 마무리 단계 (5.6.14, D494~D498)', () => {
+  /** 새 Work의 fix: 버그 수정의 마지막 작업 단계다 (D493) */
+  function finishing(settings?: WorkSettings, config?: AppConfig) {
+    const { work, task } = workAt('fix', { v2: true, ...(settings ? { settings } : {}) })
+    return buildContext({
+      ...input('fix', {}, config),
+      work,
+      task,
+      delivery: ['[완료만]', '[push]'],
+    })
+  }
+
+  it('마무리 절: 리뷰 요청 문구, 코드 리뷰 설정, 판정표·결과·PR 초안 파일 (D494, D495, D497)', () => {
+    const text = section(finishing(), '마무리')
+    expect(text).toContain(`리뷰 요청 안내 문구: ${REVIEW_REQUEST_CLOSING}`)
+    expect(text).toContain('코드 리뷰: 켬')
+    expect(text).toContain(`${WORK_DIR}\\tasks\\02-fix\\verification.md`)
+    expect(text).toContain(`${WORK_DIR}\\tasks\\02-fix\\independent-review.md`)
+    expect(text).toContain(`PR 초안: \`${WORK_DIR}\\tasks\\02-fix\\pr.md\``)
+    // Work 설정이 앱 설정보다 앞이다 (D72, D497)
+    expect(section(finishing({ code_review: false }), '마무리')).toContain('코드 리뷰: 끔')
+    expect(
+      section(finishing(undefined, { ...DEFAULT_CONFIG, code_review: false }), '마무리'),
+    ).toContain('코드 리뷰: 끔')
+  })
+
+  it('승인 화면이 Work 완료 화면이라 늘 수동이고, 마무리 안내 문구는 전달 버튼이다 (D498)', () => {
+    const md = finishing()
+    expect(section(md, '승인 방식')).toBe('수동 승인 (의도 승인, Work 완료는 늘 수동)')
+    expect(section(md, '마무리 안내 문구')).toContain('[완료만], [push] 중 하나를 누르세요')
+    expect(section(md, '마무리 안내 문구')).not.toContain('자동 승인')
+  })
+
+  it('옛 Work의 fix와 마지막이 아닌 단계에는 마무리 절이 없다 (D501)', () => {
+    expect(sections(buildContext(input('fix'))).has('마무리')).toBe(false)
+    const { work, task } = workAt('design', { v2: true, type: 'feature' })
+    expect(sections(buildContext({ ...input('fix'), work, task })).has('마무리')).toBe(false)
   })
 })
 

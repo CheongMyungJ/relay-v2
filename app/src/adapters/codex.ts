@@ -97,8 +97,9 @@ export async function deployCodexSkill(o: {
   skill: SkillName
   type: WorkType
   custom?: CustomSource
+  finishing?: boolean
 }): Promise<DeployedSkill> {
-  const original = await skillText(o.source, o.skill, o.type, o.custom)
+  const original = await skillText(o.source, o.skill, o.type, o.custom, o.finishing)
   // skillText는 머리글을 뗀 절차다 (D444). 질문 도구 이름만 바꾼다
   const body = original.replaceAll('`AskUserQuestion`', '`mcp__relay__ask_human`')
   const writing =
@@ -339,6 +340,7 @@ export async function codexJson(input: Omit<ClaudeJsonInput, 'effort'>): Promise
       env: input.env,
       timeoutMs: input.timeoutMs,
       input: input.system ? `${input.system}\n\n${input.prompt}` : input.prompt,
+      ...(input.signal ? { signal: input.signal } : {}),
     })
     if (r.code !== 0) return fail(describeFailure(r))
     let data: unknown

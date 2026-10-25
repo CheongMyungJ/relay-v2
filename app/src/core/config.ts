@@ -72,6 +72,7 @@ const EDITABLE_KEYS = [
   'reply_signature',
   'knowledge_review_engine',
   'knowledge_review_model',
+  'code_review',
   'theme',
   'session_dir',
 ] as const
@@ -106,7 +107,7 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   respond_auto_round_max: [1, 20],
 }
 
-type BooleanKey = 'pr_draft' | 'respond_auto_start' | 'side_notice'
+type BooleanKey = 'pr_draft' | 'respond_auto_start' | 'side_notice' | 'code_review'
 
 const NAMES: Readonly<
   Record<IntegerKey | BooleanKey | 'question_mode' | 'auto_approve' | 'reply_signature', string>
@@ -121,6 +122,7 @@ const NAMES: Readonly<
   question_mode: '질문 방식',
   pr_draft: 'draft PR',
   respond_auto_start: '대응 자동 시작',
+  code_review: '독립 리뷰의 코드 리뷰',
   side_notice: '곁 세션을 열 때 안내',
   auto_approve: '자동 승인',
   reply_signature: '답글 표시 문구',
@@ -283,8 +285,13 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
   return { ok: true, value: v }
 }
 
-/** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154) */
-const BOOLEAN_KEYS: readonly BooleanKey[] = ['pr_draft', 'respond_auto_start', 'side_notice']
+/** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154), 곁 세션 안내(D392), 독립 리뷰의 코드 리뷰(D497) */
+const BOOLEAN_KEYS: readonly BooleanKey[] = [
+  'pr_draft',
+  'respond_auto_start',
+  'side_notice',
+  'code_review',
+]
 
 /** 답글 표시 문구의 길이 상한 (D173, 기본값) */
 const SIGNATURE_MAX = 200
@@ -509,6 +516,7 @@ const WORK_KEYS = [
   'custom_auto_approve',
   'question_mode',
   'respond_auto_start',
+  'code_review',
 ] as const
 
 /** 커스텀 단계의 자동 승인 (D457). 키는 단계 id 모양이어야 한다. 그 Work에 있는 단계인지는 보지 않는다(없는 단계는 쓰이지 않음) */
@@ -526,9 +534,9 @@ function customAutoApprove(v: unknown): Checked<Record<string, boolean>> {
 }
 
 /**
- * Work별 설정 (D72): 단계별 자동 승인, 스킬별 질문 방식, 대응 자동 시작(D154). 준 키만 돌려주고, 빈 값은 그 키를 앱
- * 설정으로 되돌린다는 뜻이다(mergeWorkSettings): 자동 승인과 질문 방식은 빈 객체, 대응 자동 시작은 null이다. 단계나
- * 스킬을 빼면 앱 설정을 따른다.
+ * Work별 설정 (D72): 단계별 자동 승인, 스킬별 질문 방식, 대응 자동 시작(D154), 독립 리뷰의 코드 리뷰(D497). 준 키만
+ * 돌려주고, 빈 값은 그 키를 앱 설정으로 되돌린다는 뜻이다(mergeWorkSettings): 자동 승인과 질문 방식은 빈 객체, 대응 자동
+ * 시작과 코드 리뷰는 null이다. 단계나 스킬을 빼면 앱 설정을 따른다.
  */
 export function checkWorkSettings(input: unknown): Checked<WorkSettingsPatch> {
   if (!isRecord(input)) return { ok: false, error: 'Work 설정이 객체가 아님' }
@@ -538,11 +546,11 @@ export function checkWorkSettings(input: unknown): Checked<WorkSettingsPatch> {
       return { ok: false, error: `Work 설정에서 바꿀 수 없는 값: ${key}` }
     }
     if (v === undefined) continue
-    if (key === 'respond_auto_start') {
+    if (key === 'respond_auto_start' || key === 'code_review') {
       if (v !== null && typeof v !== 'boolean') {
-        return { ok: false, error: `${NAMES.respond_auto_start}: true/false나 null이어야 함` }
+        return { ok: false, error: `${NAMES[key]}: true/false나 null이어야 함` }
       }
-      out.respond_auto_start = v
+      out[key] = v
     } else if (key === 'question_mode') {
       const r = questionModes(v)
       if (!r.ok) return r
@@ -571,16 +579,25 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatc
   const auto = pick(current.auto_approve, patch.auto_approve)
   const custom = pick(current.custom_auto_approve, patch.custom_auto_approve)
   const modes = pick(current.question_mode, patch.question_mode)
-  const start =
-    patch.respond_auto_start === undefined
-      ? current.respond_auto_start
-      : (patch.respond_auto_start ?? undefined)
+  const flag = (key: 'respond_auto_start' | 'code_review') =>
+    patch[key] === undefined ? current[key] : (patch[key] ?? undefined)
+  const start = flag('respond_auto_start')
+  const review = flag('code_review')
   return {
     ...(auto ? { auto_approve: auto } : {}),
     ...(custom ? { custom_auto_approve: custom } : {}),
     ...(modes ? { question_mode: modes } : {}),
     ...(start === undefined ? {} : { respond_auto_start: start }),
+    ...(review === undefined ? {} : { code_review: review }),
   }
+}
+
+/** 마무리 단계의 독립 리뷰에서 코드 리뷰를 하는가 (D497): Work 설정, 앱 설정 순서로 본다. 리뷰 요청을 받을 때의 값을 쓴다 */
+export function codeReviewOn(
+  config: Pick<AppConfig, 'code_review'>,
+  settings: Pick<WorkSettings, 'code_review'>,
+): boolean {
+  return settings.code_review ?? config.code_review
 }
 
 // ---------- 프로젝트 설정 (5.1.2, D185) ----------

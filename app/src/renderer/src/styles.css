@@ -512,7 +512,8 @@ textarea {
   color: var(--on-solid);
 }
 
-.badge.b-working {
+.badge.b-working,
+.badge.b-reviewing {
   --tone: var(--accent-text);
 }
 
@@ -665,7 +666,8 @@ textarea {
 }
 
 /* 작업 중인 점의 깜박임. transform과 opacity만 바꿔 다시 그리기를 줄인다 */
-.dot.s-working::after {
+.dot.s-working::after,
+.dot.s-reviewing::after {
   content: '';
   position: absolute;
   inset: -3px;
@@ -684,6 +686,7 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .dot.s-working::after,
+  .dot.s-reviewing::after,
   .modal-dialog[open] {
     animation: none;
   }
@@ -768,11 +771,14 @@ textarea {
   color: var(--on-hot);
 }
 
-.s-working {
+.s-working,
+.s-reviewing {
   --tone: var(--accent-text);
 }
 
-.dot.s-working {
+/* 독립 리뷰 중 (D496): 앱이 일하는 중이라 작업 중과 같은 색이다 */
+.dot.s-working,
+.dot.s-reviewing {
   --tone: var(--accent);
 }
 

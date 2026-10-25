@@ -527,6 +527,7 @@ export type BadgeKind =
   | 'mergeable'
   | 'session_ended'
   | 'working'
+  | 'reviewing'
   | 'idle'
   | 'queued'
   | 'pr_waiting'
@@ -632,6 +633,11 @@ export interface TaskView {
    * 기다리지 않고 onActivity로 따로 온다
    */
   activity: ActivityView | null
+  /**
+   * 마무리 단계의 독립 리뷰 (D495, D496): running은 리뷰가 도는 중, ready는 끝났지만 결과로 세션을 아직 다시 열지 않음(앱을
+   * 다시 켰거나 다시 열지 못함. [재개]가 결과를 첫 입력으로 준다). 그 밖에는 null. codeReview는 그때의 설정이다 (D497)
+   */
+  review?: { state: 'running' | 'ready'; codeReview: boolean } | null
 }
 
 /**
@@ -932,6 +938,11 @@ export interface Completion {
    * 묶음 Work가 아니면 없다
    */
   repos?: RepoCompletion[]
+  /**
+   * 마무리 단계의 독립 리뷰 (D495, D497): ok(코드 리뷰와 확인을 함), off(코드 리뷰를 끔, 판정표만 확인), failed(호출이 실패함,
+   * error에 까닭), none(리뷰를 받지 않고 승인할 수 있게 됨, 형식 오류를 무시한 때 등). 옛 Work의 verify는 null이다
+   */
+  review: { state: 'ok' | 'off' | 'failed' | 'none'; error?: string } | null
 }
 
 /** 묶음 Work의 승인 화면에서 레포 하나의 변경 (D475) */

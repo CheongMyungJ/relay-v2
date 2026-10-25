@@ -11,6 +11,7 @@ import {
   REPO_FILES,
   REQUEST,
   VERIFICATION,
+  featureScenario,
   handoff,
   scenario,
   steps,
@@ -80,7 +81,9 @@ const FEE_RULE = [
   '- 쿠폰을 뺀 금액으로 무료배송을 판단한다.',
 ].join('\n')
 
-describe('[흐름] verify의 지식 확인 (D293, D294)', () => {
+// scenario({ verify })의 verify는 독립 리뷰를 받은 뒤 다시 연 마무리 단계(fix)의 단계다. 지식은 마무리 단계가 쓰고, 지식 확인과
+// 검토는 그 단계가 승인 대기로 마무리하는 Stop에서 한다 (D493, D500)
+describe('[흐름] 마무리 단계의 지식 확인 (D293, D294, D500)', () => {
   it('옛 형식의 지식과 줄 없는 handoff는 되돌리고, 고친 뒤에는 Work가 끝난다', async () => {
     const verify: Scenario['tasks'][string] = [
       { do: 'prompt' },
@@ -121,8 +124,7 @@ describe('[흐름] verify의 지식 확인 (D293, D294)', () => {
     expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
     expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
       ['01 의도 정리', 0],
-      ['02 원인 분석과 수정', 0],
-      ['03 리뷰와 검증', 1],
+      ['02 원인 분석과 수정', 1],
     ])
     const workId = r.workKey.split('/')[1] ?? ''
     const events = fs
@@ -206,7 +208,7 @@ describe('[흐름] 아직 따르지 않는 곳, 지운 지식, 이 Work의 지�
     const result = await drive(hh.relay, hh.ui, r.workKey)
     await settle(hh, r.workKey)
     expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 1])
     const workId = r.workKey.split('/')[1] ?? ''
     const bounced = fs
       .readFileSync(
@@ -219,7 +221,7 @@ describe('[흐름] 아직 따르지 않는 곳, 지운 지식, 이 Work의 지�
     expect(bounced).toContain(AVG)
     expect(bounced).toContain('아직 규칙을 따르지 않는 곳')
 
-    const review = await hh.relay.review(r.workKey, 't-03')
+    const review = await hh.relay.review(r.workKey, 't-02')
     expect(review?.completion?.knowledge?.map((k) => [k.path, k.change, k.kind, k.note])).toEqual([
       [AVG, 'updated', 'rule', 'src/avg.js를 고쳐 아직 따르지 않는 곳에서 뺌'],
       [STALE, 'removed', null, '더는 맞지 않음'],
@@ -295,7 +297,7 @@ describe('[흐름] 지식 검토 호출 (D300)', () => {
     const result = await drive(hh.relay, hh.ui, r.workKey)
     await settle(hh, r.workKey)
     expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 1])
     const workDir = path.join(
       hh.home,
       'projects',
@@ -314,7 +316,7 @@ describe('[흐름] 지식 검토 호출 (D300)', () => {
       fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-1.txt`, 'utf8'),
     ).toContain('환불 회수율은 1%다.')
     const record = JSON.parse(
-      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+      fs.readFileSync(path.join(workDir, 'tasks', '02-fix', 'knowledge-review.json'), 'utf8'),
     ) as {
       calls: { bounced: boolean; costUsd: number; ms: number; issues: unknown[]; usage: unknown }[]
     }
@@ -330,7 +332,7 @@ describe('[흐름] 지식 검토 호출 (D300)', () => {
       cacheCreation: 0,
     })
     // 승인 화면은 기록을 쓰고 모델을 다시 부르지 않는다
-    await hh.relay.review(r.workKey, 't-03')
+    await hh.relay.review(r.workKey, 't-02')
     expect(fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-count`, 'utf8')).toBe('2')
   })
 })
@@ -393,7 +395,7 @@ describe('[흐름] 지식 검토 호출의 되돌림은 task마다 한 번이다
     const result = await drive(hh.relay, hh.ui, r.workKey)
     await settle(hh, r.workKey)
     expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 0, 1])
+    expect(result.tasks.map((t) => t.bounces)).toEqual([0, 1])
     expect(fs.readFileSync(`${path.join(hh.root, 'scenario.json')}.review-count`, 'utf8')).toBe('1')
     const workDir = path.join(
       hh.home,
@@ -403,11 +405,11 @@ describe('[흐름] 지식 검토 호출의 되돌림은 task마다 한 번이다
       r.workKey.split('/')[1] ?? '',
     )
     const record = JSON.parse(
-      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+      fs.readFileSync(path.join(workDir, 'tasks', '02-fix', 'knowledge-review.json'), 'utf8'),
     ) as { calls: { bounced: boolean }[] }
     expect(record.calls.map((c) => c.bounced)).toEqual([true])
     // 승인 화면에서도 같은 지적은 막는 오류가 아니라 경고다
-    const review = await hh.relay.review(r.workKey, 't-03')
+    const review = await hh.relay.review(r.workKey, 't-02')
     expect(review?.errors.map((e) => e.message).join()).not.toContain('[지식 검토')
     expect(review?.warnings.map((e) => e.message).join()).toContain('[지식 검토')
   })
@@ -448,11 +450,11 @@ describe('[흐름] 이 Work가 고친 지식은 머지 전 앞 Work의 글보다
     h = hh
     const { repo } = makeRepo(hh.root, 'knowledge-mine', REPO_FILES)
     const projectId = await register(hh, repo)
-    const make = async () => {
+    const make = async (type: 'bugfix' | 'feature' = 'bugfix') => {
       const r = await hh.relay.createWork(projectId, {
         request: REQUEST,
         baseBranch: 'main',
-        type: 'bugfix',
+        type,
         baseLocation: 'local',
       })
       if (!r.ok) throw new Error(r.error)
@@ -462,17 +464,30 @@ describe('[흐름] 이 Work가 고친 지식은 머지 전 앞 Work의 글보다
       return r.workKey.split('/')[1] ?? ''
     }
     await make()
-    // 두 번째 Work: fix가 같은 경로를 2%로 고쳐 커밋한다. 앞 Work는 머지되지 않았다
-    const second = scenario({
-      fix: [
+    // 두 번째 Work: 기능 추가의 design이 같은 경로를 2%로 고쳐 커밋한다. 앞 Work는 머지되지 않았다. 버그 수정은 fix가 마지막
+    // 단계라 고친 뒤의 다음 task가 없다 (D493). 마무리 단계(implement)는 리뷰를 받은 뒤 그 지식 줄을 적는다
+    const feature = featureScenario({
+      design: [
         { do: 'prompt' },
         { do: 'commit', files: { [RATE]: rule('2%') }, message: 'knowledge: 2%' },
-        ...steps('fix').slice(1),
+        ...steps('design').slice(1),
       ],
-      verify: verify(`고친 지식: ${RATE} — 1% → 2%`),
     })
+    const second: Scenario = {
+      ...feature,
+      reviewed: {
+        implement: (feature.reviewed?.['implement'] ?? []).map((st) =>
+          st.do === 'write' && st.file === 'handoff.md'
+            ? {
+                ...st,
+                text: st.text.replace('## 요약\n', `## 요약\n고친 지식: ${RATE} — 1% → 2%\n`),
+              }
+            : st,
+        ),
+      },
+    }
     fs.writeFileSync(path.join(hh.root, 'scenario.json'), JSON.stringify(second))
-    const workId = await make()
+    const workId = await make('feature')
     const injected = fs.readFileSync(
       path.join(
         hh.home,
@@ -481,7 +496,7 @@ describe('[흐름] 이 Work가 고친 지식은 머지 전 앞 Work의 글보다
         'works',
         workId,
         'tasks',
-        '03-verify',
+        '03-implement',
         'knowledge-injected.md',
       ),
       'utf8',
@@ -620,7 +635,7 @@ describe('[흐름] 지식 파일만 고친 턴도 검토 되돌림을 받는다 
     expect(bounced).toHaveLength(2)
     expect(bounced[1]).toContain('[지식 검토: 규칙 절에 정하지 않은 것]')
     const record = JSON.parse(
-      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+      fs.readFileSync(path.join(workDir, 'tasks', '02-fix', 'knowledge-review.json'), 'utf8'),
     ) as { calls: { bounced: boolean; issues: unknown[] }[] }
     expect(record.calls.map((c) => [c.bounced, c.issues.length])).toEqual([
       [true, 1],
@@ -717,7 +732,7 @@ describe('[흐름] 지식 검토의 엔진은 설정에서 고른다 (D334)', ()
     expect(args[0]).toBe('exec')
     expect(args[args.indexOf('-m') + 1]).toBe('gpt-5-codex')
     const record = JSON.parse(
-      fs.readFileSync(path.join(workDir, 'tasks', '03-verify', 'knowledge-review.json'), 'utf8'),
+      fs.readFileSync(path.join(workDir, 'tasks', '02-fix', 'knowledge-review.json'), 'utf8'),
     ) as { calls: { engine: string; model: string; bounced: boolean }[] }
     expect(record.calls[0]).toMatchObject({ engine: 'codex', model: 'gpt-5-codex', bounced: true })
   })
@@ -725,7 +740,7 @@ describe('[흐름] 지식 검토의 엔진은 설정에서 고른다 (D334)', ()
   it('고른 엔진을 찾지 못하면 되돌리지 않고 승인 화면에 경고한다', async () => {
     const { hh, r, result } = await run({ codexBin: path.join(os.tmpdir(), 'relay-없는-codex') })
     expect(result, hh.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    const review = await hh.relay.review(r.workKey, 't-03')
+    const review = await hh.relay.review(r.workKey, 't-02')
     expect(review?.errors.map((e) => e.message).join()).not.toContain('[지식 검토')
     expect(review?.warnings.map((e) => e.message).join()).toContain(
       '[지식 검토를 하지 못함] Codex를 찾지 못함',

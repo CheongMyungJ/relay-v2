@@ -68,6 +68,8 @@ export async function claudeAuthStatus(bin: string, env?: NodeJS.ProcessEnv): Pr
 
 const SKILL_FILE = 'SKILL.md'
 const COMMON_FILE = '_common.md'
+/** 마무리 절차 (5.6.14, D493). 마무리 단계 task에만 스킬 본문과 공통 규칙 사이에 붙인다 */
+const FINAL_FILE = '_final.md'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.
@@ -174,21 +176,24 @@ async function customBody(body: string, skill: SkillName, custom: CustomSource):
 
 /**
  * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
- * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). 마무리 단계(finishing)는 그 뒤에 마무리 절차(_final.md)의 그 유형
+ * 구간을 붙인다 (5.6.14, D493). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
  */
 export async function skillText(
   source: string,
   skill: SkillName,
   type: WorkType,
   custom?: CustomSource,
+  finishing = false,
 ): Promise<string> {
   const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
   const body = selectType(stripFrontMatter(raw), type)
-  return mergeSkill(
-    custom && type === 'custom' ? await customBody(body, skill, custom) : body,
-    selectType(common, type),
-  )
+  const own = custom && type === 'custom' ? await customBody(body, skill, custom) : body
+  const final = finishing
+    ? mergeSkill(own, selectType(await fsp.readFile(path.join(source, FINAL_FILE), 'utf8'), type))
+    : own
+  return mergeSkill(final, selectType(common, type))
 }
 
 /**
@@ -233,8 +238,10 @@ export async function deploySkill(o: {
   type: WorkType
   /** 커스텀 Work의 유형 폴더와 단계 (D452, D456) */
   custom?: CustomSource
+  /** 마무리 단계 task다: 마무리 절차를 붙인다 (5.6.14, D493) */
+  finishing?: boolean
 }): Promise<DeployedSkill> {
-  const text = await skillText(o.source, o.skill, o.type, o.custom)
+  const text = await skillText(o.source, o.skill, o.type, o.custom, o.finishing)
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
   await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))
@@ -255,18 +262,25 @@ async function removeRelaySkills(workDir: string): Promise<void> {
   }
 }
 
-// ---------- 짧은 모델 호출 (D300) ----------
+// ---------- 짧은 모델 호출 (D300, D495) ----------
 
 export interface ClaudeJsonInput {
   bin: string
   env: NodeJS.ProcessEnv
   cwd: string
+  /** 모델. 비우면 CLI의 기본이다 */
   model: string
   effort?: string
   system: string
   prompt: string
   schema: object
   timeoutMs: number
+  /** 줄 도구. 없으면 도구 없음이다(지식 검토, D300). 독립 리뷰는 읽기 도구만 준다 (D495) */
+  tools?: readonly string[]
+  /** 작업 폴더 밖에서 읽을 폴더 (--add-dir) */
+  addDirs?: readonly string[]
+  /** 끊을 때 (Work 포기). 끊으면 프로세스를 끝내고 error에 적는다 */
+  signal?: AbortSignal
 }
 
 export interface ClaudeJsonResult {
@@ -280,12 +294,11 @@ export interface ClaudeJsonResult {
 
 /** claudeJson의 실행 인자. 계약 시험이 실제 claude의 --help와 맞춰 본다 (test/contract) */
 export function claudeJsonArgs(
-  input: Pick<ClaudeJsonInput, 'model' | 'effort' | 'system' | 'schema'>,
+  input: Pick<ClaudeJsonInput, 'model' | 'effort' | 'system' | 'schema' | 'tools' | 'addDirs'>,
 ): string[] {
   return [
     '-p',
-    '--model',
-    input.model,
+    ...(input.model ? ['--model', input.model] : []),
     ...(input.effort ? ['--effort', input.effort] : []),
     '--output-format',
     'json',
@@ -294,7 +307,8 @@ export function claudeJsonArgs(
     '--json-schema',
     JSON.stringify(input.schema),
     '--tools',
-    '',
+    (input.tools ?? []).join(','),
+    ...(input.addDirs ?? []).flatMap((d) => ['--add-dir', d]),
     '--no-session-persistence',
   ]
 }
@@ -311,6 +325,7 @@ export async function claudeJson(input: ClaudeJsonInput): Promise<ClaudeJsonResu
     env: input.env,
     timeoutMs: input.timeoutMs,
     input: input.prompt,
+    ...(input.signal ? { signal: input.signal } : {}),
   })
   const ms = Date.now() - started
   const fail = (error: string): ClaudeJsonResult => ({

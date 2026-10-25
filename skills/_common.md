@@ -5,7 +5,7 @@
 
 ## Language
 
-Write everything the human reads in Korean: questions and options, artifact contents, handoff values. Keep section headings and field names exactly as in the templates. (`pr.md` has its own rule in verify.)
+Write everything the human reads in Korean: questions and options, artifact contents, handoff values. Keep section headings and field names exactly as in the templates. (`pr.md` has its own rule in the Work's finishing procedure.)
 
 ## Asking the human
 
@@ -73,7 +73,7 @@ Run it when:
 
 | When | Close with |
 |---|---|
-| All completion criteria of this step are met | `status: awaiting_approval` |
+| All completion criteria of this step are met | `status: awaiting_approval` (the last step of a Work first requests the independent review with `status: review_requested`, as its finishing procedure says) |
 | You cannot proceed | `status: blocked` and `blocked_reason` |
 | The human decided to start over as a new Work | a Work draft, then `status: blocked` (see above) |
 | The human asks you to wrap up | what you have so far. Put unfinished items in `open_questions` or `risks` |
@@ -90,7 +90,7 @@ Steps:
 
 ```yaml
 ---
-status:              # awaiting_approval | blocked
+status:              # awaiting_approval | blocked | review_requested (review_requested only in the finishing procedure)
 blocked_reason:      # non-empty text, required only when status is blocked. What is missing. Otherwise leave empty
 decisions: []        # items {what, why, by}. by: human | ai
 assumptions: []      # things assumed without checking

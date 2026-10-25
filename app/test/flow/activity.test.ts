@@ -103,7 +103,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     expect(result, ui.dump()).toMatchObject({ status: 'completed' })
     const work = ui.works.get(workKey)
     // 턴이 끝나면(승인 대기, 승인됨) 진행 표시가 없다
-    expect(work?.tasks.map((t) => t.activity)).toEqual([null, null, null])
+    expect(work?.tasks.map((t) => t.activity)).toEqual([null, null])
 
     // 도구 훅은 스냅샷이 아니라 따로 왔다. 질문 도구가 아니라 core를 거치지 않고 빈 본문으로 바로 답했다
     const updates = ui.activityLog.filter((u) => u.workKey === workKey && u.taskId === fixId)
@@ -123,24 +123,21 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
 
     // 새 세션의 터미널과 pty.log는 표시 줄로 시작한다 (D215)
     const tasks = work?.tasks ?? []
-    expect(tasks.map((t) => t.label)).toEqual([
-      '01 의도 정리',
-      '02 원인 분석과 수정',
-      '03 리뷰와 검증',
-    ])
+    expect(tasks.map((t) => t.label)).toEqual(['01 의도 정리', '02 원인 분석과 수정'])
     for (const t of tasks) {
       // 표시 줄 뒤에 CLI의 출력이 온다. Windows에서는 그 사이에 ConPTY가 먼저 보내는 제어 문자가 온다
       const out = ui.output.get(t.terminal) ?? ''
       expect(out.startsWith(mark(t.label))).toBe(true)
       expect(out.indexOf('FAKE-CLAUDE READY')).toBeGreaterThanOrEqual(mark(t.label).length)
     }
-    const dirs = ['01-intake', '02-fix', '03-verify']
+    const dirs = ['01-intake', '02-fix']
     for (const [i, dir] of dirs.entries()) {
       const log = read(path.join(workDir, 'tasks', dir, 'pty.log'))
       expect(log.startsWith(mark(tasks[i]?.label ?? ''))).toBe(true)
     }
 
-    // events.jsonl: 세션마다 task.started 다음에 첫 출력, 첫 훅(UserPromptSubmit)을 남긴다 (D217)
+    // events.jsonl: 세션마다 task.started(다시 연 세션은 task.resumed) 다음에 첫 출력, 첫 훅(UserPromptSubmit)을 남긴다
+    // (D217). 마무리 단계는 리뷰를 요청해 세션을 닫고 리뷰 결과로 같은 대화를 다시 연다 (D496)
     const events = read(path.join(workDir, 'events.jsonl'))
       .split('\n')
       .filter(Boolean)
@@ -148,17 +145,38 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     const state = JSON.parse(read(path.join(workDir, 'work.json'))) as WorkState
     for (const t of state.tasks) {
       const own = events.filter((e) => e.task_id === t.id)
+      const finishing = t.node === 'fix'
       expect(own.map((e) => e.type)).toEqual([
         'task.started',
         'task.first_output',
         'task.first_hook',
+        ...(finishing
+          ? [
+              'review.requested',
+              'review.finished',
+              'task.resumed',
+              'task.first_output',
+              'task.first_hook',
+            ]
+          : []),
         'task.awaiting_approval',
         'task.approved',
       ])
+      // 세션 기록은 마지막 세션의 것이다. 다시 연 세션의 시각도 같은 모양으로 남는다
       const pid = t.session?.pid
-      expect(own[1]?.payload).toEqual({ pid, ms: expect.any(Number) })
-      expect(own[2]?.payload).toEqual({ pid, ms: expect.any(Number), event: 'UserPromptSubmit' })
-      expect(Number(own[1]?.payload['ms'])).toBeLessThanOrEqual(Number(own[2]?.payload['ms']))
+      const sessions = finishing ? [1, 6] : [1]
+      for (const [n, at] of sessions.entries()) {
+        const sessionPid = n === sessions.length - 1 ? pid : expect.any(Number)
+        expect(own[at]?.payload).toEqual({ pid: sessionPid, ms: expect.any(Number) })
+        expect(own[at + 1]?.payload).toEqual({
+          pid: sessionPid,
+          ms: expect.any(Number),
+          event: 'UserPromptSubmit',
+        })
+        expect(Number(own[at]?.payload['ms'])).toBeLessThanOrEqual(
+          Number(own[at + 1]?.payload['ms']),
+        )
+      }
     }
     // 수정 세션은 첫 요청 전에 1.5초 쉬었다
     const fixHook = events.find((e) => e.task_id === fixId && e.type === 'task.first_hook')
@@ -231,13 +249,13 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
       ['PreToolUse', 'AskUserQuestion', null, 200, null],
       ['PostToolUseFailure', 'AskUserQuestion', null, 200, null],
     ])
-    // 실패한 질문 도구 뒤에는 쉬는 1.5초 동안 질문 대기가 아니라 작업 중이다
+    // 실패한 질문 도구 뒤에는 쉬는 1.5초 동안 질문 대기가 아니라 작업 중이다. 그 뒤 마무리 단계라 리뷰를 요청한다 (D494)
     const statuses = ui.history
       .filter((v) => v.key === workKey)
       .map((v) => v.tasks.find((t) => t.id === fixId)?.status)
       .filter((x, i, all) => x !== undefined && x !== all[i - 1])
     const asked = statuses.indexOf('asking')
     expect(asked).toBeGreaterThanOrEqual(0)
-    expect(statuses.slice(asked, asked + 3)).toEqual(['asking', 'working', 'awaiting_approval'])
+    expect(statuses.slice(asked, asked + 3)).toEqual(['asking', 'working', 'reviewing'])
   })
 })
