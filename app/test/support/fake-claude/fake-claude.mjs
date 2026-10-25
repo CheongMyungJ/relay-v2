@@ -52,7 +52,8 @@ if (argv[0] === 'auth' && argv[1] === 'status') {
 // 독립 리뷰(D495)는 --json-schema에 candidates가 있는 호출이다: later가 있으면 찾기, 없으면 확인이다. 프롬프트와 실행 인자를
 // <시나리오>.independent-<찾기|확인>-<n>.txt·.json에 남기고 시나리오의 independent.find·check(없으면 지적·이의 없음)를
 // 돌려준다. FAKE_CLAUDE_INDEPENDENT_FAIL이 find·check·all이면 그 호출이 종료 코드 1로 끝나고, FAKE_CLAUDE_INDEPENDENT_MS가
-// 있으면 그만큼 기다린 뒤 답한다(리뷰 중인 상태를 보는 시험)
+// 있으면 그만큼 기다린 뒤 답한다(리뷰 중인 상태를 보는 시험). --output-format stream-json이면(진행 표시, D502) 녹화본의 모양으로
+// 글 하나, 읽기 도구 하나(worktree의 README.md)와 그 결과, 구조화된 출력 도구를 줄마다 내고 기다린 뒤 result 줄로 끝낸다
 if (argv[0] === '-p') {
   const prompt = fs.readFileSync(0, 'utf8')
   const file = env.FAKE_CLAUDE_SCENARIO
@@ -68,6 +69,33 @@ if (argv[0] === '-p') {
       fs.writeFileSync(`${file}.independent-${kind}-${n}.txt`, prompt)
       fs.writeFileSync(`${file}.independent-${kind}-${n}.json`, JSON.stringify(argv))
     }
+    const stream = argv[argv.indexOf('--output-format') + 1] === 'stream-json'
+    const data =
+      scenario.independent?.[kind] ??
+      (kind === 'find' ? { candidates: [], later: [] } : { candidates: [], objections: [] })
+    const session = randomUUID()
+    const line = (e) =>
+      process.stdout.write(`${JSON.stringify({ ...e, session_id: session, uuid: randomUUID() })}\n`)
+    const said = (content) => line({ type: 'assistant', message: { role: 'assistant', content } })
+    if (stream) {
+      const id = `toolu_fake_${kind}`
+      said([{ type: 'text', text: kind === 'find' ? '변경 파일을 읽는다.' : '판정표를 읽는다.' }])
+      said([
+        {
+          type: 'tool_use',
+          id,
+          name: 'Read',
+          input: { file_path: path.join(process.cwd(), 'README.md') },
+        },
+      ])
+      line({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: id, content: '1\t# sample' }],
+        },
+      })
+    }
     const wait = Number(env.FAKE_CLAUDE_INDEPENDENT_MS ?? 0)
     if (wait) await new Promise((r) => setTimeout(r, wait))
     const failing = env.FAKE_CLAUDE_INDEPENDENT_FAIL
@@ -75,9 +103,10 @@ if (argv[0] === '-p') {
       process.stderr.write('가짜 리뷰 실패\n')
       process.exit(1)
     }
-    const data =
-      scenario.independent?.[kind] ??
-      (kind === 'find' ? { candidates: [], later: [] } : { candidates: [], objections: [] })
+    if (stream)
+      said([
+        { type: 'tool_use', id: `toolu_fake_${kind}_out`, name: 'StructuredOutput', input: data },
+      ])
     process.stdout.write(
       JSON.stringify({
         type: 'result',

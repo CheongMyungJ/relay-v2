@@ -32,6 +32,8 @@ export interface RunOptions {
   input?: string
   /** 끊으면 프로세스를 끝내고 error에 "멈춤"을 적는다 (독립 리뷰의 [Work 포기], D496) */
   signal?: AbortSignal
+  /** 표준 출력이 오는 대로 받는다. 끝난 뒤의 stdout에도 그대로 남는다 (독립 리뷰의 진행 표시, D502) */
+  onStdout?: (chunk: string) => void
 }
 
 /** 끊어서 끝낸 명령의 error */
@@ -100,6 +102,10 @@ export function run(
       } else {
         child.kill()
       }
+    }
+    if (opts.onStdout) {
+      const listen = opts.onStdout
+      child.stdout?.on('data', (c: string | Buffer) => listen(String(c)))
     }
     if (opts.signal?.aborted) abort()
     else opts.signal?.addEventListener('abort', abort, { once: true })

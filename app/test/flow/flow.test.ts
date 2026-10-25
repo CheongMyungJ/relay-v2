@@ -286,6 +286,27 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(findPrompt).toContain(path.join(task('02-fix'), 'fix.md'))
     expect(read(`${scenarioFile}.independent-check-1.txt`)).toContain('## 완료조건 판정')
     expect(fs.existsSync(`${scenarioFile}.independent-find-2.txt`)).toBe(false)
+    // 진행 표시 (D502): 호출마다 출력 이벤트를 받아 지금 호출과 도구를 보이고, 진행 기록을 남긴다
+    const reviewing = s.h.ui.activityLog
+      .filter((u) => u.taskId === 't-02' && u.activity?.phase)
+      .map((u) => [
+        u.activity?.phase,
+        u.activity?.tool?.label ?? null,
+        u.activity?.tool?.endedAt === null,
+      ])
+    expect(reviewing).toContainEqual(['찾기', 'Read(README.md)', true])
+    expect(reviewing).toContainEqual(['찾기', 'Read(README.md)', false])
+    expect(reviewing).toContainEqual(['확인', 'Read(README.md)', true])
+    // 구조화된 출력 도구는 진행에 보이지 않는다
+    expect(reviewing.some(([, label]) => String(label).startsWith('StructuredOutput'))).toBe(false)
+    const findLog = read(path.join(task('02-fix'), 'independent-review', 'find.log'))
+    expect(findLog).toMatch(/^\d\d:\d\d:\d\d 찾기 시작 \(Claude Code\)\n/)
+    expect(findLog).toMatch(/^\d\d:\d\d:\d\d {3}변경 파일을 읽는다\.$/m)
+    expect(findLog).toMatch(/^\d\d:\d\d:\d\d Read\(README\.md\)$/m)
+    expect(findLog).toMatch(/^\d\d:\d\d:\d\d 찾기 끝 \(\d+초\)\n$/m)
+    expect(read(path.join(task('02-fix'), 'independent-review', 'check.log'))).toContain('확인 끝')
+    // 독립 리뷰가 끝나면 진행 표시는 없다 (다시 연 세션의 진행 표시로 바뀐다)
+    expect(s.h.ui.works.get(s.workKey)?.tasks[1]?.activity?.phase).toBeUndefined()
     expect(read(path.join(s.workDir, 'request.md'))).toBe(REQUEST)
 
     // context.md (시나리오 2-4): fix는 intent, 결정 로그, 기각 목록, 직전 handoff를 받고, 마무리 단계라 마무리 절이 있다
@@ -533,6 +554,9 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     ])
     expect(verifyView?.completion?.verdicts.map((v) => v.verdict)).toEqual(['통과', '통과', '통과'])
     expect(verifyView?.completion?.review).toEqual({ state: 'ok' })
+    // 독립 리뷰의 진행 기록은 산출물이 아니고 [산출물] 탭 아래에 따로 보인다 (D502)
+    expect(verifyView?.reviewLogs?.map((l) => l.name)).toEqual(['find.log', 'check.log'])
+    expect(verifyView?.reviewLogs?.[0]?.text).toContain('Read(README.md)')
     expect(verifyView?.lead).toEqual({
       title: '원인',
       sections: [

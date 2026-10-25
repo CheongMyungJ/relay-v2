@@ -1,12 +1,15 @@
 // [계약] 실제 쪽: 실제 claude가 아직 계약(claude.ts)과 녹화본(fixtures/claude.json)대로인지 본다. 사용량이 조금 든다.
 // RELAY_CONTRACT_LIVE=1일 때만 돈다(app-claude 워크플로의 정기 실행, Claude Code를 올릴 때). 없으면 건너뛴다.
-// RELAY_CONTRACT_UPDATE=1이면 녹화본을 새로 쓴다. 녹화본이 바뀌면 fakes.test.ts가 가짜 claude를 따라오게 한다.
+// RELAY_CONTRACT_UPDATE=1이면 녹화본을 새로 쓴다. stream이면 옵션과 출력 이벤트(4)만 새로 쓰고 훅 본문은 둔다.
+// 녹화본이 바뀌면 fakes.test.ts가 가짜 claude를 따라오게 한다. RELAY_CONTRACT_PASS_ENV에 쉼표로 적은 변수는 고른 환경에
+// 더 넘긴다(로그인을 프록시와 토큰 파일로 하는 환경).
 //
 // 1. claude --help에 앱이 넘기는 옵션이 모두 있다
 // 2. claude -p를 앱과 같은 훅 설정(--settings, hookSettings)으로 돌려 오는 훅 본문이 계약을 지킨다. 훅 머리글의
 //    $RELAY_HOOK_TOKEN이 풀려 온다(I13). 도구 성공과 실패(PostToolUseFailure)를 하나씩 부르게 한다. 첫 Stop을 되돌리면
 //    일을 잇고 다음 Stop에 stop_hook_active: true를 보낸다(S2, D21)
 // 3. 지식 검토 호출(claudeJson, D300)이 구조화된 출력과 사용량을 읽는다
+// 4. 독립 리뷰 호출의 출력 이벤트(stream-json, D502)가 계약을 지키고 진행 표시와 결과를 읽는다
 import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -14,6 +17,7 @@ import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { cleanEnv, makeClaudeConfig } from '../../eval/lib/env.mjs'
 import { claudeJson } from '../../src/adapters/claude'
+import { reviewSteps } from '../../src/core/independent-review'
 import { HOOK_TOKEN_ENV, hookSettings, type HookEvent } from '../../src/core/settings'
 import {
   appFlags,
@@ -24,6 +28,8 @@ import {
   readFixture,
   redact,
   shapeOf,
+  streamParts,
+  streamViolations,
   violations,
   type ClaudeFixture,
   type Recorded,
@@ -31,6 +37,8 @@ import {
 
 const LIVE = process.env['RELAY_CONTRACT_LIVE'] === '1'
 const UPDATE = process.env['RELAY_CONTRACT_UPDATE'] === '1'
+const UPDATE_STREAM = process.env['RELAY_CONTRACT_UPDATE'] === 'stream'
+const PASS = (process.env['RELAY_CONTRACT_PASS_ENV'] ?? '').split(',').filter(Boolean)
 const MODEL = process.env['RELAY_CONTRACT_MODEL'] ?? 'haiku'
 const OUT = path.resolve(__dirname, '../../test-results/contract')
 const TOKEN = 'contract-token'
@@ -43,6 +51,7 @@ const env: NodeJS.ProcessEnv = LIVE
   ? cleanEnv({
       CLAUDE_CODE_OAUTH_TOKEN: process.env['CLAUDE_CODE_OAUTH_TOKEN'],
       ANTHROPIC_API_KEY: process.env['ANTHROPIC_API_KEY'],
+      ...Object.fromEntries(PASS.map((k) => [k, process.env[k]])),
       CLAUDE_CONFIG_DIR: makeClaudeConfig(path.join(root, 'config')),
     })
   : {}
@@ -76,6 +85,7 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
   const version = LIVE ? execFileSync(BIN, ['--version'], { env, encoding: 'utf8' }).trim() : ''
   let flags: string[] = []
   let got: Recorded[] = []
+  let stream: Record<string, unknown>[] = []
 
   it('--help에 앱이 넘기는 옵션이 모두 있다', () => {
     const help = execFileSync(BIN, ['--help'], { env, encoding: 'utf8' })
@@ -172,8 +182,49 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
     expect(r.costUsd).not.toBeNull()
   })
 
+  it('독립 리뷰 호출의 출력 이벤트가 계약을 지키고 진행과 결과를 읽는다 (D502)', async () => {
+    const cwd = path.join(root, 'stream')
+    fs.mkdirSync(cwd, { recursive: true })
+    fs.writeFileSync(path.join(cwd, 'a.js'), 'export const add = (a, b) => a + b\n')
+    const events: Record<string, unknown>[] = []
+    const r = await claudeJson({
+      bin: BIN,
+      env,
+      cwd,
+      model: MODEL,
+      system: 'You review code. Say briefly what you do before each step.',
+      // 진행 표시가 읽는 셋(도구 호출, 도구 결과, 모델의 글)이 모두 오게 한다
+      prompt:
+        'First write one short sentence saying you will read a.js. Then use the Read tool to read a.js. Then return name set to the exported function name.',
+      schema: {
+        type: 'object',
+        properties: { name: { type: 'string' } },
+        required: ['name'],
+        additionalProperties: false,
+      },
+      tools: ['Read', 'Grep', 'Glob'],
+      timeoutMs: 3 * 60 * 1000,
+      onEvent: (e) => events.push(e),
+    })
+    stream = events
+    const steps = events.flatMap((e) => reviewSteps(e, cwd))
+    const broken = streamViolations(streamParts(events))
+    lines.push(`- 독립 리뷰 호출: ${r.error ?? '통과'} (${r.ms}ms), 진행 ${steps.length}걸음`)
+    lines.push(`- 출력 이벤트 계약 위반: ${broken.length ? broken.join('; ') : '없음'}`)
+    expect(r.error).toBeNull()
+    expect(r.data).toEqual({ name: 'add' })
+    expect(r.costUsd).not.toBeNull()
+    expect(broken).toEqual([])
+    expect(steps.some((x) => x.kind === 'tool' && x.label === 'Read(a.js)')).toBe(true)
+  })
+
   it('녹화본과 견준다 (RELAY_CONTRACT_UPDATE=1이면 새로 쓴다)', () => {
     expect(got.length).toBeGreaterThan(0)
+    const recordedAt = new Date().toISOString().slice(0, 10)
+    const shapes = Object.fromEntries(
+      Object.entries(streamParts(stream)).map(([k, v]) => [k, shapeOf(v)]),
+    )
+    const streamNow = { claudeVersion: version, recordedAt, shapes }
     const events: ClaudeFixture['events'] = {}
     for (const g of got) {
       // 이벤트마다 처음 받은 것을 남긴다. PreToolUse와 PostToolUse는 성공한 도구의 것이다
@@ -181,9 +232,20 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
     }
     const now: ClaudeFixture = {
       claudeVersion: version,
-      recordedAt: new Date().toISOString().slice(0, 10),
+      recordedAt,
       flags,
       events,
+      stream: streamNow,
+    }
+    if (UPDATE_STREAM) {
+      fs.writeFileSync(
+        FIXTURE,
+        JSON.stringify({ ...readFixture(), flags, stream: streamNow }, null, 2) + '\n',
+      )
+      lines.push(
+        `- 녹화본의 옵션과 출력 이벤트를 새로 썼다: ${path.relative(process.cwd(), FIXTURE)}`,
+      )
+      return
     }
     if (UPDATE) {
       fs.writeFileSync(FIXTURE, JSON.stringify(now, null, 2) + '\n')

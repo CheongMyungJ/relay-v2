@@ -730,6 +730,19 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+/* 독립 리뷰 중의 최근 도구 (D502) */
+.activity-recent {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.activity-recent li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .human-question {
   margin: 12px 0;
   padding: 14px;

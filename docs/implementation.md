@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -200,6 +200,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I184 | 독립 리뷰 호출(D495)은 `WorkRunner.runReview`가 한다. 변경은 앱이 `tasks/<nn>/independent-review/diff.patch`(묶음 Work는 레포마다)로 쓰고, 찾기(코드 리뷰를 켰을 때)와 확인(늘)을 차례로 `claude -p --json-schema --no-session-persistence --tools Read,Grep,Glob --add-dir <Work 디렉터리>`(Codex는 `codex exec --sandbox read-only`)로 부른다. 모델과 노력은 그 task의 것이다. 지침은 `skills/_review.md`의 `# Finder`, `# Checker`를 유형 블록으로 골라 넣는다. 결과는 `independent-review.md`(사람과 세션이 읽음)와 `independent-review.json`(호출 기록: 시간, 비용, 실패)이다. 호출이 실패해도 리뷰는 끝나고 결과 글에 까닭을 쓴다. 호출 상한은 30분, 그만두기·앱 종료·Work 지우기는 `AbortController`로 멈춘다 | 리뷰 세션은 다른 세션의 판단을 이어받지 않아야 독립이다. 읽기 도구만 주고 구조화된 출력만 받으면 앱이 결과를 정해진 모양으로 쓸 수 있다 | |
 | I185 | 앱 재시작(D496): 끝나지 않은 리뷰(`review.finished_at` 없음)는 `restarted: true`로 다시 돌리고, 끝나면 task를 `interrupted`로 둬 저절로 열지 않는다. 끝난 리뷰는 `interrupted`이고 [재개]가 리뷰 입력으로 연다. 그만두기는 `cancelReview`를 내고 task를 `interrupted`로 둔다 | 사람이 없는 동안 세션을 저절로 열지 않는다(D418의 재시작 규칙과 같음) | |
 | I186 | 코드 리뷰 설정(D497)은 앱 설정 `code_review`(기본 켬)와 Work 설정의 같은 키(null은 앱 설정을 따름)다. `codeReviewOn(config, settings)`로 리뷰를 요청받을 때의 값을 정해 `review.code_review`에 남긴다. 판정표 확인은 끄지 못한다(D497). 마무리 단계의 승인은 자동 승인을 켜도 늘 수동이다(D498, `taskApprovalMode`) | 리뷰를 요청할 때 정한 값이 결과 글, `pr.md`의 "독립 코드 리뷰를 하지 않음", 완료 화면에 같게 보인다 | |
+| I187 | 독립 리뷰의 진행 표시(D502): `claudeJson`이 `onEvent`를 받으면 `--output-format stream-json --verbose`로 부르고 `exec.run`의 `onStdout`으로 받은 출력을 `jsonLines`가 줄로 읽어 넘긴다. 결과는 마지막 `result` 이벤트에서 `json` 모양과 같게 읽는다. `core/independent-review`의 `reviewSteps`가 이벤트에서 도구 호출(`toolLabel`, D216과 같은 이름), 도구 결과, 모델의 글을 걸음으로 뽑고 `StructuredOutput`은 뺀다. `WorkRunner`는 task마다 메모리에 지금 호출, 시작한 때, 지금 도구, 최근 도구 다섯(`reviewProgress`)을 두고 걸음마다 `ui.activity`로 보낸다(스냅샷을 다시 만들지 않는다). `activityOf`는 독립 리뷰 중인 task에 `phase`와 `recent`가 붙은 `ActivityView`를 준다. 기록은 호출마다 `independent-review/<find|check>.log`에 이어 쓰고, `ReviewView.reviewLogs`로 [산출물] 탭 아래에 보인다. 계약은 `test/contract/claude.ts`의 `STREAM_CONTRACT`(앱이 읽는 자리와 필드)와 녹화본의 `stream`(자리마다 모양, 2.1.310), 가짜 claude는 그 모양에서 필드를 지어내지 않는다 | 도구를 쓸 때마다 스냅샷을 보내면 렌더러가 승인 화면을 다시 읽는다(D216과 같은 까닭). 녹화는 훅과 따로 할 수 있게 `RELAY_CONTRACT_UPDATE=stream`이 옵션과 출력 이벤트만 새로 쓴다. Codex의 `exec --json` 도구 이벤트는 녹화하지 않아 읽지 않는다 | |
 
 ## 3. 확인한 사실
 
@@ -1502,6 +1503,22 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[계약]** `claude -p`의 `--tools`, `--add-dir`는 녹화본의 옵션 목록에 있다.
 - **[실제]**, **[스모크]** 아직 더하지 않았다. 마무리 세션이 리뷰를 요청하고 결과로 마무리하는지는 평가(`app/eval/`)로 본다.
 
+### M37. 독립 리뷰의 진행 표시 (D502)
+
+사람이 "독립 리뷰 중일 때 찾기와 확인을 볼 수 없나"를 물었고, 출력 이벤트를 받아 패널에 보이는 방법을 골랐다. 설계 v0.32.
+
+- 어댑터: `exec.run`의 `onStdout`, `claude`의 `claudeJsonArgs`의 `stream`, `claudeJson`의 `onEvent`, `jsonLines`(I187).
+- core: `independent-review`의 `reviewSteps`, `reviewLogLine`, `REVIEW_PHASE`, `reviewLogFile`.
+- 앱과 화면: `WorkRunner`의 `reviewProgress`와 진행 기록, `activityOf`, `ReviewView.reviewLogs`, `Activity`의 호출 이름과 `ActivityRecent`, [산출물] 탭의 "독립 리뷰 기록".
+- 계약: `STREAM_CONTRACT`, `streamParts`, `streamViolations`, 녹화본의 `stream`과 `--verbose`, live 시험의 출력 이벤트 녹화와 `RELAY_CONTRACT_PASS_ENV`.
+
+**시험**
+
+- **[단위]** `test/unit/finishing.test.ts`: 이벤트에서 걸음 뽑기(경로, 구조화된 출력 도구 빼기, 모양이 다른 것), 기록의 줄, 조각난 출력을 줄로 읽기.
+- **[계약]** `fakes.test.ts`: 녹화본이 앱이 읽는 필드를 담고, 가짜 claude의 출력 이벤트가 계약을 지키며 녹화본에 없는 필드를 보내지 않는다. `live.test.ts`: 실제 claude의 출력 이벤트가 계약을 지키고 진행과 결과를 읽는다(2.1.310에서 녹화).
+- **[흐름]** `flow.test.ts`: 리뷰 중 진행 표시가 찾기와 확인, 도구의 시작과 끝을 보이고, 구조화된 출력 도구는 보이지 않으며, 기록 파일과 Work 완료 화면의 기록. `codex.test.ts`: Codex의 기록은 시작과 끝, 까닭만 있다.
+- **[스모크]**, **[실제]** 더하지 않았다. 화면 글자는 흐름 시험의 진행 표시 값으로 이어 본다.
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층
@@ -1551,6 +1568,8 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
   - 명령 실패는 `FAKE_GH_FAIL`(`view`, `api`, `event`, `merge`, `log`를 더함. `api`는 REST 요청 모두, `event`는 실행 읽기만), gh 버전은 `FAKE_GH_VERSION`(기본 2.101.0)으로 흉내 낸다. `merge`의 실패는 M9 [실제]에서 GitHub가 준 "GraphQL: Pull Request is not mergeable (mergePullRequest)"다. 브랜치 보호로 막힌 것(mergeStateStatus BLOCKED)은 `github.json`의 `merge_state`로 두면 gh처럼 GitHub에 묻기 전에 멈춘다.
 
 - 가짜 `codex`: `app/test/support/fake-codex/fake-codex.mjs`. 실제 Codex의 옵션을 받아 relay의 command 훅·MCP 브리지를 실제로 실행하고, 모델 요청은 하지 않는다. Codex [흐름](`test/flow/codex.test.ts`)과 Codex GUI [스모크]가 쓴다([engines.md](engines.md)).
+
+- 독립 리뷰 호출(D495)은 `--json-schema`에 `candidates`가 있는 `-p` 호출로 알아보고, `--output-format stream-json`이면 녹화본의 `stream` 모양으로 글, 읽기 도구와 그 결과, 구조화된 출력 도구를 줄마다 낸 뒤 `result`로 끝낸다(D502).
 
 - 가짜가 실제를 따라가게 하는 장치는 [계약]이다(`test/contract`). 실제 `claude`와 gh에서 녹화한 모양(`fixtures/claude.json`, `fixtures/gh.json`)과 가짜가 보내는 모양이 다르면 가짜 쪽 시험이 실패한다. 녹화본은 `app-claude`의 경우 `contract`를 `update_contract`와 함께 돌려 결과물(`contract-fixtures`)로 받아 바꾼다. 실제 `claude`는 Claude Code 웹 세션에서도 `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=1 npx vitest run --project contract test/contract/live.test.ts`로 녹화할 수 있다. 녹화는 `claude -p`(비대화형)로 한다. 앱은 PTY에서 대화형으로 띄우므로, 대화형에서만 오는 이벤트(`Notification`)와 대화형에서만 달라지는 필드는 녹화본에 없고 [실제]가 잡는다(`test/contract/claude.ts`의 `NOT_RECORDED`).
 

@@ -176,6 +176,8 @@ import {
   FIND_SCHEMA,
   REVIEW_CALL_TIMEOUT_MS,
   REVIEW_INPUT_DIR,
+  REVIEW_PHASE,
+  REVIEW_RECENT,
   REVIEW_RECORD_FILE,
   REVIEW_RESULT_FILE,
   REVIEW_SYSTEM as INDEPENDENT_REVIEW_SYSTEM,
@@ -187,9 +189,13 @@ import {
   reviewError,
   reviewMarkdown,
   reviewPart,
+  reviewLogFile,
+  reviewLogLine,
   reviewResumePrompt,
+  reviewSteps,
   sortFindings,
   type CallRecord,
+  type ReviewCall,
   type ReviewBrief,
   type ReviewDiff,
   type ReviewResult,
@@ -367,6 +373,7 @@ import {
 } from '../core/repos'
 import type {
   ActivityView,
+  Artifact,
   ApproveOptions,
   BadgeKind,
   BranchInfo,
@@ -700,6 +707,14 @@ interface Lane {
   relinkOk: Map<string, string>
 }
 
+/** 도는 독립 리뷰 호출의 진행 (D502): 호출, 시작한 때, 지금 도구(끝났으면 끝난 때), 지금 것 앞의 최근 도구 */
+interface ReviewProgress {
+  call: ReviewCall
+  since: number
+  tool: { id: string; label: string; startedAt: number; endedAt: number | null } | null
+  recent: string[]
+}
+
 export class WorkRunner {
   readonly key: string
   private queue: Promise<unknown> = Promise.resolve()
@@ -717,6 +732,8 @@ export class WorkRunner {
   private readonly resumeInput = new Map<string, ResumeInput>()
   /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
   private readonly reviews = new Map<string, AbortController>()
+  /** 도는 독립 리뷰 호출의 진행 (D502). 기록하지 않고 리뷰가 도는 동안만 둔다 */
+  private readonly reviewProgress = new Map<string, ReviewProgress>()
   /** task마다 자리를 잡아 세션을 띄우기 시작한 때. 진행 표시의 "세션을 띄우는 중"을 여기서부터 센다 (D216) */
   private readonly launchedAt = new Map<string, number>()
   private readonly problems: string[] = []
@@ -1317,6 +1334,7 @@ export class WorkRunner {
       .catch((e: unknown) => this.problem(`독립 리뷰를 하지 못함: ${message(e)}`))
       .finally(() => {
         if (this.reviews.get(taskId) === controller) this.reviews.delete(taskId)
+        this.reviewProgress.delete(taskId)
       })
   }
 
@@ -1338,7 +1356,52 @@ export class WorkRunner {
     const engine = taskEngine(task)
     const bin = engine === 'codex' ? findCodex({ env }) : findClaude({ env })
     const calls: CallRecord[] = []
+    const progress = (next: ReviewProgress | null) => {
+      if (next) this.reviewProgress.set(taskId, next)
+      else this.reviewProgress.delete(taskId)
+      const t = this.task(taskId)
+      if (t) this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(t) })
+    }
     const call = async (kind: CallRecord['kind'], prompt: string, schema: object) => {
+      // 진행 기록 (D502): 호출마다 independent-review/<kind>.log에 도구와 모델의 글을 시각과 함께 줄마다 쓴다
+      const log = path.join(dir, REVIEW_INPUT_DIR, reviewLogFile(kind))
+      const clock = () => new Date().toTimeString().slice(0, 8)
+      // 기록을 쓰지 못해도 리뷰는 이어 간다
+      let writing: Promise<void> = fsp
+        .writeFile(
+          log,
+          `${clock()} ${REVIEW_PHASE[kind]} 시작 (${AGENT_LABELS[engine]}${task.model ? `, 모델 ${task.model}` : ''})\n`,
+        )
+        .catch(() => undefined)
+      const write = (text: string) => {
+        writing = writing.then(() => fsp.appendFile(log, `${text}\n`)).catch(() => undefined)
+      }
+      let state: ReviewProgress = { call: kind, since: Date.now(), tool: null, recent: [] }
+      progress(state)
+      const onEvent = (e: Record<string, unknown>) => {
+        for (const step of reviewSteps(e, this.worktree)) {
+          const line = reviewLogLine(step, clock())
+          if (line) write(line)
+          const now = Date.now()
+          if (step.kind === 'tool') {
+            const recent = state.tool
+              ? [...state.recent, state.tool.label].slice(-REVIEW_RECENT)
+              : state.recent
+            state = {
+              ...state,
+              recent,
+              tool: { id: step.id, label: step.label, startedAt: now, endedAt: null },
+            }
+          } else if (
+            step.kind === 'done' &&
+            state.tool?.id === step.id &&
+            state.tool.endedAt === null
+          ) {
+            state = { ...state, tool: { ...state.tool, endedAt: now } }
+          } else continue
+          if (this.reviewProgress.get(taskId)?.call === kind) progress(state)
+        }
+      }
       const input = {
         env,
         cwd: this.worktree,
@@ -1364,8 +1427,18 @@ export class WorkRunner {
           }
         : engine === 'codex'
           ? await codexJson({ ...input, bin })
-          : await claudeJson({ ...input, bin, ...(task.effort ? { effort: task.effort } : {}) })
+          : await claudeJson({
+              ...input,
+              bin,
+              ...(task.effort ? { effort: task.effort } : {}),
+              onEvent,
+            })
       calls.push({ kind, ms: r.ms, cost_usd: r.costUsd, usage: r.usage, error: r.error })
+      if (engine === 'codex') write('(Codex는 도는 동안의 도구를 받지 않는다)')
+      write(
+        `${clock()} ${REVIEW_PHASE[kind]} 끝 (${Math.round(r.ms / 1000)}초)${r.error ? `: ${r.error}` : ''}`,
+      )
+      await writing
       return r
     }
     let found: ReturnType<typeof readFind> = { candidates: [], later: [] }
@@ -4693,6 +4766,7 @@ export class WorkRunner {
       artifacts: Object.entries(files)
         .filter(([name]) => isArtifactName(name))
         .map(([name, text]) => ({ name, text })),
+      ...(task.review ? { reviewLogs: await this.reviewLogs(task) } : {}),
       diff: clip(diff),
       ...(bundled ? { repoDiffs: await this.repoDiffs(task, diff) } : {}),
       gate: approvalGate(task, check),
@@ -4700,6 +4774,17 @@ export class WorkRunner {
       completion,
       respond: respond?.view ?? null,
     }
+  }
+
+  /** 독립 리뷰의 진행 기록 (D502): 호출마다 independent-review/<kind>.log. 없는 호출(코드 리뷰를 끔 등)은 뺀다 */
+  private async reviewLogs(task: TaskRecord): Promise<Artifact[]> {
+    const out: Artifact[] = []
+    for (const call of ['find', 'check'] as const) {
+      const name = reviewLogFile(call)
+      const text = await readText(path.join(this.files.taskDir(task), REVIEW_INPUT_DIR, name))
+      if (text !== null) out.push({ name, text })
+    }
+    return out
   }
 
   /**
@@ -6788,10 +6873,26 @@ export class WorkRunner {
   }
 
   /**
-   * 진행 표시 (D216). 작업 중인 task만 보인다. 첫 턴 전(세션을 띄우는 중)은 자리를 잡아 띄우기 시작한 때부터 센다:
+   * 진행 표시 (D216). 작업 중인 task와 독립 리뷰 중인 task(D502)만 보인다. 첫 턴 전(세션을 띄우는 중)은 자리를 잡아 띄우기 시작한 때부터 센다:
    * 앱이 스킬과 context.md를 준비하는 시간도 사람에게는 기다리는 시간이다. 대기열에서 기다린 시간은 넣지 않는다
    */
   private activityOf(t: TaskRecord): ActivityView | null {
+    // 독립 리뷰 중은 지금 호출의 진행이다 (D502): 출력 이벤트로 알고 세션의 훅은 없다
+    const review = t.status === 'reviewing' ? this.reviewProgress.get(t.id) : undefined
+    if (review)
+      return {
+        turn: true,
+        since: review.since,
+        tool: review.tool
+          ? {
+              label: review.tool.label,
+              startedAt: review.tool.startedAt,
+              endedAt: review.tool.endedAt,
+            }
+          : null,
+        phase: REVIEW_PHASE[review.call],
+        recent: review.recent,
+      }
     if (t.status !== 'working') return null
     const session = this.live.get(t.id)
     const turn = session?.turnStartedAt ?? null

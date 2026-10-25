@@ -650,6 +650,13 @@ export interface ActivityView {
   since: number
   /** 이번 턴의 마지막 도구. 아직 없으면 null */
   tool: ToolActivityView | null
+  /**
+   * 독립 리뷰 중(D502)이면 지금 호출의 이름("찾기", "확인"). since는 그 호출을 시작한 때이고 tool은 그 호출의 마지막
+   * 도구다. 작업 중인 task는 없다
+   */
+  phase?: string
+  /** 독립 리뷰 중의 최근 도구 (오래된 것부터, 지금 것을 빼고). Codex는 도구를 받지 않아 없다 */
+  recent?: readonly string[]
 }
 
 export interface ToolActivityView {
@@ -860,6 +867,11 @@ export interface ReviewView {
   /** [요약] 탭 맨 위의 이 단계 핵심 (D223). 의도 정리, 원인 분석과 수정, 리뷰와 검증만 있다 */
   lead: StageLead | null
   artifacts: Artifact[]
+  /**
+   * 독립 리뷰의 진행 기록 (D502): 호출마다 find.log, check.log. 산출물이 아니라 이슈 기록에는 넣지 않는다. 독립 리뷰를
+   * 요청하지 않은 task는 없다
+   */
+  reviewLogs?: Artifact[]
   /** 이 task의 변경 (task 시작 커밋 → 작업 트리) */
   diff: string
   /**

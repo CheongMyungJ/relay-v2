@@ -26,7 +26,7 @@ import type {
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
-import { Activity } from './Activity'
+import { Activity, ActivityRecent } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, Modal, UncommittedDialog } from './dialogs'
 import { DraftCards } from './DraftCards'
@@ -425,6 +425,7 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         <section className="progress">
           <h3>진행</h3>
           <Activity activity={task.activity} />
+          <ActivityRecent activity={task.activity} />
         </section>
       ) : null}
       <section>
@@ -605,6 +606,17 @@ function Review({
           ) : (
             <div className="dim">산출물 없음</div>
           )
+        ) : null}
+        {tab === 'artifacts' && review.reviewLogs?.length ? (
+          <section className="review-logs" aria-label="독립 리뷰 기록">
+            <h3>독립 리뷰 기록</h3>
+            {review.reviewLogs.map((l) => (
+              <details key={l.name}>
+                <summary>{l.name}</summary>
+                <pre>{l.text}</pre>
+              </details>
+            ))}
+          </section>
         ) : null}
         {tab === 'changes' ? (
           review.repoDiffs ? (

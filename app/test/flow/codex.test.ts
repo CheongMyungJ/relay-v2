@@ -386,6 +386,14 @@ describe('[흐름] Codex CLI와 실제 훅·MCP 브리지', () => {
       code_review: true,
       resumed_at: expect.any(String),
     })
+    // Codex 호출은 도는 동안의 도구를 받지 않는다: 진행 기록은 시작과 끝, 그 까닭만 있다 (D502)
+    const log = fs.readFileSync(
+      path.join(path.dirname(s.file()), 'tasks', '02-fix', 'independent-review', 'find.log'),
+      'utf8',
+    )
+    expect(log).toContain('찾기 시작 (Codex')
+    expect(log).toContain('(Codex는 도는 동안의 도구를 받지 않는다)')
+    expect(log).toContain('찾기 끝')
     expect(s.hh.records().filter((r) => r['type'] === 'start')).toHaveLength(0)
   })
 

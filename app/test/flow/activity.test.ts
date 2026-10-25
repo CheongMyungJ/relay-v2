@@ -106,7 +106,14 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     expect(work?.tasks.map((t) => t.activity)).toEqual([null, null])
 
     // 도구 훅은 스냅샷이 아니라 따로 왔다. 질문 도구가 아니라 core를 거치지 않고 빈 본문으로 바로 답했다
-    const updates = ui.activityLog.filter((u) => u.workKey === workKey && u.taskId === fixId)
+    // 세션의 도구 훅으로 온 것만 본다. 독립 리뷰 중의 진행(phase가 있음, D502)과 리뷰가 끝난 때의 지움은 flow.test.ts가 본다
+    const updates = ui.activityLog.filter(
+      (u) =>
+        u.workKey === workKey &&
+        u.taskId === fixId &&
+        u.activity !== null &&
+        u.activity.phase === undefined,
+    )
     expect(
       updates.map((u) => [u.activity?.tool?.label, u.activity?.tool?.endedAt === null]),
     ).toEqual([
@@ -222,7 +229,14 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     const fixId = ui.works.get(workKey)?.tasks.find((t) => t.node === 'fix')?.id ?? ''
 
     // 진행 표시: 실패한 Bash도 끝났고, Grep은 보이지 않고 Task가 끝까지 남는다
-    const updates = ui.activityLog.filter((u) => u.workKey === workKey && u.taskId === fixId)
+    // 세션의 도구 훅으로 온 것만 본다. 독립 리뷰 중의 진행(phase가 있음, D502)과 리뷰가 끝난 때의 지움은 flow.test.ts가 본다
+    const updates = ui.activityLog.filter(
+      (u) =>
+        u.workKey === workKey &&
+        u.taskId === fixId &&
+        u.activity !== null &&
+        u.activity.phase === undefined,
+    )
     expect(
       updates.map((u) => [u.activity?.tool?.label, u.activity?.tool?.endedAt === null]),
     ).toEqual([

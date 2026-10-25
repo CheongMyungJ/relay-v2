@@ -4,6 +4,7 @@
 // 이 파일은 순수 함수만 둔다(브리프, 스키마, 결과 읽기, 결과 글). 호출과 파일 쓰기는 main/work.ts다.
 import type { WorkType } from '../shared/work'
 import { fence } from './knowledge'
+import { toolLabel } from './review'
 
 /** 결과 글 (task 디렉터리). 다시 연 마무리 세션이 읽는다 (D496) */
 export const REVIEW_RESULT_FILE = 'independent-review.md'
@@ -19,6 +20,78 @@ export const REVIEW_CALL_TIMEOUT_MS = 30 * 60_000
 
 /** 리뷰가 읽기만 하게 주는 도구 (Claude). Bash를 주지 않아 파일을 바꿀 수 없다: git이 필요한 변경은 앱이 미리 만든다 */
 export const REVIEW_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob']
+
+/** 호출 종류: 찾기(코드 리뷰)와 확인 */
+export type ReviewCall = 'find' | 'check'
+
+/** 진행 표시와 기록의 호출 이름 (D502) */
+export const REVIEW_PHASE: Readonly<Record<ReviewCall, string>> = { find: '찾기', check: '확인' }
+
+/** 호출마다의 진행 기록 파일 (independent-review/ 안, D502). 끝난 뒤에도 남아 Work 완료 화면에서 읽는다 */
+export const reviewLogFile = (call: ReviewCall): string => `${call}.log`
+
+/** 진행 표시에 남길 최근 도구 수 (D502) */
+export const REVIEW_RECENT = 5
+
+/**
+ * 구조화된 출력을 내는 도구. Claude Code가 --json-schema의 답을 이 도구로 낸다(2.1.310에서 봄). 리뷰가 한 일이 아니라
+ * 진행에서 뺀다
+ */
+const STRUCTURED_TOOL = 'StructuredOutput'
+
+/** 진행의 한 걸음 (D502): 도구를 부름, 도구가 끝남, 모델의 글 */
+export type ReviewStep =
+  | { kind: 'tool'; id: string; label: string }
+  | { kind: 'done'; id: string }
+  | { kind: 'text'; text: string }
+
+const record = (v: unknown): Record<string, unknown> | null =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+
+/**
+ * 출력 이벤트(`--output-format stream-json`) 하나에서 진행의 걸음 (D502). assistant의 tool_use와 text, user의
+ * tool_result만 읽는다(계약: test/contract/claude.ts의 STREAM_CONTRACT). 경로는 root(worktree) 안이면 상대 경로로 보인다
+ */
+export function reviewSteps(event: Record<string, unknown>, root?: string): ReviewStep[] {
+  const type = event['type']
+  if (type !== 'assistant' && type !== 'user') return []
+  const content = record(event['message'])?.['content']
+  if (!Array.isArray(content)) return []
+  const out: ReviewStep[] = []
+  for (const item of content as unknown[]) {
+    const c = record(item)
+    if (!c) continue
+    const id = typeof c['id'] === 'string' ? c['id'] : ''
+    if (type === 'assistant' && c['type'] === 'tool_use' && typeof c['name'] === 'string') {
+      if (c['name'] !== STRUCTURED_TOOL)
+        out.push({ kind: 'tool', id, label: toolLabel(c['name'], c['input'], root) })
+    } else if (type === 'assistant' && c['type'] === 'text' && typeof c['text'] === 'string') {
+      const text = c['text'].trim()
+      if (text) out.push({ kind: 'text', text })
+    } else if (
+      type === 'user' &&
+      c['type'] === 'tool_result' &&
+      typeof c['tool_use_id'] === 'string'
+    ) {
+      out.push({ kind: 'done', id: c['tool_use_id'] })
+    }
+  }
+  return out
+}
+
+/** 진행 기록의 글 길이. 넘으면 줄인다 */
+const LOG_TEXT_MAX = 400
+
+/**
+ * 진행 기록(find.log, check.log)의 한 줄 (D502): "12:03:04 Read(src/avg.js)", 모델의 글은 들여 써서 한 줄로 줄인다.
+ * 도구가 끝난 것은 적지 않는다. time은 시:분:초다
+ */
+export function reviewLogLine(step: ReviewStep, time: string): string | null {
+  if (step.kind === 'done') return null
+  if (step.kind === 'tool') return `${time} ${step.label}`
+  const one = step.text.replace(/\s+/g, ' ')
+  return `${time}   ${one.length > LOG_TEXT_MAX ? `${one.slice(0, LOG_TEXT_MAX - 1)}…` : one}`
+}
 
 const SEVERITIES = ['차단', '권장', '사소'] as const
 const KINDS = ['정확성', '정리'] as const

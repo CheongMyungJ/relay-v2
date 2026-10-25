@@ -1,5 +1,5 @@
 // 마무리 단계와 독립 리뷰의 순수 함수 (5.6.14, D493~D500): 리뷰 요청의 형식 검사, 독립 리뷰의 브리프·결과 읽기·결과 글,
-// code_review 설정, Work 완료 화면의 리뷰 표시
+// code_review 설정, Work 완료 화면의 리뷰 표시, 독립 리뷰 호출의 진행 표시(D502)
 import { describe, expect, it } from 'vitest'
 import { stringify } from 'yaml'
 import {
@@ -8,6 +8,7 @@ import {
   mergeWorkSettings,
   normalizeConfig,
 } from '../../src/core/config'
+import { jsonLines } from '../../src/adapters/claude'
 import {
   CHECK_SCHEMA,
   FIND_SCHEMA,
@@ -16,9 +17,11 @@ import {
   readCheck,
   readFind,
   reviewError,
+  reviewLogLine,
   reviewMarkdown,
   reviewPart,
   reviewResumePrompt,
+  reviewSteps,
   sortFindings,
   type Candidate,
   type ReviewBrief,
@@ -427,5 +430,84 @@ describe('Work 완료 화면의 독립 리뷰 표시 (D495, D497)', () => {
     ).toEqual({ state: 'failed', error: '시간 초과' })
     expect(completionReview(v2, { node: 'fix' })).toEqual({ state: 'none' })
     expect(completionReview({ type: 'bugfix' }, { node: 'verify' })).toBeNull()
+  })
+})
+
+describe('독립 리뷰 호출의 진행 표시 (D502)', () => {
+  const root = '/w/tree'
+  // 녹화본(test/contract/fixtures/claude.json의 stream)의 모양에서 앱이 읽는 필드만 둔다
+  const assistant = (content: object[]) => ({ type: 'assistant', message: { content } })
+
+  it('도구 호출, 도구 결과, 모델의 글을 걸음으로 읽는다. 경로는 worktree 기준이다', () => {
+    expect(
+      reviewSteps(
+        assistant([
+          { type: 'text', text: '  변경 파일을 읽는다.\n' },
+          { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/tree/src/avg.js' } },
+          { type: 'tool_use', id: 't2', name: 'Grep', input: { pattern: 'mean', path: '/w/tree' } },
+        ]),
+        root,
+      ),
+    ).toEqual([
+      { kind: 'text', text: '변경 파일을 읽는다.' },
+      { kind: 'tool', id: 't1', label: 'Read(src/avg.js)' },
+      { kind: 'tool', id: 't2', label: 'Grep(mean)' },
+    ])
+    expect(
+      reviewSteps(
+        { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1' }] } },
+        root,
+      ),
+    ).toEqual([{ kind: 'done', id: 't1' }])
+  })
+
+  it('구조화된 출력 도구, 빈 글, 다른 이벤트, 모양이 다른 것은 걸음이 아니다', () => {
+    expect(
+      reviewSteps(
+        assistant([
+          { type: 'tool_use', id: 'o', name: 'StructuredOutput', input: { candidates: [] } },
+          { type: 'text', text: '   ' },
+          { type: 'thinking', thinking: '…' },
+          null as unknown as object,
+        ]),
+        root,
+      ),
+    ).toEqual([])
+    expect(reviewSteps({ type: 'result', structured_output: {} }, root)).toEqual([])
+    expect(reviewSteps({ type: 'system', subtype: 'init' }, root)).toEqual([])
+    expect(reviewSteps({ type: 'assistant', message: { content: 'x' } }, root)).toEqual([])
+    expect(reviewSteps({ type: 'assistant' }, root)).toEqual([])
+    // 사람이 보낸 글(user의 text)은 도구 결과가 아니다
+    expect(
+      reviewSteps({ type: 'user', message: { content: [{ type: 'text', text: 'x' }] } }),
+    ).toEqual([])
+  })
+
+  it('진행 기록의 줄: 도구는 시각과 이름, 글은 들여 써서 한 줄로 줄이고, 도구가 끝난 것은 적지 않는다', () => {
+    expect(reviewLogLine({ kind: 'tool', id: 'a', label: 'Read(src/avg.js)' }, '12:03:04')).toBe(
+      '12:03:04 Read(src/avg.js)',
+    )
+    expect(reviewLogLine({ kind: 'text', text: '첫 줄\n\n둘째  줄' }, '12:03:05')).toBe(
+      '12:03:05   첫 줄 둘째 줄',
+    )
+    const long = reviewLogLine({ kind: 'text', text: 'ㄱ'.repeat(500) }, '00:00:00') ?? ''
+    expect(long.endsWith('…')).toBe(true)
+    expect(long.length).toBe('00:00:00   '.length + 400)
+    expect(reviewLogLine({ kind: 'done', id: 'a' }, '12:03:06')).toBeNull()
+  })
+
+  it('stream-json 출력을 조각나 와도 줄로 읽고 마지막 result를 남긴다. JSON이 아닌 줄과 받는 쪽의 오류는 건너뛴다', () => {
+    const got: unknown[] = []
+    const lines = jsonLines((e) => {
+      got.push(e['type'])
+      if (e['type'] === 'user') throw new Error('표시 실패')
+    })
+    lines.push('{"type":"assi')
+    lines.push('stant","message":{}}\nnot json\n[1]\n{"type":"user"}\n')
+    lines.push('{"type":"result","n":1}\n{"type":"result","n":2}')
+    expect(lines.result()).toEqual({ type: 'result', n: 1 })
+    lines.end()
+    expect(got).toEqual(['assistant', 'user', 'result', 'result'])
+    expect(lines.result()).toEqual({ type: 'result', n: 2 })
   })
 })

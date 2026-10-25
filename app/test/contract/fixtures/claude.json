@@ -16,6 +16,7 @@
     "--system-prompt",
     "--system-prompt-snapshot",
     "--tools",
+    "--verbose",
     "-p"
   ],
   "events": {
@@ -188,6 +189,96 @@
         "prompt_id": "<prompt_id>",
         "hook_event_name": "SessionEnd",
         "reason": "other"
+      }
+    }
+  },
+  "stream": {
+    "claudeVersion": "2.1.310 (Claude Code)",
+    "recordedAt": "2026-10-25",
+    "shapes": {
+      "assistant": {
+        "message": "object",
+        "parent_tool_use_id": "null",
+        "request_id": "string",
+        "session_id": "string",
+        "timestamp": "string",
+        "type": "string",
+        "uuid": "string"
+      },
+      "assistant.message": {
+        "container": "null",
+        "content": "array",
+        "context_management": "null",
+        "diagnostics": "null",
+        "id": "string",
+        "input_transformations": "array",
+        "model": "string",
+        "role": "string",
+        "stop_details": "null",
+        "stop_reason": "null",
+        "stop_sequence": "null",
+        "type": "string",
+        "usage": "object"
+      },
+      "content.text": {
+        "text": "string",
+        "type": "string"
+      },
+      "content.tool_use": {
+        "caller": "object",
+        "id": "string",
+        "input": "object",
+        "name": "string",
+        "type": "string"
+      },
+      "user": {
+        "message": "object",
+        "parent_tool_use_id": "null",
+        "session_id": "string",
+        "timestamp": "string",
+        "tool_result_meta": "array",
+        "tool_use_result": "object",
+        "type": "string",
+        "uuid": "string"
+      },
+      "user.message": {
+        "content": "array",
+        "role": "string"
+      },
+      "content.tool_result": {
+        "content": "string",
+        "tool_use_id": "string",
+        "type": "string"
+      },
+      "result": {
+        "api_error_status": "null",
+        "duration_api_ms": "number",
+        "duration_ms": "number",
+        "fast_mode_disabled_reason": "string",
+        "fast_mode_state": "string",
+        "first_content_frame_ms": "number",
+        "is_error": "boolean",
+        "modelUsage": "object",
+        "model_usage_since_last_result": "object",
+        "num_turns": "number",
+        "permission_denials": "array",
+        "queued_turn_count": "number",
+        "result": "string",
+        "result_index": "number",
+        "safety_stops": "number",
+        "session_id": "string",
+        "stop_reason": "string",
+        "structured_output": "object",
+        "subagent_stats": "object",
+        "subtype": "string",
+        "terminal_reason": "string",
+        "time_to_request_ms": "number",
+        "total_cost_usd": "number",
+        "ttft_ms": "number",
+        "ttft_stream_ms": "number",
+        "type": "string",
+        "usage": "object",
+        "uuid": "string"
       }
     }
   }
