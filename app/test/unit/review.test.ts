@@ -13,6 +13,7 @@ import {
   permissionNotice,
   resumeHint,
   revisitDecisions,
+  shownErrors,
   stageLead,
   stopNotice,
   taskLabel,
@@ -219,6 +220,58 @@ describe('형식 되돌림 안내 (D220)', () => {
     // 고쳐서 승인 대기가 됐거나 상한까지 되돌려 대기면 없다
     expect(bounceNotice({ status: 'awaiting_approval', bounce_count: 0 }, 2)).toBeNull()
     expect(bounceNotice({ status: 'idle', bounce_count: 2 }, 2)).toBeNull()
+  })
+})
+
+describe('화면의 형식 오류 (D494, D496)', () => {
+  const again: FormatIssue = {
+    file: 'handoff.md',
+    part: 'header',
+    field: 'status',
+    message: '독립 리뷰는 이미 받음',
+  }
+  const other: FormatIssue = { file: 'fix.md', part: 'body', field: '원인', message: '빈 절' }
+  const review = { requested_at: '2026-10-25T00:00:00Z', code_review: true }
+  const errors = [again, other]
+
+  it('리뷰하는 동안, 다시 열기를 기다리는 동안, 다시 연 세션의 첫 Stop 전에는 리뷰를 요청할 때의 handoff status 오류를 보이지 않는다', () => {
+    for (const status of ['reviewing', 'queued', 'working', 'asking', 'input_needed'] as const) {
+      expect(
+        shownErrors({ status, bounce_count: 0, review }, 'review_requested', errors),
+        status,
+      ).toEqual([other])
+    }
+  })
+
+  it('리뷰가 끝나 다시 열기 전에 끊기면 숨기고, 다시 연 뒤에 끊기면 보인다 (I185)', () => {
+    const task = { status: 'interrupted' as const, bounce_count: 0 }
+    expect(shownErrors({ ...task, review }, 'review_requested', errors)).toEqual([other])
+    expect(
+      shownErrors(
+        { ...task, review: { ...review, resumed_at: '2026-10-25T00:02:00Z' } },
+        'review_requested',
+        errors,
+      ),
+    ).toEqual(errors)
+  })
+
+  it('되돌린 뒤, 승인 대기, 리뷰를 요청하기 전, handoff가 다른 status면 그대로 보인다', () => {
+    expect(
+      shownErrors({ status: 'working', bounce_count: 1, review }, 'review_requested', errors),
+    ).toEqual(errors)
+    expect(
+      shownErrors(
+        { status: 'awaiting_approval', bounce_count: 0, review },
+        'review_requested',
+        errors,
+      ),
+    ).toEqual(errors)
+    expect(shownErrors({ status: 'working', bounce_count: 0 }, 'review_requested', errors)).toEqual(
+      errors,
+    )
+    expect(
+      shownErrors({ status: 'working', bounce_count: 0, review }, 'awaiting_approval', errors),
+    ).toEqual(errors)
   })
 })
 
