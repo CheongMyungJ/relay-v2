@@ -1,6 +1,6 @@
 // [실제] 실제 claude로 작은 리팩터링이 intake → refactor(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M15, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - work-start가 머리글 없는 intent 초안에 리팩터링의 기본 완료조건 넷과 구조 조건을 쓴다 (D264, D266)
+// - work-start가 머리글 없는 intent 초안에 리팩터링의 기본 완료조건 둘과 구조 조건을 쓴다 (D266, D503)
 // - refactor가 안전망을 먼저 따로 커밋하고, refactor.md 다섯 절에 안전망 커밋 해시를 적는다 (D259, D272, I64)
 // - 숨은 버그(공백을 하나만 바꿈)를 고치지 않고 지금 동작을 지킨다 (D260)
 // - refactor가 독립 리뷰를 요청해 받고(D494~D496), 리팩터링 pr.md(목표 구조, 동작 보존, 찾은 버그)를 쓰고 작업 브랜치로
@@ -194,6 +194,14 @@ function inspect(
       '리팩터링 기본 완료조건(공개 인터페이스) 없음 (D264)',
     )
     need(!criteria.includes('재현 절차'), '버그 수정 완료조건(재현 절차)이 들어감')
+    need(
+      !criteria.includes('약화하거나 삭제하지 않는다'),
+      '없앤 기본 완료조건(약화 금지)이 들어감 (D503)',
+    )
+    need(
+      !/^- \[ \] `[^`]+`가 통과한다/m.test(criteria),
+      '없앤 기본 완료조건(테스트 명령)이 들어감 (D503)',
+    )
     notes.push(`완료조건: ${criteria.replace(/\n/g, ' / ')}`)
   }
   const intent = fs.readFileSync(path.join(workDir, 'intent.md'), 'utf8')

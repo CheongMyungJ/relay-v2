@@ -494,7 +494,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
         { title: '비목표', text: '- 없음' },
         {
           title: '완료조건',
-          text: '- [ ] 재현 절차가 더 이상 실패하지 않는다\n- [ ] `npm test`가 통과한다\n- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
+          text: '- [ ] 재현 절차가 더 이상 실패하지 않는다\n- [ ] 빈 배열이면 avg가 0을 돌려준다',
         },
       ],
     })
@@ -564,7 +564,7 @@ describe('[흐름] 최소 흐름 (M2)', () => {
       'pr.md',
       'verification.md',
     ])
-    expect(verifyView?.completion?.verdicts.map((v) => v.verdict)).toEqual(['통과', '통과', '통과'])
+    expect(verifyView?.completion?.verdicts.map((v) => v.verdict)).toEqual(['통과', '통과'])
     expect(verifyView?.completion?.review).toEqual({ state: 'ok' })
     // 독립 리뷰의 진행 기록은 산출물이 아니고 [산출물] 탭 아래에 따로 보인다 (D502)
     expect(verifyView?.reviewLogs?.map((l) => l.name)).toEqual(['find.log', 'check.log'])

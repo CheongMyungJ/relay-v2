@@ -135,11 +135,9 @@ export function intentDraft(opts: { omit?: string[]; note?: string } = {}) {
     ['원하는 결과', '빈 배열의 평균은 0이다.'],
     [
       '완료조건',
-      [
-        '- [ ] 재현 절차가 더 이상 실패하지 않는다',
-        '- [ ] `npm test`가 통과한다',
-        '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
-      ].join('\n'),
+      ['- [ ] 재현 절차가 더 이상 실패하지 않는다', '- [ ] 빈 배열이면 avg가 0을 돌려준다'].join(
+        '\n',
+      ),
     ],
     ['추가 의견', '- (사람 추정, 확인 안 됨) 0으로 나누는 부분'],
   ]
@@ -226,17 +224,13 @@ export const FIX_DOC = [
   '',
 ].join('\n')
 
-/** verification.md의 판정 절들 (5.6.6, D437): 완료조건 판정, 테스트 파일 변경, 나중에 정리할 곳, 남은 위험 */
+/** verification.md의 판정 절들 (5.6.14, D437, D504): 완료조건 판정, 나중에 정리할 곳, 남은 위험 */
 export const VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
   '| 재현 절차가 더 이상 실패하지 않는다 | 통과 | 0 출력 |',
-  '| `npm test`가 통과한다 | 통과 | 2 passed |',
-  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 시험 추가만 |',
-  '',
-  '## 테스트 파일 변경',
-  '- test/avg.test.js — 약화 아님 — 시험 추가',
+  '| 빈 배열이면 avg가 0을 돌려준다 | 통과 | test/avg.test.js 2 passed |',
   '',
   '## 나중에 정리할 곳',
   '- 없음',
@@ -325,8 +319,6 @@ export function featureIntentDraft(opts: { note?: string } = {}) {
     [
       '완료조건',
       [
-        '- [ ] `npm test`가 통과한다',
-        '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
         '- [ ] 완료조건의 각 동작을 확인하는 테스트가 있다',
         '- [ ] 홀수 길이 배열이면 가운데 값을 돌려준다',
         '- [ ] 빈 배열이면 0을 돌려준다',
@@ -424,14 +416,9 @@ export const FEATURE_VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
-  '| `npm test`가 통과한다 | 통과 | 3 passed |',
-  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 시험 추가만 |',
   '| 완료조건의 각 동작을 확인하는 테스트가 있다 | 통과 | test/median.test.js |',
   '| 홀수 길이 배열이면 가운데 값을 돌려준다 | 통과 | 홀수 길이 시험 |',
   '| 빈 배열이면 0을 돌려준다 | 통과 | 빈 배열 시험 |',
-  '',
-  '## 테스트 파일 변경',
-  '- test/median.test.js — 약화 아님 — 새 파일',
   '',
   '## 나중에 정리할 곳',
   '- 없음',
@@ -468,8 +455,6 @@ export function refactorIntentDraft() {
     [
       '완료조건',
       [
-        '- [ ] `npm test`가 통과한다',
-        '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다',
         '- [ ] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다',
         '- [ ] 레포 밖 공개 인터페이스가 바뀌지 않는다',
         '- [ ] 합계는 src/sum.js의 sum 한 곳에서만 계산한다',
@@ -484,14 +469,9 @@ export const REFACTOR_VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
-  '| `npm test`가 통과한다 | 통과 | 3 passed |',
-  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 시험 추가만 |',
   '| 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다 | 통과 | 안전망 커밋과 마지막 코드에서 통과 |',
   '| 레포 밖 공개 인터페이스가 바뀌지 않는다 | 통과 | avg의 export 그대로 |',
   '| 합계는 src/sum.js의 sum 한 곳에서만 계산한다 | 통과 | reduce는 src/sum.js에만 |',
-  '',
-  '## 테스트 파일 변경',
-  '- test/avg-safety.test.js — 약화 아님 — 새 파일',
   '',
   '## 나중에 정리할 곳',
   '- 없음',
@@ -555,20 +535,18 @@ export const GENERAL_REQUEST = [
   '',
 ].join('\n')
 
-/** 일반 intent 초안의 확인 방법 줄 (D305). 셋째 줄은 사람이 확인한다 (D306) */
+/** 일반 intent 초안의 확인 방법 줄 (D305, D503). 둘째 줄은 사람이 확인한다 (D306) */
 export const GENERAL_CRITERIA = [
-  '- [ ] `npm test`가 통과한다 — 확인: `npm test`',
-  '- [ ] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: 기준 커밋과 테스트 파일 diff',
   '- [ ] README.md에 테스트 실행 명령이 있다 — 확인: README.md',
   '- [ ] README의 avg 설명이 처음 보는 사람에게 읽힌다 — 확인: 사람',
 ]
 
 /**
- * 일반 intent 초안 (5.3, D304, D305). 머리글이 없다. noCheck면 셋째 완료조건의 확인 방법을 빼 형식 오류를 낸다 (I86)
+ * 일반 intent 초안 (5.3, D305, D503). 머리글이 없다. noCheck면 첫째 완료조건의 확인 방법을 빼 형식 오류를 낸다 (I86)
  */
 export function generalIntentDraft(opts: { noCheck?: boolean } = {}) {
   const criteria = GENERAL_CRITERIA.map((line, i) =>
-    opts.noCheck && i === 2 ? line.replace(/ — 확인: .*$/, '') : line,
+    opts.noCheck && i === 0 ? line.replace(/ — 확인: .*$/, '') : line,
   )
   const sections: [string, string][] = [
     ['목표', 'README.md에 테스트 명령과 avg 쓰는 법을 적는다.'],
@@ -584,13 +562,8 @@ export const GENERAL_VERDICTS = [
   '## 완료조건 판정',
   '| 완료조건 | 판정 | 근거 |',
   '|---|---|---|',
-  '| `npm test`가 통과한다 | 통과 | 1 passed |',
-  '| 기존 테스트를 약화하거나 삭제하지 않는다 | 통과 | 테스트 파일 변경 없음 |',
   '| README.md에 테스트 실행 명령이 있다 | 통과 | README.md에 npm test |',
   '| README의 avg 설명이 처음 보는 사람에게 읽힌다 | 통과 | 사람 확인: 읽힌다 |',
-  '',
-  '## 테스트 파일 변경',
-  '- 없음',
   '',
   '## 나중에 정리할 곳',
   '- 없음',
@@ -611,8 +584,6 @@ export const EXECUTION_PLAN = [
 export const EXECUTION_SELF_CHECK = [
   '| 완료조건 | 한 일 | 확인 결과 |',
   '|---|---|---|',
-  '| `npm test`가 통과한다 | — | `npm test` 실행, 통과 |',
-  '| 기존 테스트를 약화하거나 삭제하지 않는다 | — | 테스트 파일 변경 없음 |',
   '| README.md에 테스트 실행 명령이 있다 | README.md를 씀 | README.md에 npm test |',
   '| README의 avg 설명이 처음 보는 사람에게 읽힌다 | 예시를 둠 | 사람이 볼 곳: README.md |',
 ].join('\n')

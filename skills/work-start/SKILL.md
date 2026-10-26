@@ -69,27 +69,28 @@ Scope (`비목표`) and completion criteria (`완료조건`). This step has no h
 
 ## 완료조건 section
 
-<!-- type: bugfix feature refactor general custom -->
-- Always start with these default items. Find the concrete test command in the repo (e.g. `npm test`). If the repo has no tests, leave out the test command item.
+<!-- type: bugfix feature refactor -->
+- Always start with these default items.
 <!-- /type -->
 <!-- type: bugfix -->
-  `- [ ] 재현 절차가 더 이상 실패하지 않는다` / `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다`
+  `- [ ] 재현 절차가 더 이상 실패하지 않는다`
 - Then add items that fit the request.
 <!-- /type -->
 <!-- type: feature -->
-  `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다` / `- [ ] 완료조건의 각 동작을 확인하는 테스트가 있다`
+  `- [ ] 완료조건의 각 동작을 확인하는 테스트가 있다`
 - Then add the acceptance criteria: one behavior seen from outside per line, as "<조건>이면 <결과>" (e.g. "빈 검색어로 요청하면 400과 오류 문구를 돌려준다"). No implementation details (which function to add etc.).
 - **Changed or removed behavior:** write a behavior that changes as "(바뀜) <조건>이면 <새 결과> (지금: <옛 결과>)", and one that goes away as "(없앰) <조건>이면 <결과> (지금: <옛 결과>)" (e.g. "(없앰) `--legacy`를 주면 알 수 없는 옵션 오류로 끝난다 (지금: 옛 형식으로 출력)"). If it is used outside the repo (exports, HTTP API, CLI arguments, stored formats and schemas), end the line with "(레포 밖 인터페이스)".
-- If any line is marked (바뀜) or (없앰), write the second default item as `- [ ] (바뀜)·(없앰) 항목의 옛 동작을 잡던 테스트 밖에서는 기존 테스트를 약화하거나 삭제하지 않는다`. The tests of the old behavior must change; any other weakening is still not allowed.
 <!-- /type -->
 <!-- type: refactor -->
-  `- [ ] <test command>가 통과한다` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다` / `- [ ] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` / `- [ ] 레포 밖 공개 인터페이스가 바뀌지 않는다` (leave out the interfaces the intent says to change)
+  `- [ ] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` / `- [ ] 레포 밖 공개 인터페이스가 바뀌지 않는다` (leave out the interfaces the intent says to change)
 - Then add the structural conditions that can be checked by reading code or running a command, one per line (e.g. "가격 계산은 `pricing` 모듈 한 곳에만 있다", "`routes/`는 `db/`를 직접 import하지 않는다"). Not the order or method of the change.
 <!-- /type -->
 <!-- type: general custom -->
-  `- [ ] <test command>가 통과한다 — 확인: <test command>` / `- [ ] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: 기준 커밋과 테스트 파일 diff`
-- Then add the items that fit the request, one per line. Not how to do the work.
-- **Check method:** end every line, the default items included, with ` — 확인: <방법>`: a command to run, a place to read (a file or a code location), or `사람`. Use `사람` only when no command and no place to read can check it. The app rejects a line without a check method.
+- Write the items that fit the request, one per line. Not how to do the work.
+- **Check method:** end every line with ` — 확인: <방법>`: a command to run, a place to read (a file or a code location), or `사람`. Use `사람` only when no command and no place to read can check it. The app rejects a line without a check method.
+<!-- /type -->
+<!-- type: bugfix feature refactor general custom -->
+- No line that only says the repo's tests pass or that existing tests are kept, unless the request is about the tests themselves. Every step runs the repo's tests, and the review reads the whole diff.
 <!-- /type -->
 <!-- type: spec -->
 - Always start with these default items. No test command item: only the document changes.
@@ -125,19 +126,19 @@ No front matter: the app adds the type and version when the human approves.
 
 ## 완료조건
 <!-- type: bugfix -->
-- [ ] (기본 항목 세 개)
+- [ ] (기본 항목)
 - [ ] …
 - [ ] (요청에 맞는 항목)
 <!-- /type -->
 <!-- type: feature -->
-- [ ] (기본 항목 세 개)
+- [ ] (기본 항목)
 - [ ] …
 - [ ] (인수 조건: "<조건>이면 <결과>")
 - [ ] (있을 때만) (바뀜) <조건>이면 <새 결과> (지금: <옛 결과>)
 - [ ] (있을 때만) (없앰) <조건>이면 <결과> (지금: <옛 결과>)
 <!-- /type -->
 <!-- type: refactor -->
-- [ ] (기본 항목 네 개)
+- [ ] (기본 항목 두 개)
 - [ ] …
 - [ ] (구조 조건: 코드를 읽거나 명령으로 확인할 수 있는 문장)
 <!-- /type -->
@@ -147,7 +148,7 @@ No front matter: the app adds the type and version when the human approves.
 - [ ] (<무엇>을 정한다)
 <!-- /type -->
 <!-- type: general custom -->
-- [ ] (기본 항목 두 개) — 확인: (명령)
+- [ ] (요청에 맞는 항목) — 확인: (명령 / 읽을 곳 / 사람)
 - [ ] … — 확인: …
 - [ ] (요청에 맞는 항목) — 확인: (명령 / 읽을 곳 / 사람)
 <!-- /type -->

@@ -1,6 +1,7 @@
 // [실제] 실제 claude로 작은 일반 Work가 intake → execute(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M18, I91, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - work-start가 머리글 없는 intent 초안에 일반의 기본 완료조건 둘과, 줄마다 확인 방법을 쓴다 (D304, D305)
+// - work-start가 머리글 없는 intent 초안에 요청에 맞는 완료조건을 줄마다 확인 방법과 함께 쓰고, 테스트 명령·약화 금지
+//   기본 항목은 넣지 않는다 (D305, D503)
 // - 읽기 쉬움처럼 명령으로 확인할 수 없는 조건은 `확인: 사람`으로 둔다 (D306)
 // - execute가 execution.md 네 절에 완료조건별 자체 확인을 적고 커밋한다 (D309, D310)
 // - execute가 독립 리뷰를 요청해 받고(D494~D496), 사람 확인 항목을 물어 판정하고(D311), 일반 pr.md(주요 결정)를
@@ -153,14 +154,18 @@ function inspect(
     need(!intentDraftBody(draft).header, 'intent 초안에 머리글이 있음 (D236)')
     const criteria = sectionText(intentDraftBody(draft).body, '완료조건') ?? ''
     const lines = criteria.split('\n').filter((l) => l.startsWith('- [ ] '))
-    need(lines.length >= 3, '완료조건이 셋보다 적음')
+    need(lines.length >= 2, '완료조건이 둘보다 적음')
     need(
       lines.every((l) => CHECK_METHOD.test(l)),
       '확인 방법이 없는 완료조건 줄이 있음 (D305)',
     )
     need(
-      criteria.includes('약화하거나 삭제하지 않는다'),
-      '일반 기본 완료조건(약화 금지) 없음 (D304)',
+      !criteria.includes('약화하거나 삭제하지 않는다'),
+      '없앤 기본 완료조건(약화 금지)이 들어감 (D503)',
+    )
+    need(
+      !/^- \[ \] `[^`]+`가 통과한다/m.test(criteria),
+      '없앤 기본 완료조건(테스트 명령)이 들어감 (D503)',
     )
     need(!criteria.includes('재현 절차'), '버그 수정 완료조건(재현 절차)이 들어감')
     human = lines.some((l) => /확인\s*:\s*사람/.test(l))

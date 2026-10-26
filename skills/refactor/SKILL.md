@@ -16,7 +16,7 @@ For a refactoring Work, change the structure without changing behavior. In one s
 2. **Ask if needed** (see Human decisions).
 3. **Safety net.** For each place you will change, decide the tests that pin its current behavior. Commit only the safety net, as one commit, before any structural change.
 4. **Steps.** For each plan step: change structure, run the test command, commit.
-5. Run the intent's test command at the end.
+5. Run the repo's test command at the end.
 
 ## Rules
 
@@ -27,7 +27,7 @@ For a refactoring Work, change the structure without changing behavior. In one s
 - **No safety net possible** (UI behavior, needs an external service, no way to run tests): do not ask. Write why in `안전망 테스트` and in `risks`, and go on. That part is judged 판정 불가 when the Work finishes.
 - **Interfaces:** you may change names, signatures and module boundaries used only inside the repo, and fix the callers in the repo together. Existing tests may follow such a change only in call names, import paths, file location and setup code. Never change their expected values or inputs. Change an interface used outside the repo (what a library exports, HTTP API, CLI arguments, stored formats and schemas) only when the intent says so.
 - **Commits:** one safety-net commit, then one commit per plan step. The test command must pass at every commit. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
-- **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
+- **Run tests:** run the repo's test command (find it in the repo, e.g. `npm test`). For each failure, check whether it also fails at the base commit (from `context.md`), and say which. If the repo has no tests, write that in `테스트 실행`.
 - **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human (see "When an earlier result is wrong" in the common rules).
 
 ## Decision points
@@ -50,7 +50,7 @@ Ask on the spot only in these cases. In any other case, decide yourself and reco
 - Every plan step is committed, and the test command passed at each commit.
 - Bugs you found are written down, not fixed.
 - Human decisions were asked and the answers recorded in `decisions`.
-- You ran the intent's test command and wrote the result.
+- You ran the repo's test command and wrote the result, or wrote that the repo has no tests.
 
 ## Artifact template: `refactor.md`
 

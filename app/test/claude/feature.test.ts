@@ -1,6 +1,6 @@
 // [실제] 실제 claude로 작은 기능 추가가 intake → design → implement(마무리, D493)를 지나 끝까지 간다
 // (docs/implementation.md M14, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - work-start가 머리글 없는 intent 초안에 기능 추가의 기본 완료조건 셋과 인수 조건을 쓴다 (D236, D239, D240)
+// - work-start가 머리글 없는 intent 초안에 기능 추가의 기본 완료조건(각 동작의 테스트)과 인수 조건을 쓴다 (D236, D240, D503)
 // - design이 코드를 바꾸지 않고 design.md 여덟 절을 쓴다 (D243, D244, D431)
 // - implement가 테스트를 먼저 커밋하거나 implement.md에 구현 전 실패를 적는다 (D247, D250)
 // - implement가 독립 리뷰를 요청해 받고(D494~D496), verification.md에 나중에 정리할 곳을 두고(D437) 기능 추가
@@ -118,7 +118,15 @@ function inspect(
     const criteria = sectionText(intentDraftBody(draft).body, '완료조건') ?? ''
     need(
       criteria.includes('완료조건의 각 동작을 확인하는 테스트가 있다'),
-      '기능 추가 기본 완료조건 없음 (D239)',
+      '기능 추가 기본 완료조건 없음 (D503)',
+    )
+    need(
+      !criteria.includes('약화하거나 삭제하지 않는다'),
+      '없앤 기본 완료조건(약화 금지)이 들어감 (D503)',
+    )
+    need(
+      !/^- \[ \] `[^`]+`가 통과한다/m.test(criteria),
+      '없앤 기본 완료조건(테스트 명령)이 들어감 (D503)',
     )
     need(!criteria.includes('재현 절차'), '버그 수정 완료조건(재현 절차)이 들어감')
     notes.push(`완료조건: ${criteria.replace(/\n/g, ' / ')}`)

@@ -15,7 +15,8 @@ This Work has a type the team defined. Its steps run after intake, and this is o
 
 - **Problems outside the scope:** do not fix them. Write them in `risks`. Fixing one widens the scope, which is a human decision.
 - **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human: decide it within the intent and go on / start over as a new Work (see "When an earlier result is wrong" in the common rules).
-- **Tests:** if you change how code behaves, add a test that catches that behavior. If you cannot add one (UI behavior, needs an external service, no way to run tests), write why in this step's artifact and in `risks`, and go on. Never weaken or delete existing tests.
+- **Tests:** if you change how code behaves, add a test that catches that behavior. If you cannot add one (UI behavior, needs an external service, no way to run tests), write why in this step's artifact and in `risks`, and go on.
+- **Run tests:** if this step changed code, run the repo's test command (find it in the repo, e.g. `npm test`) before you close. For each failure, check whether it also fails at the base commit (from `context.md`), and say which in this step's artifact. If the repo has no tests, write that.
 - **Self-check:** for each 완료조건 this step takes on, run its check method (`— 확인: …` at the end of the line) for real and write the result in this step's artifact (in `완료조건별 자체 확인` if it has that section). For `확인: 사람`, write where the human should look. The Work's verdicts are judged on the final code when it finishes, so this is for comparison.
 - **Commits:** this step may change code. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output. If the procedure says this step does not change code, keep to it.
 - **A design document to follow:** if the intent's `제약` says "`<path>`의 결정을 따른다", departing from that design touches the constraints: ask the human. If they decide to change it, change the design document too, with the history and the human's decision, and commit it with the code.
@@ -25,6 +26,7 @@ This Work has a type the team defined. Its steps run after intake, and this is o
 - This step's artifact (`<step id>.md`) has every section listed in `context.md`.
 - The procedure below is done.
 - Every change in code behavior has a test, or the reason it has none.
+- If this step changed code, you ran the repo's test command and wrote the result.
 - Every change is committed.
 
 ## Artifact

@@ -50,7 +50,6 @@ function handoff(status: string): string {
 
 const VERDICTS =
   '## 완료조건 판정\n| 완료조건 | 판정 | 근거 |\n|---|---|---|\n| a | 통과 | npm test |\n'
-const TESTS = '## 테스트 파일 변경\n없음\n'
 
 function check(
   files: Record<string, string>,
@@ -68,11 +67,12 @@ function check(
 const errors = (r: { errors: { message: string }[] }) => r.errors.map((e) => e.message)
 
 describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
-  it('리뷰 요청 때는 단계 산출물과 판정표·테스트 파일 변경 절만 본다. pr.md는 아직 없다', () => {
+  it('리뷰 요청 때는 단계 산출물과 판정표 절만 본다. pr.md는 아직 없다. 테스트 파일 변경 절은 없다 (D504)', () => {
+    expect(reviewRequestSections('bugfix')).toEqual(['완료조건 판정'])
     const ok = check({
       'handoff.md': handoff('review_requested'),
       'fix.md': '',
-      'verification.md': `${VERDICTS}\n${TESTS}`,
+      'verification.md': VERDICTS,
     })
     expect(errors(ok)).toEqual([])
     expect(ok.status).toBe('review_requested')
@@ -85,28 +85,21 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
         check({
           'handoff.md': handoff('review_requested'),
           'fix.md': '',
-          'verification.md': VERDICTS,
+          'verification.md': '## 리뷰 지적\n없음\n',
         }),
       ),
-    ).toEqual(['`## 테스트 파일 변경` 절 없음: 리뷰 요청의 필수 절'])
+    ).toEqual(['`## 완료조건 판정` 절 없음: 리뷰 요청의 필수 절'])
   })
 
   it('마무리할 때(awaiting_approval)도 판정표의 절이 남아 있어야 한다: 리뷰 지적을 옮기며 다시 써도 지운 절은 되돌린다 (D499)', () => {
     const base = { 'handoff.md': handoff('awaiting_approval'), 'fix.md': '', 'pr.md': '# 제목\n' }
+    expect(errors(check({ ...base, 'verification.md': VERDICTS }, { requested: true }))).toEqual([])
     expect(
-      errors(check({ ...base, 'verification.md': `${VERDICTS}\n${TESTS}` }, { requested: true })),
-    ).toEqual([])
-    expect(
-      errors(
-        check(
-          { ...base, 'verification.md': `## 리뷰 지적\n없음\n\n${TESTS}` },
-          { requested: true },
-        ),
-      ),
+      errors(check({ ...base, 'verification.md': '## 리뷰 지적\n없음\n' }, { requested: true })),
     ).toEqual(['`## 완료조건 판정` 절 없음: 마무리 때 판정표의 필수 절'])
   })
 
-  it('설계 Work는 테스트 파일 변경 대신 문서 밖 파일 변경 절을 본다 (D374)', () => {
+  it('설계 Work는 문서 밖 파일 변경 절도 본다 (D374)', () => {
     expect(reviewRequestSections('spec')).toEqual(['완료조건 판정', '문서 밖 파일 변경'])
     const r = check(
       {
@@ -120,7 +113,7 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
   })
 
   it('리뷰 요청은 마무리 단계에서 task마다 한 번이고, 리뷰를 요청하기 전에는 awaiting_approval로 마무리하지 않는다', () => {
-    const files = { 'fix.md': '', 'verification.md': `${VERDICTS}\n${TESTS}`, 'pr.md': '# 제목\n' }
+    const files = { 'fix.md': '', 'verification.md': VERDICTS, 'pr.md': '# 제목\n' }
     expect(
       errors(check({ ...files, 'handoff.md': handoff('review_requested') }, { requested: true })),
     ).toEqual([
@@ -163,7 +156,7 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
       {
         'handoff.md': handoff('awaiting_approval'),
         'fix.md': '',
-        'verification.md': `${VERDICTS}\n${TESTS}`,
+        'verification.md': VERDICTS,
         'pr.md': '제목 없음\n',
       },
       { requested: true },

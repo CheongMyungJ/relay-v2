@@ -104,11 +104,10 @@ plausible is the default. Do not mark a candidate refuted for being speculative 
 
 ## Verdict table
 
-The writing session judged each 완료조건 of the intent in a table (`## 완료조건 판정`) and judged every changed test file (`## 테스트 파일 변경`; for a design Work, `## 문서 밖 파일 변경` lists the files changed outside the target document). Check them, and raise an objection when one of these holds:
+The writing session judged each 완료조건 of the intent in a table (`## 완료조건 판정`; for a design Work, `## 문서 밖 파일 변경` also lists the files changed outside the target document). Check them, and raise an objection when one of these holds:
 
 - The evidence does not support the verdict: it is not an actual run result or a read of the code or document, it quotes a run on code older than the final code, or it does not cover what the 완료조건 says.
 - The verdict breaks the rules: 통과 / 실패 / 판정 불가 only; 판정 불가 needs a reason; a bug that was never reproduced cannot make "재현 절차가 더 이상 실패하지 않는다" 통과; a behavior with no test cannot make "완료조건의 각 동작을 확인하는 테스트가 있다" 통과; a refactor place with no safety net cannot make the safety-net 완료조건 통과.
-- A test file changed since the base commit is missing from `## 테스트 파일 변경`, or a change marked 약화 아님 does weaken a test (a looser expected value, a removed case, a deleted test) without the intent allowing it.
 - For a design Work: a file outside the target document and the knowledge files changed and is missing from `## 문서 밖 파일 변경`.
 
-An objection names the 완료조건 (or the test file), what is wrong, and the evidence (the line, run or file). If the table is sound, return no objections. Do not object to style or wording.
+An objection names the 완료조건 (or the file), what is wrong, and the evidence (the line, run or file). If the table is sound, return no objections. Do not object to style or wording.
