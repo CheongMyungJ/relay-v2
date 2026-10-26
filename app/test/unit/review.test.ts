@@ -20,6 +20,7 @@ import {
   toolLabel,
   verdicts,
 } from '../../src/core/review'
+import { ALREADY_REVIEWED } from '../../src/core/validate'
 import type { Handoff, NodeName } from '../../src/shared/contracts'
 import type {
   AutoHoldReason,
@@ -228,7 +229,7 @@ describe('화면의 형식 오류 (D494, D496)', () => {
     file: 'handoff.md',
     part: 'header',
     field: 'status',
-    message: '독립 리뷰는 이미 받음',
+    message: ALREADY_REVIEWED,
   }
   const other: FormatIssue = { file: 'fix.md', part: 'body', field: '원인', message: '빈 절' }
   const review = { requested_at: '2026-10-25T00:00:00Z', code_review: true }
@@ -241,6 +242,13 @@ describe('화면의 형식 오류 (D494, D496)', () => {
         status,
       ).toEqual([other])
     }
+  })
+
+  it('handoff의 다른 status 오류는 리뷰를 기다리는 동안에도 보인다', () => {
+    const blocked: FormatIssue = { ...again, message: 'blocked_reason 없음' }
+    expect(
+      shownErrors({ status: 'reviewing', bounce_count: 0, review }, 'review_requested', [blocked]),
+    ).toEqual([blocked])
   })
 
   it('리뷰가 끝나 다시 열기 전에 끊기면 숨기고, 다시 연 뒤에 끊기면 보인다 (I185)', () => {

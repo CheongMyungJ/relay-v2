@@ -2776,7 +2776,7 @@ export function AddRepoDialog({ work, onClose }: { work: WorkView; onClose: () =
       <p className="dim">
         고른 서브모듈의 worktree를 메인 worktree 안의 그 자리에 작업 브랜치{' '}
         <code>{work.branch}</code>로 만듭니다. 지금 세션에는 앱이 알리지 않으니 터미널에서 직접
-        알리세요. 다음 단계부터는 앱이 안내에 넣습니다.
+        알리세요. 다음에 시작하는 task(PR 대응 포함)부터는 앱이 안내에 넣습니다.
       </p>
       {subs === null ? (
         <div className="dim">읽는 중…</div>

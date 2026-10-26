@@ -648,6 +648,35 @@ describe('[흐름] 최소 흐름 (M2)', () => {
     expect(blocked[0]?.reason).not.toContain('verification.md')
   })
 
+  it('리뷰 요청 handoff는 리뷰 중과 다시 연 세션이 일하는 동안 화면의 형식 오류가 아니다 (D494, D496, I188)', async () => {
+    // 다시 연 세션은 1.5초 쉰 뒤 마무리한다: 그동안 handoff는 리뷰 요청 때의 것이다
+    const after = steps('verify')
+    const s = await start(
+      scenario({ verify: [...after.slice(0, 1), { do: 'sleep', ms: 1500 }, ...after.slice(1)] }),
+    )
+    const seen: { status: string; errors: string[] }[] = []
+    let done = false
+    const watch = (async () => {
+      while (!done) {
+        const t = s.h.ui.works.get(s.workKey)?.tasks.find((x) => x.node === 'fix')
+        if (t && (t.status === 'reviewing' || t.status === 'working')) {
+          const r = await s.h.relay.review(s.workKey, t.id)
+          if (r?.handoffStatus === 'review_requested')
+            seen.push({ status: t.status, errors: r.errors.map((e) => e.message) })
+        }
+        await new Promise((r) => setTimeout(r, 50))
+      }
+    })()
+    const result = await drive(s.h.relay, s.h.ui, s.workKey)
+    done = true
+    await watch
+    await settle(s.h, s.workKey)
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    // 다시 연 세션이 일하는 동안을 보았고, 그동안 형식 오류가 없었다
+    expect(seen.map((x) => x.status)).toContain('working')
+    expect(seen.flatMap((x) => x.errors)).toEqual([])
+  })
+
   it('형식 오류를 되돌리면 고쳐 쓴 handoff로 승인 대기가 된다 (D21, D107)', async () => {
     // 마무리 단계의 리뷰 요청 handoff가 형식을 어겼다. 고쳐 쓰면 리뷰를 받고 마무리한다 (D494)
     const bad = handoff({ status: 'review_requested', omit: ['요약'] })

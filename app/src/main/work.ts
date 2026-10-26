@@ -3078,7 +3078,7 @@ export class WorkRunner {
         return r
       }
       this.problem(
-        `${repo.path}을 이 Work에 더했습니다. 지금 세션에는 터미널에서 알리세요. 다음 단계부터 context.md에 들어갑니다`,
+        `${repo.path}을 이 Work에 더했습니다. 지금 세션에는 터미널에서 알리세요. 다음에 시작하는 task부터 context.md에 들어갑니다`,
       )
       return { ok: true }
     })

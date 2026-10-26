@@ -29,6 +29,7 @@ import {
   REFACTOR_FILE,
   SPEC_FILE,
   EXECUTION_FILE,
+  ALREADY_REVIEWED,
   HANDOFF_FILE,
   INTENT_DRAFT_FILE,
   VERIFICATION_FILE,
@@ -94,8 +95,8 @@ export function bounceNotice(
 
 /**
  * 화면에 보일 형식 오류. 마무리 단계가 독립 리뷰를 요청한 뒤로는 리뷰하는 동안(D496), 다시 열기 전(대기열 D18, 끊김 I185),
- * 다시 연 세션이 첫 Stop 전인 동안(질문을 기다릴 때 포함) handoff가 리뷰를 요청할 때 쓴 그대로라 `review_requested`의 오류(D494)를 보이지
- * 않는다: 에이전트가 마무리하며 고쳐 쓴다. 다시 연 세션이 그대로 멈춰 되돌리면(D21) 보인다
+ * 다시 연 세션의 턴 안(질문을 기다릴 때 포함)에서 handoff가 리뷰를 요청할 때 쓴 그대로라 "이미 받음" 오류(D494)를
+ * 보이지 않는다: 에이전트가 마무리하며 고쳐 쓴다. 다시 연 세션의 턴이 끝나면(대기, 되돌림 D21) 그대로 보인다
  */
 export function shownErrors(
   task: Pick<TaskRecord, 'status' | 'bounce_count' | 'review'>,
@@ -111,7 +112,7 @@ export function shownErrors(
   const waiting = task.status === 'reviewing' || unopened || (turn && task.bounce_count === 0)
   const leftover = status === 'review_requested' && task.review !== undefined && waiting
   return leftover
-    ? errors.filter((e) => !(e.file === HANDOFF_FILE && e.field === 'status'))
+    ? errors.filter((e) => !(e.file === HANDOFF_FILE && e.message === ALREADY_REVIEWED))
     : [...errors]
 }
 

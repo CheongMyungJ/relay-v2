@@ -730,6 +730,10 @@ export function reviewRequestSections(type: WorkType): readonly string[] {
   return ['완료조건 판정', type === 'spec' ? '문서 밖 파일 변경' : '테스트 파일 변경']
 }
 
+/** 리뷰를 받은 뒤 다시 `review_requested`를 쓴 handoff의 오류 (D494). 화면은 리뷰 요청 때의 것이 남은 동안 숨긴다 (I188) */
+export const ALREADY_REVIEWED =
+  '독립 리뷰는 이미 받음: 리뷰를 받은 뒤의 순서를 마치고 `status: awaiting_approval`로 마무리 (D494)'
+
 /**
  * 리뷰 요청의 규칙 (D494): review_requested는 마무리 단계에서 task마다 한 번이고, 마무리 단계의 awaiting_approval은 리뷰를
  * 요청한 뒤다. 어기면 handoff.md의 status 오류다
@@ -744,9 +748,7 @@ function reviewRequestIssues(
   if (status === 'review_requested') {
     if (!finishing) return issue('`review_requested`는 Work의 마지막 작업 단계만 씀 (D494)')
     if (finishing.requested) {
-      return issue(
-        '독립 리뷰는 이미 받음: 리뷰를 받은 뒤의 순서를 마치고 `status: awaiting_approval`로 마무리 (D494)',
-      )
+      return issue(ALREADY_REVIEWED)
     }
   } else if (status === 'awaiting_approval' && finishing && !finishing.requested) {
     return issue('판정표를 쓰고 `status: review_requested`로 독립 리뷰를 먼저 요청해야 함 (D494)')

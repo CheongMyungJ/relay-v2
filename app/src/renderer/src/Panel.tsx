@@ -59,6 +59,9 @@ export function prCards(work: WorkView): PrView[] {
   return [...(work.pr ? [work.pr] : []), ...(work.prs ?? [])]
 }
 
+/** 카드가 여럿일 때 PR 카드의 이름: 레포(메인은 "메인")와 번호. PR 탭과 완료 알림이 같이 쓴다 */
+const cardName = (pr: PrView) => `${pr.repo || '메인'} PR #${pr.number}`
+
 /**
  * 승인 화면을 보일 task인가: 에이전트가 턴을 끝냈고 handoff가 있다. 막힘은 따로 보인다.
  * verify에서 멈춘 Work의 verify도 Work 완료 화면이다 (D119)
@@ -907,7 +910,7 @@ function PrSection({
             className={tab === `pr:${c.repo}` ? 'active' : ''}
             onClick={() => setTab(`pr:${c.repo}`)}
           >
-            {cards.length > 1 ? `${c.repo || '메인'} PR #${c.number}` : 'PR'}
+            {cards.length > 1 ? cardName(c) : 'PR'}
           </button>
         ))}
         <button
@@ -1008,9 +1011,8 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
 function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | null }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
   const cards = prCards(work)
-  // 카드가 여럿이면 레포를 붙여 가른다 (탭 이름과 같은 꼴)
-  const name = (pr: PrView) =>
-    cards.length > 1 ? `${pr.repo || '메인'} PR #${pr.number}` : `PR #${pr.number}`
+  // 카드가 여럿이면 레포를 붙여 가른다 (탭 이름과 같음)
+  const name = (pr: PrView) => (cards.length > 1 ? cardName(pr) : `PR #${pr.number}`)
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
