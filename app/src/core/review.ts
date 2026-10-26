@@ -29,6 +29,8 @@ import {
   REFACTOR_FILE,
   SPEC_FILE,
   EXECUTION_FILE,
+  ALREADY_REVIEWED,
+  HANDOFF_FILE,
   INTENT_DRAFT_FILE,
   VERIFICATION_FILE,
   intentDraftBody,
@@ -89,6 +91,29 @@ export function bounceNotice(
   return task.status === 'working' && task.bounce_count > 0
     ? `형식 확인으로 되돌림(${task.bounce_count}/${max}): 에이전트가 handoff와 산출물의 형식만 고칩니다. 결정과 판정은 바뀌지 않습니다.`
     : null
+}
+
+/**
+ * 화면에 보일 형식 오류. 마무리 단계가 독립 리뷰를 요청한 뒤로는 리뷰하는 동안(D496), 다시 열기 전(대기열 D18, 끊김 I185),
+ * 다시 연 세션의 턴 안(질문을 기다릴 때 포함)에서 handoff가 리뷰를 요청할 때 쓴 그대로라 "이미 받음" 오류(D494)를
+ * 보이지 않는다: 에이전트가 마무리하며 고쳐 쓴다. 다시 연 세션의 턴이 끝나면(대기, 되돌림 D21) 그대로 보인다
+ */
+export function shownErrors(
+  task: Pick<TaskRecord, 'status' | 'bounce_count' | 'review'>,
+  status: string | null,
+  errors: readonly FormatIssue[],
+): FormatIssue[] {
+  // 다시 연 세션의 턴 안: 작업 중, 질문(AskUserQuestion), 입력 필요
+  const turn = ['working', 'asking', 'input_needed'].includes(task.status)
+  // 리뷰가 끝났지만 아직 다시 열지 않음: 대기열(D18)이나 앱을 다시 켜 끊긴 것(I185)
+  const unopened =
+    (task.status === 'queued' || task.status === 'interrupted') &&
+    task.review?.resumed_at === undefined
+  const waiting = task.status === 'reviewing' || unopened || (turn && task.bounce_count === 0)
+  const leftover = status === 'review_requested' && task.review !== undefined && waiting
+  return leftover
+    ? errors.filter((e) => !(e.file === HANDOFF_FILE && e.message === ALREADY_REVIEWED))
+    : [...errors]
 }
 
 /** 진행 표시에서 도구 인자의 길이 (D216) */
@@ -407,7 +432,7 @@ export function emphasis(input: EmphasisInput): Emphasis[] {
       title: '기존 테스트 변경',
       lines: [
         ...input.tests,
-        '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 verify를 다시 돌리지 않습니다 (D180).',
+        '이번 라운드가 이미 있던 테스트 파일을 바꾸거나 지웠습니다. 대응 뒤에는 독립 리뷰와 완료조건 판정을 다시 하지 않습니다 (D180).',
       ],
     })
   }

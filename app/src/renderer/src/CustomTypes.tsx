@@ -172,8 +172,9 @@ export function CustomTypesDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="업무 유형" onClose={onClose}>
       <div className="dim">
-        커스텀 유형은 의도 정리 → 직접 쓴 단계들 → 리뷰와 검증으로 진행합니다. Work는 만들 때의
-        유형을 복사해 끝까지 그대로 씁니다. 같은 id가 레포에도 있으면 레포 것을 씁니다.
+        커스텀 유형은 의도 정리 → 직접 쓴 단계들로 진행하고, 마지막 단계가 독립 리뷰를 받아 Work를
+        마무리합니다. Work는 만들 때의 유형을 복사해 끝까지 그대로 씁니다. 같은 id가 레포에도 있으면
+        레포 것을 씁니다.
       </div>
       {notice ? <div className="notice">{notice}</div> : null}
       {error ? <div className="error">{error}</div> : null}
@@ -355,7 +356,8 @@ function TypeEditor({
       <h3>단계</h3>
       <div className="dim">
         단계마다 앱이 공통 규칙(입력 읽기, 범위 밖 문제, intent와 어긋날 때, 테스트, 완료조건 자체
-        확인, 커밋, 설계 문서)을 앞에, 질문·handoff·종료 절차를 뒤에 붙입니다. 절차에는 이 단계에서
+        확인, 커밋, 설계 문서)을 앞에, 질문·handoff·종료 절차를 뒤에 붙입니다. 마지막 단계에는
+        마무리 절차(완료조건 판정, 독립 리뷰 반영, PR 초안, 지식)도 붙입니다. 절차에는 이 단계에서
         할 일만 적습니다.
       </div>
       {d.steps.map((s, i) => (
@@ -402,7 +404,7 @@ function TypeEditor({
                 checked={s.autoApprove}
                 onChange={(e) => setStep(i, { autoApprove: e.target.checked })}
               />
-              자동 승인 (기본값)
+              자동 승인 (기본값. Work의 마지막 단계면 늘 수동)
             </label>
           </div>
           <label className="field">

@@ -274,6 +274,7 @@ import {
   WORK_STATUS_LABEL,
   bandText,
   bounceNotice,
+  shownErrors,
   changeRange,
   completionReview,
   emphasis,
@@ -3077,7 +3078,7 @@ export class WorkRunner {
         return r
       }
       this.problem(
-        `${repo.path}을 이 Work에 더했습니다. 지금 세션에는 터미널에서 알리세요. 다음 단계부터 context.md에 들어갑니다`,
+        `${repo.path}을 이 Work에 더했습니다. 지금 세션에는 터미널에서 알리세요. 다음에 시작하는 task부터 context.md에 들어갑니다`,
       )
       return { ok: true }
     })
@@ -4810,6 +4811,7 @@ export class WorkRunner {
         review: completionReview(this.work, task),
       }
     }
+    const shown = shownErrors(task, check.status, check.errors)
     return {
       workKey: this.key,
       taskId,
@@ -4829,13 +4831,13 @@ export class WorkRunner {
       decisions: header?.decisions ?? [],
       assumptions: header?.assumptions ?? [],
       risks: header?.risks ?? [],
-      errors: check.errors,
+      errors: shown,
       warnings: check.warnings,
       emphasis: emphasis({
         node: task.node,
         type: workType(this.work),
         handoff: header,
-        errors: check.errors,
+        errors: shown,
         uncommitted,
         submodules,
         ...(integration ? { integration } : {}),

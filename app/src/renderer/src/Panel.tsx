@@ -8,7 +8,7 @@
 // PR 진행인 Work의 지금 task(verify)에서는 PR 패널이 된다 (시나리오 10, D183). 리뷰와 검증 결과는 탭으로 본다.
 // 지금 task가 PR 대응 task면 PR 패널과 그 대응 task를 탭으로 오가고, 승인할 때는 대응 승인 화면(항목별 결과, 게시될 모양의
 // 답글, 기존 테스트 변경, D172, D202, D207)을 먼저 보인다.
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type {
   BranchInfo,
   CommandResult,
@@ -58,6 +58,9 @@ export function showsPr(work: WorkView, taskId: string | undefined): boolean {
 export function prCards(work: WorkView): PrView[] {
   return [...(work.pr ? [work.pr] : []), ...(work.prs ?? [])]
 }
+
+/** 카드가 여럿일 때 PR 카드의 이름: 레포(메인은 "메인")와 번호. PR 탭과 완료 알림이 같이 쓴다 */
+const cardName = (pr: PrView) => `${pr.repo || '메인'} PR #${pr.number}`
 
 /**
  * 승인 화면을 보일 task인가: 에이전트가 턴을 끝냈고 handoff가 있다. 막힘은 따로 보인다.
@@ -907,7 +910,7 @@ function PrSection({
             className={tab === `pr:${c.repo}` ? 'active' : ''}
             onClick={() => setTab(`pr:${c.repo}`)}
           >
-            {cards.length > 1 ? `${c.repo || '메인'} PR #${c.number}` : 'PR'}
+            {cards.length > 1 ? cardName(c) : 'PR'}
           </button>
         ))}
         <button
@@ -916,7 +919,7 @@ function PrSection({
           className={tab === 'task' ? 'active' : ''}
           onClick={() => setTab('task')}
         >
-          {respond ? task.label : '리뷰와 검증 결과'}
+          {respond ? task.label : `${task.label} 결과`}
         </button>
       </div>
       {pr ? <PrPanel key={pr.repo} work={work} pr={pr} /> : body}
@@ -1001,39 +1004,52 @@ const MERGE_LABEL: Readonly<Record<string, string>> = {
   rebase: 'rebase',
 }
 
-/** 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). PR 진행으로 끝났으면 머지나 끝낸 것을 보인다 (D178, D179) */
+/**
+ * 완료한 Work의 전달과 결과 링크 (시나리오 7-4, 7-6). PR 진행으로 끝났으면 카드마다 머지나 끝낸 것을 보인다
+ * (D178, D179, D480)
+ */
 function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | null }) {
   const d = work.delivery?.status === 'succeeded' ? work.delivery : null
-  const pr = work.pr
-  // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
-  const lost = pr?.merged ? pr.rounds.filter((r) => r.state === 'deferred') : []
+  const cards = prCards(work)
+  // 카드가 여럿이면 레포를 붙여 가른다 (탭 이름과 같음)
+  const name = (pr: PrView) => (cards.length > 1 ? cardName(pr) : `PR #${pr.number}`)
   return (
     <div className="notice done">
       Work 완료 (전달: {d ? d.label : '완료만'})
       {branch ? <BranchLine work={work} branch={branch} /> : null}
-      {pr?.merged ? (
-        <div>
-          PR #{pr.number} 머지됨 (
-          {pr.merged.outside
-            ? 'relay 밖에서'
-            : pr.merged.method
-              ? MERGE_LABEL[pr.merged.method]
-              : ''}
-          , head {pr.merged.head.slice(0, 8)}).
-          {work.status === 'completed' ? ' [Work 정리]로 정리하세요.' : ''}
-        </div>
-      ) : null}
-      {lost.length ? (
-        <div className="error">
-          승인했지만 push·게시하지 못한 대응 라운드 {lost.length}개(
-          {lost.map((r) => r.label).join(', ')})는 머지에 들어가지 않았습니다. 그 커밋은 작업
-          브랜치에만 있고 답글은 게시하지 않았습니다 (D193).
-        </div>
-      ) : null}
-      {pr?.ended ? (
-        <div>
-          PR #{pr.number}을(를) 머지 없이 끝냄 ({pr.ended}). GitHub의 PR은 건드리지 않았습니다.
-        </div>
+      {cards.map((pr) => {
+        // 밖에서 머지될 때 승인했지만 push·게시를 미룬 라운드(D193)는 머지에 들어가지 않았다
+        const lost = pr.merged ? pr.rounds.filter((r) => r.state === 'deferred') : []
+        return (
+          <Fragment key={pr.repo}>
+            {pr.merged ? (
+              <div>
+                {name(pr)} 머지됨 (
+                {pr.merged.outside
+                  ? 'relay 밖에서'
+                  : pr.merged.method
+                    ? MERGE_LABEL[pr.merged.method]
+                    : ''}
+                , head {pr.merged.head.slice(0, 8)}).
+              </div>
+            ) : null}
+            {lost.length ? (
+              <div className="error">
+                {name(pr)}에서 승인했지만 push·게시하지 못한 대응 라운드 {lost.length}개(
+                {lost.map((r) => r.label).join(', ')})는 머지에 들어가지 않았습니다. 그 커밋은 작업
+                브랜치에만 있고 답글은 게시하지 않았습니다 (D193).
+              </div>
+            ) : null}
+            {pr.ended ? (
+              <div>
+                {name(pr)}을(를) 머지 없이 끝냄 ({pr.ended}). GitHub의 PR은 건드리지 않았습니다.
+              </div>
+            ) : null}
+          </Fragment>
+        )
+      })}
+      {work.status === 'completed' && cards.some((pr) => pr.merged) ? (
+        <div>[Work 정리]로 정리하세요.</div>
       ) : null}
       {d?.branch ? <div className="dim">origin에 push: {d.branch}</div> : null}
       {d?.prUrl ? (
@@ -1321,7 +1337,7 @@ function CompletionActions({
         : cleanup.status === 'live'
           ? stopping
             ? '정리 세션이 열려 있습니다(기록하지 않음). 승인하면 Work가 멈추므로 지금은 전달하지 않습니다. 정리가 끝나면 [정리 세션 닫기]로 세션을 끝낸 뒤 승인하세요.'
-            : '정리 세션이 열려 있습니다(기록하지 않음). push와 PR, 단계 선택과 재개는 막혀 있습니다. 정리가 끝나면 누르세요. 전달하지 않고 그만두려면 [정리 세션 닫기]를 누르세요.'
+            : '정리 세션이 열려 있습니다(기록하지 않음). push와 PR, 재개와 Work 포기는 막혀 있습니다. 정리가 끝나면 누르세요. 전달하지 않고 그만두려면 [정리 세션 닫기]를 누르세요.'
           : cleanup.uncommitted.length
             ? `정리 세션이 끝났지만 커밋 안 된 변경 ${cleanup.uncommitted.length}개가 남았습니다.`
             : '정리 세션이 끝났습니다.'}
