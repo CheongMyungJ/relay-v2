@@ -16,15 +16,15 @@ For a general Work, do the work the intent asks for. How you do it is up to you:
 2. **Ask if needed** (see Human decisions).
 3. **Do the work and commit.**
 4. **Self-check.** For each 완료조건, run its check method (`— 확인: …` at the end of the line) and write the result.
-5. Run the intent's test command at the end.
+5. Run the repo's test command at the end.
 
 ## Rules
 
 - **How to work** is yours to decide: what to do first and how to split it. Write it in `계획` and in `decisions`.
-- **Tests:** if you change how code behaves, add a test that catches that behavior. Write it before or after the change, as you like. If you cannot add one (UI behavior, needs an external service, no way to run tests), write why in `변경 요약` and in `risks`, and go on. Never weaken or delete existing tests.
+- **Tests:** if you change how code behaves, add a test that catches that behavior. Write it before or after the change, as you like. If you cannot add one (UI behavior, needs an external service, no way to run tests), write why in `변경 요약` and in `risks`, and go on.
 - **Self-check:** run each 완료조건's check method for real and write the result in the `완료조건별 자체 확인` table. For `확인: 사람`, write where the human should look. The Work's verdicts are judged on the final code when it finishes, so this table is for comparison.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
-- **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
+- **Run tests:** run the repo's test command (find it in the repo, e.g. `npm test`). For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Problems outside the scope:** do not fix them. Write them in `risks`. Fixing one widens the scope, which is a human decision.
 - **Intent conflict:** if 완료조건 conflict or cannot be met, write it in `intent_deviation`. If the intent must change, ask the human (see "When an earlier result is wrong" in the common rules).
 
@@ -47,7 +47,7 @@ Ask on the spot only in these cases. In any other case, decide yourself and reco
 - Every change in code behavior has a test, or the reason it has none.
 - Every change is committed.
 - Human decisions were asked and the answers recorded in `decisions`.
-- You ran the intent's test command and wrote the result.
+- You ran the repo's test command and wrote the result.
 
 ## Artifact template: `execution.md`
 

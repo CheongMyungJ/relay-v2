@@ -295,8 +295,9 @@ const spec = {
     ['5.6.4', '에이전트 가설은 handoff에만', /hypotheses[\s\S]*## 다음 task가 알아야 할 것/],
     ['D36', '결정 지점 두 가지(D227: size 없음), 사람이 정할 결정 없음', /`비목표`[\s\S]*`완료조건`[\s\S]*no human decisions/],
     ['D41', '"모름" → 그럴듯한 값 + open_questions', /모름[\s\S]*most plausible value[\s\S]*`open_questions`/],
-    ['D37', '기본 완료조건 세 개', /재현 절차가 더 이상 실패하지 않는다[\s\S]*가 통과한다[\s\S]*기존 테스트를 약화하거나 삭제하지 않는다/, ['bugfix']],
-    ['D37', '테스트 명령은 레포에서 찾기, 없으면 이 항목만 뺌', /Find the concrete test command in the repo[\s\S]*no tests/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D503', '버그 수정 기본 완료조건 하나', /`- \[ \] 재현 절차가 더 이상 실패하지 않는다`\n/, ['bugfix']],
+    ['D503', '테스트 통과·기존 테스트 유지만 말하는 줄은 쓰지 않음(테스트가 요청 자체면 뺌)', /No line that only says the repo's tests pass or that existing tests are kept, unless the request is about the tests themselves/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D503', '테스트 명령·약화 금지 기본 항목 없음', /^(?![\s\S]*<test command>)(?![\s\S]*약화)/],
     ['5.3', '완료조건에 push/PR 없음', /Never include push or PR/],
     ['D43', '완료조건 세 항목', /## Done when[\s\S]*required sections[\s\S]*verifiable[\s\S]*`open_questions`/],
     ['D227', 'size를 쓰지 않음', /^(?![\s\S]*\bsize\b)/],
@@ -304,28 +305,27 @@ const spec = {
     ['D236', '템플릿에 머리글 없음, 앱이 붙임', /No front matter: the app adds the type and version/],
     ['5.6.4', '기능 추가의 설계도 하지 않음', /Do not design the feature\. That is the job of design/, ['feature']],
     ['D238', '유형 불일치: 초안 전에 물음, 바꾸면 새 유형으로 Work 초안을 쓰고 blocked, 직접 바꾸지 않음', /Type mismatch[\s\S]*ask before you write the draft[\s\S]*Work draft with the new type[\s\S]*`blocked`[\s\S]*Never change the type yourself/],
-    ['D239', '기능 추가 기본 완료조건 세 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`/, ['feature']],
+    ['D503', '기능 추가 기본 완료조건 하나', /`- \[ \] 완료조건의 각 동작을 확인하는 테스트가 있다`\n/, ['feature']],
     ['D240', '인수 조건: 밖에서 보이는 동작, "<조건>이면 <결과>", 구현 세부 없음', /behavior seen from outside[\s\S]*"<조건>이면 <결과>"[\s\S]*No implementation details/, ['feature']],
     ['D429', '기능 추가·변경: 의도대로인 동작을 바꾸거나 없애는 일도 맡음, 의도와 다르면 버그(유형 불일치)', /Changing or removing behavior:\*\* this type also covers[\s\S]*works as intended now[\s\S]*it is a bug: that is a type mismatch/, ['feature']],
     ['D429', '유형 설명: feature는 기능 추가·변경', /`feature` \(기능 추가·변경: new behavior, or changing or removing a behavior that works as intended now\)/],
     ['D430', '바뀜·없앰 표시와 지금 결과, 레포 밖 인터페이스 표시', /"\(바뀜\) <조건>이면 <새 결과> \(지금: <옛 결과>\)"[\s\S]*"\(없앰\) <조건>이면 <결과> \(지금: <옛 결과>\)"[\s\S]*"\(레포 밖 인터페이스\)"/, ['feature']],
-    ['D430', '표시가 있으면 약화 금지 기본 항목을 바꿈', /marked \(바뀜\) or \(없앰\), write the second default item as `- \[ \] \(바뀜\)·\(없앰\) 항목의 옛 동작을 잡던 테스트 밖에서는 기존 테스트를 약화하거나 삭제하지 않는다`/, ['feature']],
     ['D241', '사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"/, ['feature', 'refactor']],
     ['D375', '설계의 사람 제안: 반드시면 제약, 아니면 (사람 제안), spec이 그래도 물음', /how something should be decided[\s\S]*`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*spec still asks about it/, ['spec']],
     ['5.6.4', '리팩터링의 계획도 하지 않음', /Do not plan how to reach the structure\. That is the job of refactor/, ['refactor']],
     ['D262', '동작 변경·성능 목표가 섞이면 초안 전에 물음: 비목표로 빼거나 유형 바꿈', /behavior change[\s\S]*performance goal[\s\S]*ask before you write the draft[\s\S]*`비목표`[\s\S]*`blocked`/, ['refactor']],
     ['D263', '레포 밖 공개 인터페이스를 바꾸면 intent에 적음', /Interfaces used outside the repo[\s\S]*write what changes in the intent/, ['refactor']],
-    ['D264', '리팩터링 기본 완료조건 네 개', /`- \[ \] <test command>가 통과한다` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다` \/ `- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/, ['refactor']],
+    ['D503', '리팩터링 기본 완료조건 둘', /`- \[ \] 바꾼 곳의 지금 동작을 잡는 안전망 테스트가 있고 기준 코드에서도 통과한다` \/ `- \[ \] 레포 밖 공개 인터페이스가 바뀌지 않는다`/, ['refactor']],
     ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/, ['refactor']],
     ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/, ['refactor']],
     ['5.6.4', '일반의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of execute/, ['general']],
     ['D241', '일반의 사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*execute decides/, ['general']],
     ['D303', '더 맞는 유형: 초안 전에 알리고 물음, 그대로 감 / 유형 바꿈(blocked)', /better[\s\S]*before you write the draft[\s\S]*keep `general` \/ change the type \(`blocked`\)/, ['general']],
-    ['D304', '일반 기본 완료조건 둘', /`- \[ \] <test command>가 통과한다 — 확인: <test command>` \/ `- \[ \] 기존 테스트를 약화하거나 삭제하지 않는다 — 확인: [^`]+`/, ['general']],
-    ['D305', '확인 방법: 줄마다, 명령 / 읽을 곳 / 사람, 앱이 검사', /Check method:[\s\S]*every line, the default items included[\s\S]*command to run[\s\S]*place to read[\s\S]*`사람`[\s\S]*app rejects/, ['general']],
+    ['D503', '일반·커스텀 기본 완료조건 없음: 요청에 맞는 항목만', /Write the items that fit the request, one per line/, ['general', 'custom']],
+    ['D305', '확인 방법: 줄마다, 명령 / 읽을 곳 / 사람, 앱이 검사', /Check method:[\s\S]*every line with[\s\S]*command to run[\s\S]*place to read[\s\S]*`사람`[\s\S]*app rejects/, ['general']],
     ['D306', '사람은 명령이나 읽을 곳으로 확인할 수 없을 때만', /Use `사람` only when no command and no place to read can check it/, ['general']],
     ['D305', '완료조건: 줄마다 확인 방법', /## Done when[\s\S]*ends with a check method/, ['general', 'custom']],
-    ['D455', '커스텀 기본 완료조건 둘과 확인 방법은 일반과 같음', /`- \[ \] <test command>가 통과한다 — 확인: <test command>`[\s\S]*Check method:[\s\S]*app rejects/, ['custom']],
+    ['D455', '커스텀 확인 방법은 일반과 같음', /Check method:[\s\S]*every line with[\s\S]*app rejects/, ['custom']],
     ['D456', '커스텀 유형: context.md의 이름·설명·단계, 설명과 안 맞거나 기본 유형이 더 맞으면 초안 전에 물음', /picked a Work type their team defined[\s\S]*`## 커스텀 유형`[\s\S]*before you write the draft[\s\S]*keep this type \/ change the type \(`blocked`\)/, ['custom']],
     ['D456', '유형의 intake 지시를 따름', /## This Work type's intake instructions/, ['custom']],
     ['5.6.4', '커스텀의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of the custom steps/, ['custom']],
@@ -369,12 +369,11 @@ const spec = {
     ['D257', '지금 동작을 지키는 완료조건의 테스트는 구현 전 통과도 됨', /keep the current behavior[\s\S]*may pass before the change/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
-    ['D434', '기존 테스트 변경마다 (바뀜) n 때문 / (없앰) n 때문 / 목록 밖', /existing test must change[\s\S]*"\(바뀜\) n 때문" \/ "\(없앰\) n 때문"[\s\S]*"목록 밖"/],
+    ['D505', '기존 테스트 변경에 (바뀜)·(없앰) n 표시를 붙이지 않음', /^(?![\s\S]*n 때문)(?![\s\S]*목록 밖)/],
     ['D434', '바뀜은 옛 테스트 기대값을 먼저 고쳐, 없앰은 없어졌음을 확인하는 테스트로 구현 전 실패', /marked \(바뀜\), first change the expected values[\s\S]*fail before the change[\s\S]*marked \(없앰\), write a test that checks the old path is gone[\s\S]*fails before the change/],
-    ['D434', 'n은 완료조건 전체(기본 항목 포함)에서의 차례', /n is that line's position among all 완료조건 lines of the intent, counting from 1 \(default items included\)/],
     ['D434', '도우미 전에 비슷한 기존 함수를 찾음', /before you add a helper function, look for a similar one/],
     ['D434', '없앤 뒤 남은 이름·설정 키·문서 언급을 찾아 변경 요약에', /search the repo for the removed names, config keys and mentions in docs[\s\S]*`변경 요약`/],
-    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D57', '레포의 테스트 명령 실행, 기준 커밋 실패 구분 (D505)', /Run tests:\*\* run the repo's test command[\s\S]*also fails at the base commit/],
     ['D248', '작은 어긋남은 정해서 계획과 달라진 점에', /Small departures[\s\S]*`계획과 달라진 점`/],
     ['D422', '설계가 틀리면 물음: 고쳐 이어서 / 새 Work, 고치면 계획과 달라진 점과 by: human', /The design is wrong:\*\* ask the human[\s\S]*start over as a new Work[\s\S]*`계획과 달라진 점`[\s\S]*`by: human`/],
     ['5.6.9', '결정 지점: 계획이 정하지 않은 구현 세부', /Implementation details the plan does not settle/],
@@ -391,7 +390,7 @@ const spec = {
     ['D263', '레포 안 인터페이스는 바꿀 수 있고 호출부도, 밖은 intent가 정할 때만', /used only inside the repo[\s\S]*callers[\s\S]*used outside the repo[\s\S]*only when the intent says so/],
     ['D265', '기존 테스트는 호출 이름·import·위치·준비 코드만, 기대값과 입력은 바꾸지 않음', /call names, import paths, file location and setup code[\s\S]*Never change their expected values or inputs/],
     ['D269', '안전망 커밋 하나와 단계마다 커밋, 커밋마다 테스트 통과', /one safety-net commit, then one commit per plan step[\s\S]*pass at every commit/],
-    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D57', '레포의 테스트 명령 실행, 기준 커밋 실패 구분 (D505)', /Run tests:\*\* run the repo's test command[\s\S]*also fails at the base commit/],
     ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.10', '결정 지점: 목표 구조, 계획의 나눔, 새 안전망', /The target structure, how to split the plan, which safety-net tests/],
     ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
@@ -402,10 +401,10 @@ const spec = {
     ['5.6.11', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['5.6.11', '순서: 계획 → 물음 → 작업과 커밋 → 자체 확인 → 테스트 명령', /Plan\.[\s\S]*Ask if needed[\s\S]*Do the work and commit[\s\S]*Self-check\.[\s\S]*test command at the end/],
     ['D302', '진행 방식은 execute가 정하고 계획과 decisions에 적음', /How to work[\s\S]*yours to decide[\s\S]*`계획`[\s\S]*`decisions`/],
-    ['D307', '동작을 바꾸면 테스트를 더함, 순서 자유, 못 하면 이유와 risks, 기존 테스트 약화 금지', /change how code behaves, add a test[\s\S]*before or after[\s\S]*cannot add one[\s\S]*`risks`[\s\S]*Never weaken or delete existing tests/],
+    ['D307', '동작을 바꾸면 테스트를 더함, 순서 자유, 못 하면 이유와 risks', /change how code behaves, add a test[\s\S]*before or after[\s\S]*cannot add one[\s\S]*`risks`/],
     ['D310', '자체 확인: 확인 방법을 실제로 돌려 표에, 사람은 볼 곳, 비교용', /Self-check:[\s\S]*run each 완료조건's check method for real[\s\S]*`완료조건별 자체 확인`[\s\S]*`확인: 사람`[\s\S]*for comparison/],
     ['D309', '커밋 수 제한 없음, 레포 관례, 모두 커밋, 실험 되돌림', /any number[\s\S]*commit message convention[\s\S]*Commit all changes before you close[\s\S]*Revert experimental changes/],
-    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D57', '레포의 테스트 명령 실행, 기준 커밋 실패 구분 (D505)', /Run tests:\*\* run the repo's test command[\s\S]*also fails at the base commit/],
     ['5.6.11', '범위 밖 문제는 고치지 않고 risks, 고치려면 사람 결정', /outside the scope[\s\S]*do not fix them[\s\S]*`risks`[\s\S]*human decision/],
     ['D422', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 사람에게 물음', /`intent_deviation`[\s\S]*If the intent must change, ask the human/],
     ['5.6.11', '결정 지점: 방식, 나눔, 더할 테스트', /How to do the work, how to split it, which tests to add/],
@@ -442,7 +441,7 @@ const spec = {
     ['D53', '재현 테스트: 수정 전 실패, 후 통과, 못 하면 이유', /fails before the fix and passes after[\s\S]*`risks`/],
     ['D54', '커밋 수 제한 없음, 레포 관례', /any number[\s\S]*commit message convention/],
     ['D56', '기존 테스트 변경 → risks, 변경 요약에 표시', /existing test must change[\s\S]*`risks`[\s\S]*`변경 요약`/],
-    ['D57', '테스트 명령 실행, 기준 커밋 실패 구분', /Run tests[\s\S]*also fails at the base commit/],
+    ['D57', '레포의 테스트 명령 실행, 기준 커밋 실패 구분 (D505)', /Run tests:\*\* run the repo's test command[\s\S]*also fails at the base commit/],
     ['5.6.5', '결정 지점: 재현 방법과 구현 방식', /How to reproduce, and how to implement the fix/],
     ['D45', '재현 안 될 때 세 선택지', /does not reproduce[\s\S]*try again[\s\S]*without reproduction[\s\S]*`blocked`/],
     ['D50', '원인을 좁히지 못할 때 세 선택지', /cannot narrow the cause[\s\S]*investigate more[\s\S]*most likely candidate[\s\S]*`blocked`/],
@@ -528,7 +527,7 @@ const spec = {
     ['D452', '사람이 쓴 단계 절차를 따름(앱이 뒤에 붙임)', /## This step's procedure/],
     ['D452', '범위 밖 문제는 고치지 않고 risks', /outside the scope:\*\* do not fix them[\s\S]*`risks`/],
     ['D452', 'intent와 어긋나면 intent_deviation, 의도를 바꿔야 하면 물음: intent 안에서 / 새 Work로', /`intent_deviation`[\s\S]*ask the human: decide it within the intent and go on \/ start over as a new Work/],
-    ['D307', '동작을 바꾸면 테스트, 못 하면 이유와 risks, 기존 테스트 약화 금지', /change how code behaves, add a test[\s\S]*cannot add one[\s\S]*`risks`[\s\S]*Never weaken or delete existing tests/],
+    ['D307', '동작을 바꾸면 테스트, 못 하면 이유와 risks', /change how code behaves, add a test[\s\S]*cannot add one[\s\S]*`risks`/],
     ['D452', '자체 확인: 맡은 완료조건의 확인 방법을 실제로 돌려 산출물에, 비교용', /Self-check:\*\* for each 완료조건 this step takes on[\s\S]*for real[\s\S]*for comparison/],
     ['D454', '코드를 바꿀 수 있음, 레포 관례, 모두 커밋, 실험 되돌림', /may change code[\s\S]*commit message convention[\s\S]*Commit all changes before you close[\s\S]*Revert experimental/],
     ['D369', '설계 문서를 따르는 Work: 벗어나면 물음, 바꾸면 문서도 고쳐 함께 커밋', /design document to follow[\s\S]*ask the human[\s\S]*change the design document too[\s\S]*commit it with the code/],
@@ -543,14 +542,14 @@ const spec = {
     ['D456', '커스텀이면 커스텀 단계의 산출물(경로)', /custom steps' `<step id>\.md`, `verification\.md`/, ['custom']],
     ['D374', '설계면 spec.md(경로)와 대상 문서는 제약', /`spec\.md`, `verification\.md`[\s\S]*target design document's path is in the intent's `제약`/, ['spec']],
     ['D368', '결정을 바꾸라는 코멘트: 그 자리에서 spec과 같은 모양으로 물음, 문서와 결정 표를 고치고 사람 결정 표시, 답글에 정한 것', /asks to change a decision[\s\S]*ask the human on the spot[\s\S]*options, the recommended one first with "\(추천\)", and the reason[\s\S]*change the document and its decision table[\s\S]*human's decision[\s\S]*reply what was decided/, ['spec']],
-    ['D374', '설계는 테스트 명령이 없어 테스트 실행을 건너뜀', /no test command\. Skip running tests/, ['spec']],
+    ['D374', '설계는 문서만 바꿔 테스트 실행을 건너뜀', /changes only documents\. Skip running tests/, ['spec']],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
     ['D168', '항목마다 셋 중 하나: 고침 / 고치지 않음과 이유 / 사람에게 물음. 모르면 open_questions', /고침[\s\S]*고치지 않음[\s\S]*사람에게 물음[\s\S]*`open_questions`/],
     ['5.6.7', '범위: intent의 목표와 비목표. 비목표·제약에 걸리면 사람 결정 (D51과 같음)', /`목표` and `비목표`[\s\S]*`비목표` or `제약`[\s\S]*human decision/],
     ['D175', 'CI 실패: 로그로 원인. 이 PR의 코드 문제면 고침, 아니면 코드를 바꾸지 않고 결론과 근거', /CI failure:[\s\S]*this PR's code causes it, fix it[\s\S]*do not change code[\s\S]*conclusion and the evidence/],
     ['D181', '충돌: 기준 브랜치를 병합하며 풂. 리베이스하지 않음', /Conflict:[\s\S]*merge the base branch[\s\S]*Do not rebase/],
     ['D193', '원격과 갈라짐: 앱이 fetch해 둔 원격 PR 브랜치를 병합. 리베이스하지 않음', /Divergence:[\s\S]*merge the remote PR branch the app fetched[\s\S]*Do not rebase/],
-    ['D57', '테스트: 고쳤으면 테스트 명령, 기준 커밋 실패 구분', /changed code, run the test command[\s\S]*also fails at the base commit/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
+    ['D57', '테스트: 고쳤으면 레포의 테스트 명령, 기준 커밋 실패 구분 (D505)', /changed code, run the repo's test command[\s\S]*also fails at the base commit/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
     ['D56', '기존 테스트를 고쳤으면 risks (D180)', /changed an existing test, add it to `risks`/, ['bugfix', 'feature', 'refactor', 'general', 'custom']],
     ['D190', '답글: 코멘트 항목마다 replies.md에 ## <항목 id> 절', /`## <item id>` in `replies\.md` for each comment item/],
     ['5.6.7', '답글: 고친 것은 무엇을 어떻게, 고치지 않은 것은 이유. 코멘트의 언어', /what you fixed and how, or why you did not[\s\S]*language of the comment/],
@@ -614,6 +613,8 @@ check(!/^---\n/.test(finalSrc) && !/^---\n/.test(reviewSrc), '_final.md·_review
 check(designSection('#### 5.6.14').length > 0, '설계 5.6.14 마무리 절이 있음');
 const d493 = ['D493', 'D494', 'D495', 'D496', 'D497', 'D498', 'D499', 'D500', 'D501'].filter((d) => !design.includes(`\n| ${d} |`));
 check(d493.length === 0, `design.md: 결정 D493~D501${d493.length ? ` (빠짐: ${d493.join(', ')})` : ''}`);
+const d503 = ['D503', 'D504', 'D505'].filter((d) => !design.includes(`\n| ${d} |`));
+check(d503.length === 0, `design.md: 결정 D503~D505${d503.length ? ` (빠짐: ${d503.join(', ')})` : ''}`);
 const uniq = (xs) => [...new Set(xs)];
 for (const t of TYPES) {
   let fin = null;
@@ -627,12 +628,12 @@ for (const t of TYPES) {
   }
   ok(`_final.md·_review.md·${t}: 유형 표시가 맞음`);
   check(!/<!--/.test(fin) && !/<!--/.test(rev), `_final.md·_review.md·${t}: 조립한 글에 유형 표시가 남지 않음 (줄 단위 표시)`);
-  // 템플릿은 옛 verify(5.6.6)와 같다: verification.md와 그 유형의 pr.md
+  // 템플릿은 옛 verify(5.6.6)와 같다: verification.md와 그 유형의 pr.md. 테스트 파일 변경 절만 없다 (D504)
   const finH = uniq(codeBlocks(fin, 'markdown').flatMap(headings));
-  const verH = uniq(codeBlocks(assemble(stripFrontMatter(skills.verify), t), 'markdown').flatMap(headings));
+  const verH = uniq(codeBlocks(assemble(stripFrontMatter(skills.verify), t), 'markdown').flatMap(headings)).filter((h) => h !== '## 테스트 파일 변경');
   const missing = verH.filter((h) => !finH.includes(h));
   const extra = finH.filter((h) => !verH.includes(h));
-  check(missing.length === 0 && extra.length === 0, `_final.md·${t}: 템플릿 절이 5.6.6과 같음${missing.length || extra.length ? ` (빠짐: ${missing.join(', ')} / 더함: ${extra.join(', ')})` : ''}`);
+  check(missing.length === 0 && extra.length === 0, `_final.md·${t}: 템플릿 절이 5.6.6과 같음(테스트 파일 변경 빼고, D504)${missing.length || extra.length ? ` (빠짐: ${missing.join(', ')} / 더함: ${extra.join(', ')})` : ''}`);
   const foreign = TYPES.filter((x) => x !== t).flatMap((x) => ARTIFACT[x]).filter((a) => fin.includes(a));
   check(foreign.length === 0, `_final.md·${t}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
   const finalItems = [
@@ -651,10 +652,17 @@ for (const t of TYPES) {
     ['D495', '읽기만 하고 묻지 않음', /You only read: change no files, ask no one anything/],
     ['D484', '실패 시나리오를 댈 수 있으면 거르지 않고 넘김', /Pass on every candidate that has a nameable failure scenario/],
     ['D486', '가능성이 기본, 틀림은 코드로 보일 때만', /plausible is the default[\s\S]*refuted only when the code shows it/],
-    ['D495', '판정표 확인: 근거, 판정 규칙, 바뀐 테스트 파일', /## Verdict table[\s\S]*evidence does not support the verdict[\s\S]*test file changed since the base commit is missing/],
+    ['D495', '판정표 확인: 근거, 판정 규칙', /## Verdict table[\s\S]*evidence does not support the verdict[\s\S]*verdict breaks the rules/],
   ];
   for (const [ref, desc, re] of reviewItems) check(re.test(rev), `_review.md·${t}: ${desc} (${ref})`);
+  // 테스트 파일 변경 판정과 약화 질문은 옛 verify에만 있다 (D504)
+  check(!/테스트 파일 변경|약화|weaken/.test(fin + rev), `_final.md·_review.md·${t}: 테스트 파일 변경 판정과 약화 질문이 없음 (D504)`);
   if (t === 'custom') check(/This Work type's review points/.test(rev), '_review.md·custom: 유형의 리뷰 관점을 봄 (D456, D495)');
+}
+
+// 단계는 레포의 테스트 명령을 스스로 찾고, 약화 금지 문구는 옛 verify에만 남는다 (D503, D505)
+for (const name of SKILLS.filter((x) => x !== 'verify')) {
+  check(!/intent's test command|test command from the intent|weaken|약화/.test(skills[name]), `${name}: intent의 테스트 명령과 약화 금지 문구가 없음 (D505)`);
 }
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');

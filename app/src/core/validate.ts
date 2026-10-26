@@ -725,9 +725,12 @@ export interface TaskCheckInput {
   finishing?: { requested: boolean }
 }
 
-/** 마무리 단계가 리뷰를 요청할 때 verification.md에 있어야 할 절 (D494). 설계는 테스트 파일 대신 문서 밖 파일이다 (D374) */
+/**
+ * 마무리 단계가 리뷰를 요청할 때 verification.md에 있어야 할 절 (D494). 설계는 문서 밖 파일 변경도 있다 (D374). 테스트 파일
+ * 변경은 판정하지 않는다 (D504)
+ */
 export function reviewRequestSections(type: WorkType): readonly string[] {
-  return ['완료조건 판정', type === 'spec' ? '문서 밖 파일 변경' : '테스트 파일 변경']
+  return type === 'spec' ? ['완료조건 판정', '문서 밖 파일 변경'] : ['완료조건 판정']
 }
 
 /** 리뷰를 받은 뒤 다시 `review_requested`를 쓴 handoff의 오류 (D494). 화면은 리뷰 요청 때의 것이 남은 동안 숨긴다 (I188) */

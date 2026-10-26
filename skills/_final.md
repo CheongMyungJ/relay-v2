@@ -6,7 +6,7 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 
 1. **This step's work:** follow the order and `Done when` above. Where they say to close with `status: awaiting_approval`, do not close yet: go on to step 2.
 <!-- type: bugfix feature refactor general custom -->
-2. **Verdict table:** judge each 완료조건 of the intent on the final code, and write `## 완료조건 판정` of `verification.md` in the task directory (template below). Use the results of runs you already did on this same code; run again what you have not run on it. Judge every changed test file in `## 테스트 파일 변경`. Write only these two sections now.
+2. **Verdict table:** judge each 완료조건 of the intent on the final code, and write `## 완료조건 판정` of `verification.md` in the task directory (template below). Use the results of runs you already did on this same code; run again what you have not run on it. Write only this section now.
 <!-- /type -->
 <!-- type: spec -->
 2. **Verdict table:** judge each 완료조건 of the intent on the final document, and write `## 완료조건 판정` of `verification.md` in the task directory (template below). List every changed file outside the target document and the knowledge files in `## 문서 밖 파일 변경`. Write only these two sections now.
@@ -21,12 +21,12 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- /type -->
 5. **Pick findings** (human decision below). Skip this if there are no findings.
 <!-- type: bugfix feature refactor general custom -->
-6. **Apply** only the picked findings, commit, and run the intent's test command. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
+6. **Apply** only the picked findings and commit. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
 <!-- /type -->
 <!-- type: spec -->
-6. **Apply** only the picked findings to the target document and commit. There is no test command to run. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
+6. **Apply** only the picked findings to the target document and commit. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
 <!-- /type -->
-7. **Fix the verdicts:** answer each item of `## 판정표 이의` in `independent-review.md`: if you accept it, fix the verdict or check again; if you do not, add why to that verdict's evidence. Run again every 완료조건 that the applied changes touch, and fix the table on the final code. Ask about weakening, 실패 and 판정 불가 as below.
+7. **Fix the verdicts:** answer each item of `## 판정표 이의` in `independent-review.md`: if you accept it, fix the verdict or check again; if you do not, add why to that verdict's evidence. Run again every 완료조건 that the applied changes touch, and fix the table on the final code. Ask about 실패 and 판정 불가 as below.
 8. **The other sections:** fill in the rest of `verification.md`.
 <!-- type: bugfix feature refactor general custom -->
 9. **Write `pr.md`** (template below). If the code review was off, write "독립 코드 리뷰를 하지 않음" in `## 테스트`.
@@ -46,18 +46,17 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 - **Document:** after the review, change the target document only for the findings the human picked, and commit. Do not change code. Revert any experimental change when you close.
 - **A finding that needs a new decision:** ask the human on the spot, in the same shape as this step asks: options, the recommended one first with "(추천)", and the reason in its description. Change the document and its decision table by the answer, and mark it as the human's decision.
 - **Verdicts on the document:** judge each 완료조건 by reading the document and the diff. Judge "대상 문서와 지식 파일 밖의 파일을 바꾸지 않는다" from the diff against the base commit, and list every other changed file in `문서 밖 파일 변경`.
-- **No test command:** the intent has none. Skip running tests.
 <!-- /type -->
 <!-- type: bugfix -->
 - **Reproduction steps:** do not change code that they use. If a picked finding needs it, write in `반영` how the steps change, and reproduce with the changed steps.
-- **Verdicts come from runs:** the reproduction steps, the reproduction test and the test commands, run on the final code.
+- **Verdicts come from runs:** the reproduction steps and the reproduction test, run on the final code.
 <!-- /type -->
 <!-- type: feature -->
-- **Verdicts come from runs:** the new behavior tests and the test commands, run on the final code.
+- **Verdicts come from runs:** the new behavior tests, run on the final code.
 - **"완료조건의 각 동작을 확인하는 테스트가 있다":** for each 완료조건, check that a test exists and really checks that behavior, and run it on the final code. For failing before the change, use the record in `implement.md`. A test for a 완료조건 that keeps the current behavior may pass before the change. If a behavior has no test, it is 판정 불가.
 <!-- /type -->
 <!-- type: refactor -->
-- **Verdicts come from runs:** the safety-net tests and the test commands, run on the final code.
+- **Verdicts come from runs:** the safety-net tests, run on the final code.
 - **"안전망 테스트가 있고 기준 코드에서도 통과한다":** run the safety-net tests at the safety-net commit (hash in `refactor.md`; the base commit when no new test was needed), in the same worktree:
   1. `git checkout --detach <safety-net commit>`.
   2. For each test marked (추가) in `refactor.md` (added later, not in that commit): `git checkout <work branch> -- <test file>`.
@@ -75,15 +74,6 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- type: bugfix -->
   For example, the reproduction test passes in a Work that never reproduced the bug. If the Work proceeded without reproduction, "재현 절차가 더 이상 실패하지 않는다" is 판정 불가. If there are neither reproduction steps nor a reproduction test, it is 판정 불가 too.
 <!-- /type -->
-<!-- type: bugfix feature refactor general custom -->
-- **Changed test files:** list every test file changed since the base commit (`git diff <base commit>`), including ones this step's artifact does not mention. Mark each 약화 아님 or 약화 의심, with the reason.
-<!-- /type -->
-<!-- type: feature -->
-  A change to a test of a behavior marked (바뀜) or (없앰) in the 완료조건 is 약화 아님 when its new expected values match that line: write "약화 아님 — (바뀜) n" or "약화 아님 — (없앰) n", with the marker of that line, and do not ask. n is the line's position among all 완료조건 lines of the intent, counting from 1 (default items included), as in `implement.md`. If the test of the old behavior was only deleted, with no test of the changed behavior or of the removal, it looks like weakening: ask. Judge any other change as above.
-<!-- /type -->
-<!-- type: refactor -->
-  An existing test that only followed an internal interface change (call names, import paths, file location, setup code) is 약화 아님. If its expected values or inputs changed, or a test disappeared, it looks like weakening: ask.
-<!-- /type -->
 - **A finding says the change itself is wrong** (e.g. it only hides the symptom): if the human picks it, fix it here. If the intent, the cause or the design is wrong and the work must start over, ask the human: fix it here / start over as a new Work (see "When an earlier result is wrong" in the common rules). There is no going back to an earlier step.
 
 ### Finishing decisions
@@ -93,26 +83,23 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- type: general custom -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /type -->
-<!-- type: bugfix feature refactor general custom -->
-- **A test change looks like weakening:** show which test changed and how. If the human says it is not weakening, the 완료조건 on weakening tests is 통과. If they say it is, it is 실패.
-<!-- /type -->
 - **Any 실패 or 판정 불가:** let the human choose:
-  - Fix it here: fix and commit, run the test commands (if any), and judge again on the final code. Write what you did in `반영`.
+  - Fix it here: fix and commit, and judge again on the final code. Write what you did in `반영`.
   - Go to the completion screen as is. The screen shows a warning.
   - Start over as a new Work: write a Work draft and close as `blocked` (see the common rules).
 
 ### Finishing done when
 
 <!-- type: bugfix feature refactor general custom -->
-- When you request the review: this step's `Done when` is met, `verification.md` has `## 완료조건 판정` and `## 테스트 파일 변경`, and every change is committed.
-- When you close with `awaiting_approval`: `verification.md` has all seven template sections; if there were findings, the human picked and the picked ones are fixed and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final code; every changed test file is judged.
+- When you request the review: this step's `Done when` is met, `verification.md` has `## 완료조건 판정`, and every change is committed.
+- When you close with `awaiting_approval`: `verification.md` has all six template sections; if there were findings, the human picked and the picked ones are fixed and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final code.
 <!-- /type -->
 <!-- type: spec -->
 - When you request the review: this step's `Done when` is met, `verification.md` has `## 완료조건 판정` and `## 문서 밖 파일 변경`, and every change is committed.
 - When you close with `awaiting_approval`: `verification.md` has all seven template sections; if there were findings, the human picked and the picked ones are applied and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final document and the diff; `다시 볼 결정` is written.
 <!-- /type -->
 - `pr.md` is written. If `context.md` has `## 레포`, a PR draft is written for every repo with commits, at the path given there.
-- Any weakening suspicion, 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
+- Any 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
 <!-- type: general custom -->
 - Every `확인: 사람` item was asked about, and the answer recorded in `decisions`.
 <!-- /type -->
@@ -132,10 +119,10 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 
 ## 반영
 <!-- type: bugfix -->
-- 지적 번호 — 한 일, 커밋, 테스트 명령과 결과 (재현 절차를 바꿨으면 달라진 절차)
+- 지적 번호 — 한 일, 커밋, 돌린 테스트와 결과 (재현 절차를 바꿨으면 달라진 절차)
 <!-- /type -->
 <!-- type: feature refactor general custom -->
-- 지적 번호 — 한 일, 커밋, 테스트 명령과 결과
+- 지적 번호 — 한 일, 커밋, 돌린 테스트와 결과
 <!-- /type -->
 <!-- type: spec -->
 - 지적 번호 — 문서에서 고친 곳, 커밋
@@ -157,10 +144,6 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- /type -->
 
 <!-- type: bugfix feature refactor general custom -->
-## 테스트 파일 변경
-- 파일 — 약화 아님 / 약화 의심(사람 판단: …) — 이유
-(바뀐 테스트 파일이 없으면 "없음")
-
 ## 나중에 정리할 곳
 - 파일·모듈 — 무엇이 문제인지, 정리하면 좋을 까닭
 (없으면 "없음")

@@ -1,6 +1,7 @@
 // [실제] 실제 claude로 작은 커스텀 유형 Work가 intake → 조사 → 작성(마무리, D493)을 지나 끝까지 간다
 // (docs/implementation.md M30, 8.4). 가짜 claude로는 볼 수 없는 것을 본다:
-// - work-start가 커스텀 Work의 intent에 일반과 같은 기본 완료조건과 줄마다 확인 방법을 쓴다 (D455)
+// - work-start가 커스텀 Work의 intent에 일반과 같이 줄마다 확인 방법을 쓰고, 테스트 명령·약화 금지 기본 항목은 넣지 않는다
+//   (D455, D503)
 // - 커스텀 단계가 공통 바탕 뒤에 붙은 사람의 절차를 따른다: 조사 단계는 코드를 바꾸지 않고, 정의한 절의 산출물을 쓴다
 //   (D452, D453). 작성 단계는 조사 결과대로 바꾸고 커밋한다 (D454)
 // - 마지막 단계인 작성이 독립 리뷰를 요청해 받고(D494~D496) 일반 pr.md(주요 결정)를 쓴다 (D456, D500)
@@ -204,7 +205,10 @@ function inspect(
       lines.every((l) => CHECK_METHOD.test(l)),
       '확인 방법이 없는 완료조건 줄이 있음 (D455)',
     )
-    need(criteria.includes('약화하거나 삭제하지 않는다'), '기본 완료조건(약화 금지) 없음 (D455)')
+    need(
+      !criteria.includes('약화하거나 삭제하지 않는다'),
+      '없앤 기본 완료조건(약화 금지)이 들어감 (D503)',
+    )
     notes.push(`완료조건: ${criteria.replace(/\n/g, ' / ')}`)
   }
   const intent = fs.readFileSync(path.join(workDir, 'intent.md'), 'utf8')

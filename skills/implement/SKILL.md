@@ -21,7 +21,7 @@ For each step of the plan:
 4. Confirm they pass.
 5. Commit.
 
-When all steps are done, run the intent's test command.
+When all steps are done, run the repo's test command.
 
 ## Rules
 
@@ -30,8 +30,8 @@ When all steps are done, run the intent's test command.
 - **Reuse:** before you add a helper function, look for a similar one that already exists, and use it if it fits.
 - **Removing:** if something goes away, when all steps are done, search the repo for the removed names, config keys and mentions in docs. Write what was left and what you did about it in `변경 요약`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
-- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`, with why: "(바뀜) n 때문" / "(없앰) n 때문" for a marked 완료조건, otherwise "목록 밖". n is that line's position among all 완료조건 lines of the intent, counting from 1 (default items included). Whether it weakens the test is judged with the 완료조건 when the Work finishes.
-- **Run tests:** run the test command from the intent's 완료조건. For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
+- **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`, with why.
+- **Run tests:** run the repo's test command (find it in the repo, e.g. `npm test`). For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
 - **Small departures from the plan** (how files are split, names, the order of steps, small helper functions): decide yourself and write them in `계획과 달라진 점`.
 - **The design is wrong:** ask the human: fix the design and go on / start over as a new Work (see the common rules). If fixing, write the changed design in `계획과 달라진 점` and the decision in `decisions` with `by: human`.
 
@@ -56,14 +56,14 @@ Ask on the spot, before you change code, only when the implementation departs fa
 - Each behavior in the intent's 완료조건 has a test that failed before (or passed before, for a 완료조건 that keeps the current behavior) and passed after, or you wrote why it could not.
 - Far departures were asked and the answers recorded in `decisions`.
 - All changes are committed.
-- You ran the intent's test command and wrote the result.
+- You ran the repo's test command and wrote the result.
 
 ## Artifact template: `implement.md`
 
 ```markdown
 ## 변경 요약
 - 계획 단계 n — 파일 — 무엇을 바꿨는지, 커밋
-- (기존 테스트 변경) 파일 — 무엇을 왜 바꿨는지 — (바뀜) n 때문 / (없앰) n 때문 / 목록 밖
+- (기존 테스트 변경) 파일 — 무엇을 왜 바꿨는지
 - (남은 참조) 없앤 이름 — 찾은 곳과 처리 (없앤 것이 없으면 빼기)
 
 ## 계획과 달라진 점

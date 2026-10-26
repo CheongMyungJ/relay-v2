@@ -44,10 +44,10 @@ Settle every item as one of: 고침 (fixed) / 고치지 않음 (not fixed, with 
 - **Conflict:** merge the base branch the app fetched (`origin/<base>`, named in `context.md`) and resolve. Do not rebase.
 - **Divergence:** merge the remote PR branch the app fetched (`origin/<branch>`, named in `context.md`). Do not rebase.
 <!-- type: bugfix feature refactor general custom -->
-- **Tests:** if you changed code, run the test command from the intent's 완료조건, and for each failure check whether it also fails at the base commit. If you changed an existing test, add it to `risks`.
+- **Tests:** if you changed code, run the repo's test command, and for each failure check whether it also fails at the base commit. If you changed an existing test, add it to `risks`.
 <!-- /type -->
 <!-- type: spec -->
-- **Tests:** the intent has no test command. Skip running tests, and write "테스트 명령 없음" in `테스트 실행`.
+- **Tests:** a design Work changes only documents. Skip running tests, and write "테스트 명령 없음" in `테스트 실행`.
 <!-- /type -->
 
 ## Replies
