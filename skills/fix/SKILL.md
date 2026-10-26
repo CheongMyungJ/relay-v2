@@ -25,7 +25,7 @@ Reproduce the bug, find the cause, fix the code and commit. Write what you found
 - **Reproduction test:** add one whenever you can. Confirm it fails before the fix and passes after. If you cannot add one (e.g. UI behavior, needs an external service), write why in `fix.md` and `risks`.
 - **Commits:** any number. Follow the repo's commit message convention. Commit all changes before you close. Revert experimental changes such as debug output.
 - **Changing existing tests:** if an existing test must change, change it, add it to `risks`, and mark it as an existing-test change in `변경 요약`.
-- **Run tests:** run the repo's test command (find it in the repo, e.g. `npm test`). For each failure, check whether it also fails at the base commit (from `context.md`), and say which.
+- **Run tests:** run the repo's test command (find it in the repo, e.g. `npm test`). For each failure, check whether it also fails at the base commit (from `context.md`), and say which. If the repo has no tests, write that in `테스트 실행`.
 
 ## Decision points
 
@@ -50,7 +50,7 @@ In any other case, decide the fix yourself and record it in `decisions`.
 - Every human suspicion is judged.
 - All changes are committed.
 - The reproduction test fails before and passes after the fix, or you wrote why you could not add one.
-- You ran the repo's test command and wrote the result.
+- You ran the repo's test command and wrote the result, or wrote that the repo has no tests.
 
 ## Artifact template: `fix.md`
 

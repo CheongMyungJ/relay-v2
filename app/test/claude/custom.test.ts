@@ -209,6 +209,10 @@ function inspect(
       !criteria.includes('약화하거나 삭제하지 않는다'),
       '없앤 기본 완료조건(약화 금지)이 들어감 (D503)',
     )
+    need(
+      !/^- \[ \] `[^`]+`가 통과한다/m.test(criteria),
+      '없앤 기본 완료조건(테스트 명령)이 들어감 (D503)',
+    )
     notes.push(`완료조건: ${criteria.replace(/\n/g, ' / ')}`)
   }
   const intent = fs.readFileSync(path.join(workDir, 'intent.md'), 'utf8')

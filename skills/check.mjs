@@ -532,7 +532,8 @@ const spec = {
     ['D454', '코드를 바꿀 수 있음, 레포 관례, 모두 커밋, 실험 되돌림', /may change code[\s\S]*commit message convention[\s\S]*Commit all changes before you close[\s\S]*Revert experimental/],
     ['D369', '설계 문서를 따르는 Work: 벗어나면 물음, 바꾸면 문서도 고쳐 함께 커밋', /design document to follow[\s\S]*ask the human[\s\S]*change the design document too[\s\S]*commit it with the code/],
     ['D453', '산출물: <단계 id>.md, context.md에 적힌 절', /`<step id>\.md`[\s\S]*every section listed in `context\.md`/],
-    ['D452', '사람이 정할 결정 목록과 테스트 명령 실행은 공통 바탕에 없음', /^(?![\s\S]*## Human decisions)(?![\s\S]*intent's test command)/],
+    ['D452', '사람이 정할 결정 목록과 intent의 테스트 명령은 공통 바탕에 없음', /^(?![\s\S]*## Human decisions)(?![\s\S]*intent's test command)/],
+    ['D505', '코드를 바꿨으면 레포의 테스트 명령 실행, 기준 커밋 실패 구분', /Run tests:\*\* if this step changed code, run the repo's test command[\s\S]*also fails at the base commit/],
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
