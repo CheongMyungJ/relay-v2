@@ -1,0 +1,3 @@
+- Do not plan how to do the work. That is the job of execute.
+- **Human suggestions:** if the request says how to do it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". execute decides whether to take it.
+- **A better-fitting type:** `general` is for work that fits none of the other types. If the request fits `bugfix`, `feature` or `refactor` better, say which and why before you write the draft, and ask: keep `general` / change the type (`blocked`). If they keep it, draft with `general`.

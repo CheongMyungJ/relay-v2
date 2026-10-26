@@ -5,14 +5,15 @@
 // 2. 크기: SKILL.md + _common.md. Claude Code 어림(글자 수 / 4)과 모델 토큰 어림을 참고로만 보여 준다 (D445)
 // 3. 템플릿: 주석 단 템플릿에 값을 채운 예시가 docs/contracts 스키마를 통과하는지 (D87). intent 초안은 머리글이 없다 (D236)
 // 4. 설계 대조: 산출물 템플릿의 절 제목, 입력·결정 지점·사람이 정할 결정·완료조건 항목 (5.6.1~5.6.12, I60, I65, I89, I107)
-// 5. 유형별 조립: 공용 스킬의 유형 표시, 조립한 글에 다른 유형의 산출물이 없음 (D279, I68)
+// 5. 유형별 조립: 공용 스킬의 설정 구간(옛 verify는 유형 표시), 조립한 글에 다른 유형의 산출물이 없음 (D279, D508, I68)
 // 6. 마무리 절차(_final.md)와 독립 리뷰 지침(_review.md): 유형별 조립, 템플릿 절, 핵심 문구 (5.6.14, D493~D500)
+// 7. 기본 유형 폴더(skills/types/<id>/): type.json, 단계 절차와 산출물의 절, 칸 파일, 산출물 참조 (5.6.15, D506~D514)
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TYPES, assemble, stripFrontMatter } from './assemble.mjs';
+import { BUILTIN, STEPS, TYPES, assemble, assembleSkill, fillSlots, flagsOf, readType, selectFlags, stripFrontMatter } from './assemble.mjs';
 import { CHECK_METHOD } from './check-method.mjs';
 import YAML from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -21,23 +22,38 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
 
-const SKILLS = ['work-start', 'fix', 'design', 'implement', 'refactor', 'spec', 'execute', 'verify', 'pr-respond', 'custom'];
+// SKILL.md가 있는 스킬: 공용 스킬(유형 설정으로 조립)과 커스텀 단계의 공통 바탕, 옛 Work의 verify (D501)
+const SKILL_FILES = ['work-start', 'verify', 'pr-respond', 'custom'];
+// 기본 유형의 단계 절차: skills/types/<유형>/<단계>.md (D506). 단계마다 그 유형 하나다
+const OWN_TYPE = Object.fromEntries(Object.entries(STEPS).flatMap(([type, steps]) => steps.map((s) => [s, type])));
+const SKILLS = [...SKILL_FILES, ...Object.keys(OWN_TYPE)];
 
-// 업무 유형(D232, D258, D302, D350)과 유형마다 조립하는 공용 스킬(D279)
+// 업무 유형(D232, D258, D302, D350)과 유형마다 조립하는 공용 스킬(D279, D508)
 const SHARED = ['work-start', 'verify', 'pr-respond'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
-// 스킬 원본(유형 표시 포함, 공통 규칙을 붙이기 전)
-const skills = Object.fromEntries(SKILLS.map((s) => [s, read(`skills/${s}/SKILL.md`)]));
+// 스킬 원본(설정 구간·유형 표시 포함, 공통 규칙을 붙이기 전)과 기본 유형의 단계 절차
+const skills = Object.fromEntries([
+  ...SKILL_FILES.map((s) => [s, read(`skills/${s}/SKILL.md`)]),
+  ...Object.entries(OWN_TYPE).map(([s, type]) => [s, read(`skills/types/${type}/${s}.md`)]),
+]);
 
-// 에이전트가 받는 스킬 본문: 공용 스킬은 유형마다 하나씩, 나머지는 그 유형 하나다
-// custom은 커스텀 단계의 공통 바탕이다. 앱이 사람이 쓴 단계 절차를 그 뒤에 붙인다 (D452)
-const OWN_TYPE = { fix: 'bugfix', design: 'feature', implement: 'feature', refactor: 'refactor', spec: 'spec', execute: 'general', custom: 'custom' };
+// 에이전트가 받는 스킬 본문 (5.6.15): work-start와 pr-respond는 유형마다 설정 구간과 그 유형의 칸(intake.md)을 붙여 조립하고,
+// 옛 verify는 유형 표시로 고른다. 커스텀은 1판 커스텀 유형(확인 방법을 켠 코드 유형, 칸 없음)이다. 기본 유형의 단계는 그
+// 유형의 절차 그대로이고, custom은 커스텀 단계의 공통 바탕이다(앱이 사람이 쓴 단계 절차를 그 뒤에 붙인다, D452)
+const NO_TYPE_DIR = join(here, 'types', '.none');
+const bodyOf = (name, type) => {
+  if (name === 'verify') return assemble(stripFrontMatter(skills.verify), type);
+  if (name === 'custom') return selectFlags(stripFrontMatter(skills.custom), flagsOf('custom'));
+  if (!SHARED.includes(name)) return skills[name];
+  const text = assembleSkill(name, type === 'custom' ? { type, typeDir: NO_TYPE_DIR } : { type });
+  return text.slice(0, text.length - common.length);
+};
 const variants = SKILLS.flatMap((name) =>
-  (SHARED.includes(name) ? TYPES : [OWN_TYPE[name]]).map((type) => {
+  (SHARED.includes(name) ? TYPES : [OWN_TYPE[name] ?? 'custom']).map((type) => {
     try {
-      return { name, type, label: SHARED.includes(name) ? `${name}·${type}` : name, text: assemble(skills[name], type) };
+      return { name, type, label: SHARED.includes(name) ? `${name}·${type}` : name, text: bodyOf(name, type) };
     } catch (e) {
       return { name, type, label: name, text: skills[name], error: e.message };
     }
@@ -96,6 +112,13 @@ const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x))
 // 스킬 요약이고, Codex 배포본은 자기 머리글을 따로 쓴다(D444, engines.md)
 console.log('\n[1] 머리글 (D444)');
 for (const [name, text] of Object.entries(skills)) {
+  if (!SKILL_FILES.includes(name)) {
+    // 기본 유형의 단계 절차는 유형 폴더의 글이라 머리글이 없다 (D506)
+    check(!frontMatter(text), `${name}: 머리글 없음 (유형 폴더의 단계 절차)`);
+    check(!/\bthis skill\b/i.test(text), `${name}: 자기를 "this skill"이 아니라 "this step"으로 부름`);
+    check(!/\bthe argument\b/i.test(text), `${name}: 스킬 인자를 말하지 않음 (context.md 경로는 relay가 줌)`);
+    continue;
+  }
   const fm = frontMatter(text);
   check(fm && typeof fm.data.description === 'string' && fm.data.description.length > 0, `${name}: description 있음`);
   check(fm && !('disable-model-invocation' in fm.data), `${name}: disable-model-invocation 없음 (스킬로 부르지 않음)`);
@@ -193,11 +216,9 @@ for (const v of variants.filter((x) => x.name === 'work-start')) {
   check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
   // 일반은 줄마다 확인 방법을 붙인다 (D305). 앱의 검사(core/validate의 CHECK_METHOD, I86)와 같은 규칙이다
   if (v.type === 'general' || v.type === 'custom') check(lines.every((l) => CHECK_METHOD.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
-  // 설계는 확인 방법을 붙이지 않고(D356), 대상 문서를 제약에 적는다 (D351)
-  if (v.type === 'spec') {
-    check(lines.every((l) => !CHECK_METHOD.test(l)), `${v.label}: 완료조건에 확인 방법 없음 (D356)`);
-    check(/## 제약\n- 설계 문서: `<경로>` \(새 문서 \/ 기존 문서\)/.test(intentTpl), `${v.label}: 제약에 대상 문서 (D351)`);
-  }
+  // 확인 방법을 쓰지 않는 유형(D509)은 템플릿 줄에도 붙이지 않는다. 설계는 붙이지 않고(D356), 대상 문서는 설계 유형의 intake
+  // 지시가 제약에 적게 한다 (D351, 아래 [4])
+  if (v.type !== 'general' && v.type !== 'custom') check(lines.every((l) => !CHECK_METHOD.test(l)), `${v.label}: 완료조건 템플릿에 확인 방법 없음 (D356, D509)`);
 }
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
@@ -328,7 +349,7 @@ const spec = {
     ['D455', '커스텀 확인 방법은 일반과 같음', /Check method:[\s\S]*every line with[\s\S]*app rejects/, ['custom']],
     ['D456', '커스텀 유형: context.md의 이름·설명·단계, 설명과 안 맞거나 기본 유형이 더 맞으면 초안 전에 물음', /picked a Work type their team defined[\s\S]*`## 커스텀 유형`[\s\S]*before you write the draft[\s\S]*keep this type \/ change the type \(`blocked`\)/, ['custom']],
     ['D456', '유형의 intake 지시를 따름', /## This Work type's intake instructions/, ['custom']],
-    ['5.6.4', '커스텀의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of the custom steps/, ['custom']],
+    ['5.6.4', '커스텀의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of the steps after this one/, ['custom']],
     ['D280', '유형 불일치 줄에 설계', /Type mismatch[\s\S]*`spec` \(설계: /],
     ['D369', '설계 문서를 따르는 요청: 제약에 "<경로>의 결정을 따른다", 맡을 부분을 목표와 완료조건으로 (모든 유형)', /design document to follow[\s\S]*"`<path>`의 결정을 따른다" in `제약`[\s\S]*part this Work takes on as goals and completion criteria/],
     ['D370', '문서가 worktree에 없으면 초안 전에 물음: 머지를 기다림(blocked) / 문서 없이 진행', /not in the worktree[\s\S]*before you write the draft[\s\S]*wait for the merge \(`blocked`\) \/ go on from the request alone/],
@@ -537,11 +558,8 @@ const spec = {
   ],
   'pr-respond': [
     ['D192', '입력: context.md(이번 라운드의 항목, 사람 지시, PR 정보, 앞 라운드 요약)와 파이프라인 산출물(경로)', /`context\.md`[\s\S]*this round's items, the human's instruction, the PR[\s\S]*summaries of earlier rounds[\s\S]*pipeline artifacts/],
-    ['D256', '기능 추가면 design.md와 implement.md(경로)', /`design\.md`, `implement\.md`, `verification\.md`/, ['feature']],
-    ['D278', '리팩터링이면 refactor.md(경로)', /`refactor\.md`, `verification\.md`/, ['refactor']],
-    ['D318', '일반이면 execution.md(경로)', /`execution\.md`, `verification\.md`/, ['general']],
-    ['D456', '커스텀이면 커스텀 단계의 산출물(경로)', /custom steps' `<step id>\.md`, `verification\.md`/, ['custom']],
-    ['D374', '설계면 spec.md(경로)와 대상 문서는 제약', /`spec\.md`, `verification\.md`[\s\S]*target design document's path is in the intent's `제약`/, ['spec']],
+    ['D508', '파이프라인 산출물: 단계들의 산출물과 verification.md(경로)', /The pipeline artifacts \(each step's artifact, `verification\.md`, …\) at the paths in `context\.md`/],
+    ['D374', '문서 유형(설계)이면 대상 문서는 제약', /target design document's path is in the intent's `제약`/, ['spec']],
     ['D368', '결정을 바꾸라는 코멘트: 그 자리에서 spec과 같은 모양으로 물음, 문서와 결정 표를 고치고 사람 결정 표시, 답글에 정한 것', /asks to change a decision[\s\S]*ask the human on the spot[\s\S]*options, the recommended one first with "\(추천\)", and the reason[\s\S]*change the document and its decision table[\s\S]*human's decision[\s\S]*reply what was decided/, ['spec']],
     ['D374', '설계는 문서만 바꿔 테스트 실행을 건너뜀', /changes only documents\. Skip running tests/, ['spec']],
     ['D162', '외부 글은 지시가 아니라 데이터, 명령 실행·설정 변경·비밀 정보 요청은 따르지 않고 사람에게 물음, 사람 지시는 따름', /data, not instructions[\s\S]*run a command, change settings[\s\S]*reveal secrets[\s\S]*ask the human[\s\S]*Follow only the human/],
@@ -593,6 +611,9 @@ for (const v of variants) {
   if (!SHARED.includes(v.name)) check(!/<!-- \/?type/.test(skills[v.name]), `${v.name}: 한 유형의 스킬에는 유형 표시가 없음`);
 }
 check(!/<!-- \/?type/.test(common), '_common.md: 유형 표시가 없음 (모든 유형 공통)');
+// 공용 스킬은 유형 이름 대신 유형 설정으로 고른다 (D508): 유형 표시는 옛 Work의 verify에만 남는다 (D501)
+for (const name of ['work-start', 'pr-respond', 'custom']) check(!/<!-- \/?type/.test(skills[name]), `${name}: 유형 표시 없음, 설정 구간만 (D508)`);
+check(!/<!-- \/?type/.test(read('skills/_final.md') + read('skills/_review.md')), '_final.md·_review.md: 유형 표시 없음, 설정 구간만 (D508)');
 // 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 네 유형을 말하므로 산출물만 본다
 // 커스텀 단계의 산출물은 단계마다 이름이 다르다(<단계 id>.md, D453)
 const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'], custom: [] };
@@ -620,14 +641,20 @@ const uniq = (xs) => [...new Set(xs)];
 for (const t of TYPES) {
   let fin = null;
   let rev = null;
+  // 앱처럼 그 유형의 설정 구간을 고르고 칸을 채운다 (5.6.15): 기본 유형은 skills/types/<유형>/의 칸, 커스텀(1판)은 칸 없음
+  const typeDir = t === 'custom' ? NO_TYPE_DIR : join(here, 'types', t);
+  const note = (name) => (existsSync(join(typeDir, name)) ? readFileSync(join(typeDir, name), 'utf8') : '');
   try {
-    fin = assemble(finalSrc, t);
-    rev = assemble(reviewSrc, t);
+    fin = fillSlots(selectFlags(finalSrc, flagsOf(t)), {
+      finish: note('finish.md'),
+      'pr-template': note('pr-template.md') || read('skills/_pr-template.md'),
+    });
+    rev = selectFlags(reviewSrc, flagsOf(t));
   } catch (e) {
-    fail(`_final.md·_review.md·${t}: 유형 표시가 맞음 (${e.message})`);
+    fail(`_final.md·_review.md·${t}: 설정 구간이 맞음 (${e.message})`);
     continue;
   }
-  ok(`_final.md·_review.md·${t}: 유형 표시가 맞음`);
+  ok(`_final.md·_review.md·${t}: 설정 구간이 맞음`);
   check(!/<!--/.test(fin) && !/<!--/.test(rev), `_final.md·_review.md·${t}: 조립한 글에 유형 표시가 남지 않음 (줄 단위 표시)`);
   // 템플릿은 옛 verify(5.6.6)와 같다: verification.md와 그 유형의 pr.md. 테스트 파일 변경 절만 없다 (D504)
   const finH = uniq(codeBlocks(fin, 'markdown').flatMap(headings));
@@ -665,6 +692,53 @@ for (const t of TYPES) {
 for (const name of SKILLS.filter((x) => x !== 'verify')) {
   check(!/intent's test command|test command from the intent|weaken|약화/.test(skills[name]), `${name}: intent의 테스트 명령과 약화 금지 문구가 없음 (D505)`);
 }
+
+// 기본 유형 폴더 (5.6.15, D506~D514): 앱의 커스텀 유형과 같은 형식이고, 칸의 글은 그 유형의 단계 산출물과 앱의 파일만 가리킨다
+console.log('\n[7] 기본 유형 폴더 (5.6.15, D506~D514)');
+const d506 = ['D506', 'D507', 'D508', 'D509', 'D510', 'D511', 'D512', 'D513', 'D514', 'D515'].filter((d) => !design.includes(`\n| ${d} |`));
+check(d506.length === 0, `design.md: 결정 D506~D515${d506.length ? ` (빠짐: ${d506.join(', ')})` : ''}`);
+const typeDirs = readdirSync(join(here, 'types'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+check(sameSet(typeDirs, BUILTIN), `skills/types/의 폴더 = 기본 유형 다섯 (${typeDirs.join(', ')})`);
+// 앱이 쓰는 파일과, 커스텀 단계로 옮길 때 이름을 바꾸는 기본 유형 산출물 (core/custom-type referenceWarnings, BUILTIN_ARTIFACT_NAMES)
+const APP_FILES = ['request.md', 'intent.md', 'intent.draft.md', 'context.md', 'handoff.md', 'decisions.md', 'instructions.md', 'verification.md', 'pr.md', 'independent-review.md', 'response.md', 'replies.md'];
+const ARTIFACT_NAME = { execute: 'execution.md' };
+const NOTE_FILES = ['intake.md', 'verify.md', 'finish.md', 'pr-template.md'];
+for (const type of BUILTIN) {
+  const dir = `skills/types/${type}`;
+  let def = null;
+  try {
+    def = readType(type);
+  } catch (e) {
+    fail(`${type}: type.json을 읽음 (${e.message})`);
+    continue;
+  }
+  check(def.schema_version === 2, `${type}: schema_version 2`);
+  check(typeof def.name === 'string' && def.name && typeof def.description === 'string' && def.description, `${type}: 이름과 설명`);
+  check(typeof def.check_method === 'boolean' && ['code', 'document'].includes(def.target), `${type}: check_method와 target (D509, D510)`);
+  check(def.check_method === (type === 'general'), `${type}: 확인 방법은 일반만 켬 (D509)`);
+  check(def.target === (type === 'spec' ? 'document' : 'code'), `${type}: 설계만 document (D510)`);
+  const ids = def.steps.map((s) => s.id);
+  check(sameSet(ids, STEPS[type]) && ids.every((id, i) => id === STEPS[type][i]), `${type}: 단계 = 파이프라인의 노드 (${ids.join(', ')})`);
+  for (const s of def.steps) {
+    const proc = skills[s.id] ?? '';
+    // 산출물 템플릿의 절 제목이 type.json의 sections와 같다: 커스텀으로 복사해도 앱이 같은 절을 검사한다 (D453)
+    const tpl = proc.split(/^## Artifact template: /m)[1] ?? '';
+    const tplHeadings = (codeBlocks(tpl, 'markdown')[0] ?? '').split('\n').filter((l) => /^## /.test(l)).map((l) => l.slice(3).trim());
+    check(JSON.stringify(tplHeadings) === JSON.stringify(s.sections), `${type}/${s.id}: sections = 산출물 템플릿의 절${JSON.stringify(tplHeadings) === JSON.stringify(s.sections) ? '' : ` (템플릿: ${tplHeadings.join(', ')})`}`);
+    check(s.lead.length > 0 && s.lead.every((x) => s.sections.includes(x)), `${type}/${s.id}: [요약]의 절이 sections 안에 있음 (D511)`);
+    check(s.step_base === false && s.auto_approve === false, `${type}/${s.id}: 공통 바탕 끔(절차가 공통 규칙을 담음), 자동 승인 기본값 끔`);
+    check(s.question_mode === (type === 'spec' ? null : 'draft_first'), `${type}/${s.id}: 질문 방식 (설계 문답만 없음, D358)`);
+  }
+  const notes = NOTE_FILES.filter((n) => existsSync(join(root, dir, n)));
+  const texts = [...ids.map((id) => [`${id}.md`, skills[id] ?? '']), ...notes.map((n) => [n, read(`${dir}/${n}`)])];
+  const marked = texts.filter(([, x]) => /<!--/.test(x)).map(([n]) => n);
+  check(marked.length === 0, `${type}: 유형 폴더의 글에 표시 줄 없음 (그 유형 하나의 글)${marked.length ? ` (${marked.join(', ')})` : ''}`);
+  // 칸의 글이 가리키는 산출물은 그 유형의 단계 산출물이나 앱의 파일이다 (D513). 그래야 베이스로 복사한 유형이 그대로 돈다
+  const known = new Set([...APP_FILES, ...ids.map((id) => ARTIFACT_NAME[id] ?? `${id}.md`)]);
+  const refs = texts.flatMap(([n, x]) => [...x.matchAll(/`([a-z0-9][a-z0-9.-]*\.md)`/g)].map((m) => `${n}: ${m[1]}`).filter((r) => !known.has(r.split(': ')[1])));
+  check(refs.length === 0, `${type}: 칸의 글이 이 유형의 산출물과 앱의 파일만 가리킴 (D513)${refs.length ? ` (${[...new Set(refs)].join(', ')})` : ''}`);
+}
+check(!/<!--/.test(read('skills/_pr-template.md')), '_pr-template.md: 표시 줄 없음 (유형에 PR 템플릿이 없을 때의 템플릿, D507)');
 
 console.log(failures ? `\n실패 ${failures}건` : '\n모두 통과');
 process.exit(failures ? 1 : 0);

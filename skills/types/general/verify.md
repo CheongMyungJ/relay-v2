@@ -1,0 +1,2 @@
+- Does the change fit the plan in `execution.md`? Did the scope grow beyond it?
+- Does every change in code behavior have a test that catches it? If not, is the reason in `execution.md` sound?

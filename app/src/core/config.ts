@@ -9,6 +9,7 @@ import {
   THEME_CHOICES,
   type AppConfig,
   type AutoApproveNode,
+  QUESTION_MODES,
   type QuestionMode,
   type QuestionSkill,
   type AgentStepName,
@@ -34,8 +35,6 @@ import {
 
 /** 질문 방식을 고르는 스킬. spec은 없어 config.json에 있으면 모르는 스킬이다 (I104) */
 const SKILLS: readonly QuestionSkill[] = SKILL_TITLES.map(([skill]) => skill)
-
-const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
 
 /**
  * 자동 승인을 켤 수 있는 노드 (4.2). intake(의도 승인)와 verify(리뷰와 검증 = Work 완료)는 늘 수동이다.

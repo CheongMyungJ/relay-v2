@@ -1,0 +1,3 @@
+- **Reproduction steps:** do not change code that they use. If a picked finding needs it, write in `반영` how the steps change, and reproduce with the changed steps.
+- **Verdicts come from runs:** the reproduction steps and the reproduction test, run on the final code.
+- **판정 불가의 예:** the reproduction test passes in a Work that never reproduced the bug. If the Work proceeded without reproduction, "재현 절차가 더 이상 실패하지 않는다" is 판정 불가. If there are neither reproduction steps nor a reproduction test, it is 판정 불가 too.

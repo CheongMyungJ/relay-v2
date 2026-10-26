@@ -1,0 +1,2 @@
+- Did any logic change in the diff (outside the differences the human accepted in `refactor.md`)? A behavior change the human did not accept is a 차단 candidate. Are the structural goals met? Did the scope grow beyond the plan?
+- Do the safety-net tests really catch the behavior of every changed place?

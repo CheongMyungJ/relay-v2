@@ -6,12 +6,15 @@ import type { PrItemKind, PrItemStatus } from './pr'
 import type { DraftRef, ParsedDraft } from './session'
 import type {
   ApprovedIntent,
+  CustomStep,
   CustomTypeDef,
   CustomTypeSource,
   DeliveryChoice,
   FormatIssue,
   MergeMethod,
   TaskStatus,
+  TypeSource,
+  TypeTarget,
   UncommittedAction,
   WorkStatus,
   WorkType,
@@ -1182,11 +1185,18 @@ export interface RepoChoiceView {
 /** 커스텀 유형 하나 (D459, D460). 형식이 깨졌으면 errors가 있고 고를 수 없다 */
 export interface CustomTypeView {
   id: string
-  source: CustomTypeSource
+  /** 출처. 기본 유형은 builtin이다 (D506) */
+  source: TypeSource
   /** 유형 이름. 깨졌으면 id다 */
   name: string
   description: string
   steps: { id: string; title: string; autoApprove: boolean }[]
+  /** 새 Work 대화상자의 요청 입력 안내 (D511) */
+  requestHint: string
+  /** 완료조건마다 확인 방법 (D509) */
+  checkMethod: boolean
+  /** 다루는 대상 (D510) */
+  target: TypeTarget
   errors: string[]
   /** 같은 id의 레포 유형이 있어 이 프로젝트에서 가려진 전역 유형이다 (D451) */
   shadowed?: boolean
@@ -1194,6 +1204,8 @@ export interface CustomTypeView {
 
 /** 업무 유형 화면의 목록 (D459): 전역 유형과 등록한 프로젝트마다의 레포 유형 */
 export interface CustomTypeList {
+  /** 앱에 든 기본 유형 (D506, D512). 읽기 전용이고 새 유형의 베이스로 고른다 */
+  builtin: CustomTypeView[]
   global: CustomTypeView[]
   projects: { projectId: string; projectName: string; types: CustomTypeView[] }[]
 }
@@ -1203,9 +1215,17 @@ export interface CustomTypeFiles {
   def: CustomTypeDef
   /** 단계 id → 사람이 쓴 절차 */
   procedures: Record<string, string>
-  /** 선택 파일 intake.md, verify.md의 글. 없으면 빈 글 (D456) */
+  /** 유형 단위 칸의 글 (D456, D507): intake.md, verify.md, finish.md, pr-template.md. 없으면 빈 글 */
   intake: string
   verify: string
+  finish: string
+  prTemplate: string
+}
+
+/** [단계 더하기]의 기반 단계 (D512): 기본 유형 단계의 정의와 절차 */
+export interface BaseStep {
+  step: CustomStep
+  procedure: string
 }
 
 /** 지식 정리 후보 (D393) */

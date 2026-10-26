@@ -1,7 +1,3 @@
----
-description: relay refactor step (refactoring). Plans the target structure, commits safety-net tests first, changes structure step by step without changing behavior, and writes it up (refactor.md).
----
-
 # relay: refactor (계획과 리팩터링)
 
 For a refactoring Work, change the structure without changing behavior. In one session: plan the target structure, commit safety-net tests that pin the current behavior, then change the structure one plan step at a time, committing each step. Write what you did in `refactor.md` in the task directory. This is the step that changes code.

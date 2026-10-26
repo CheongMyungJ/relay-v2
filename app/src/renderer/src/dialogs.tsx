@@ -36,7 +36,14 @@ import {
   type WorkSettings,
 } from '../../shared/config'
 import { DEFAULT_BRANCH_RULE } from '../../shared/project'
-import { WORK_TYPES, WORK_TYPE_LABEL, type MergeMethod, type WorkType } from '../../shared/work'
+import { BUILTIN_TYPES, CUSTOM_REQUEST_HINT } from '../../shared/builtin-types'
+import {
+  WORK_TYPES,
+  WORK_TYPE_LABEL,
+  type BuiltinWorkType,
+  type MergeMethod,
+  type WorkType,
+} from '../../shared/work'
 import type {
   CleanPreview,
   RepoCleanPreview,
@@ -540,14 +547,13 @@ function TidyNotice({
   )
 }
 
-/** 요청 입력의 예시 문구. 유형을 고르기 전에는 버그 수정의 것이다 (D261, I88) */
+/** 요청 입력의 예시 문구 (D261, I88, D511): 유형 정의의 request_hint. 유형을 고르기 전에는 버그 수정의 것이다 */
 const REQUEST_PLACEHOLDER: Readonly<Record<WorkType, string>> = {
-  bugfix: '버그 설명, 로그, 이슈 내용을 붙여 넣으세요',
-  feature: '만들 기능이나 바꾸거나 없앨 동작, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요',
-  refactor: '바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요',
-  spec: '무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요',
-  general: '할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
-  custom: '이 유형에 맞는 할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)',
+  ...(Object.fromEntries(WORK_TYPES.map((t) => [t, BUILTIN_TYPES[t].request_hint ?? ''])) as Record<
+    BuiltinWorkType,
+    string
+  >),
+  custom: CUSTOM_REQUEST_HINT,
 }
 
 /** 짧은 이름을 치다 멈춘 뒤 브랜치 이름을 묻기까지 기다리는 시간 */
@@ -858,7 +864,7 @@ export function NewWorkDialog({
           value={request}
           onChange={(e) => setRequest(e.target.value)}
           rows={10}
-          placeholder={REQUEST_PLACEHOLDER[type ?? 'bugfix']}
+          placeholder={chosenCustom?.requestHint ?? REQUEST_PLACEHOLDER[type ?? 'bugfix']}
         />
       </label>
       <div className="row">

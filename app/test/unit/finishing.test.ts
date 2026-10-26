@@ -68,7 +68,7 @@ const errors = (r: { errors: { message: string }[] }) => r.errors.map((e) => e.m
 
 describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
   it('리뷰 요청 때는 단계 산출물과 판정표 절만 본다. pr.md는 아직 없다. 테스트 파일 변경 절은 없다 (D504)', () => {
-    expect(reviewRequestSections('bugfix')).toEqual(['완료조건 판정'])
+    expect(reviewRequestSections('code')).toEqual(['완료조건 판정'])
     const ok = check({
       'handoff.md': handoff('review_requested'),
       'fix.md': '',
@@ -100,7 +100,7 @@ describe('리뷰 요청의 형식 검사 (D494, 5.2.1)', () => {
   })
 
   it('설계 Work는 문서 밖 파일 변경 절도 본다 (D374)', () => {
-    expect(reviewRequestSections('spec')).toEqual(['완료조건 판정', '문서 밖 파일 변경'])
+    expect(reviewRequestSections('document')).toEqual(['완료조건 판정', '문서 밖 파일 변경'])
     const r = check(
       {
         'handoff.md': handoff('review_requested'),

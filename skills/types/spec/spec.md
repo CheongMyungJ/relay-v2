@@ -1,7 +1,3 @@
----
-description: relay spec step (spec Work). Settles the design decisions with the human topic by topic, writes them into the design document in the repo and commits it (spec.md). Does not change code.
----
-
 # relay: spec (설계 문답)
 
 For a spec Work, settle with the human, one by one, what the intent says to decide, and write it into the design document in the repo. Unlike the other steps you do not draft first: ask every decision of each topic. This step does not change code. It changes only the target document, and commits it. Write the progress record `spec.md` in the task directory.

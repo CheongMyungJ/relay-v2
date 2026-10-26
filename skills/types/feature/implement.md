@@ -1,7 +1,3 @@
----
-description: relay implement step (feature). Writes tests first and implements the plan in design.md, commits, and writes it up (implement.md).
----
-
 # relay: implement (구현)
 
 For a feature Work, follow the implementation plan in `design.md`: write the tests first, change the code and commit. Write what you did in `implement.md` in the task directory. This is the step that changes code.

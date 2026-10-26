@@ -1,7 +1,3 @@
----
-description: relay execute step (general Work). Plans and does the work the intent asks for, in whatever way fits, checks each completion criterion with its check method, and writes it up (execution.md).
----
-
 # relay: execute (실행)
 
 For a general Work, do the work the intent asks for. How you do it is up to you: in one session, plan, do the work, commit, and run each 완료조건's check method yourself. Write what you did in `execution.md` in the task directory. This is the step that changes code.

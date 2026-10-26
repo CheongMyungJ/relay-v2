@@ -64,6 +64,20 @@ export function inPipeline(type: WorkType, node: TaskNode): node is NodeName {
   return (PIPELINES[type] as readonly TaskNode[]).includes(node)
 }
 
+/** 기본 유형의 단계 노드 (5.6.15, D506): 절차가 유형 폴더의 <노드>.md에 있다. intake, verify, custom, respond는 아니다 */
+export const STEP_NODES: readonly NodeName[] = [
+  'fix',
+  'design',
+  'implement',
+  'refactor',
+  'spec',
+  'execute',
+]
+
+/** 기본 유형의 단계 노드인가 */
+export const isStepNode = (node: TaskNode): boolean =>
+  (STEP_NODES as readonly TaskNode[]).includes(node)
+
 /** PR 대응 task의 노드 (D187). 파이프라인 밖이다 (D188) */
 export const RESPOND = 'respond' as const
 

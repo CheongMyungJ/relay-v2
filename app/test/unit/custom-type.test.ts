@@ -6,7 +6,9 @@ import { checkWorkSettings, mergeWorkSettings } from '../../src/core/config'
 import { CUSTOM_QUESTION_LINE, buildContext, previousInputs } from '../../src/core/context'
 import {
   missingProcedures,
+  parseBuiltinType,
   parseCustomType,
+  referenceWarnings,
   serializeCustomType,
   stepIdError,
   typeIdError,
@@ -133,22 +135,28 @@ function approveCurrent(work: WorkState, config: AppConfig = MANUAL) {
 }
 
 describe('type.json 검사 (D449, D453, D457)', () => {
-  it('맞는 정의는 이름, 설명, 단계를 읽고 빈 절과 자동 승인은 기본값이다', () => {
+  it('맞는 정의는 이름, 설명, 단계를 읽고 빈 절과 자동 승인은 기본값이다. 1판은 확인 방법을 켠 코드 유형이다 (D509)', () => {
     const r = parseCustomType('survey-apply', TYPE_JSON)
+    const step = { lead: [], question_mode: null, step_base: true }
     expect(r).toEqual({
       ok: true,
       def: {
         id: 'survey-apply',
         name: '조사 후 적용',
         description: '먼저 바꿀 곳을 조사하고 그대로 적용하는 일',
+        request_hint: '',
+        branch_prefix: '',
+        check_method: true,
+        target: 'code',
         steps: [
           {
             id: 'survey',
             title: '조사',
             sections: ['조사한 곳', '적용 계획'],
             auto_approve: false,
+            ...step,
           },
-          { id: 'apply', title: '적용', sections: [], auto_approve: true },
+          { id: 'apply', title: '적용', sections: [], auto_approve: true, ...step },
         ],
       },
     })
@@ -164,6 +172,11 @@ describe('type.json 검사 (D449, D453, D457)', () => {
     expect(stepIdError('handoff')).toMatch('앱이 쓰는 이름')
     expect(stepIdError('a--b')).toMatch('영어 소문자')
     expect(stepIdError('survey')).toBeNull()
+    // 마지막 단계의 task 디렉터리에 놓이는 파일과 유형 폴더의 칸 파일은 막고, 기본 유형의 단계 이름은 쓸 수 있다 (D514)
+    for (const id of ['pr', 'verification', 'independent-review', 'finish', 'pr-template'])
+      expect(stepIdError(id), id).toMatch('앱이 쓰는 이름')
+    for (const id of ['fix', 'design', 'implement', 'refactor', 'spec', 'execute'])
+      expect(stepIdError(id), id).toBeNull()
     // task 디렉터리·산출물·브랜치 이름이 되므로 길이를 묶는다
     expect(typeIdError('a'.repeat(41))).toMatch('40자')
     expect(stepIdError('a'.repeat(41))).toMatch('40자')
@@ -200,6 +213,98 @@ describe('type.json 검사 (D449, D453, D457)', () => {
     const r = parseCustomType('survey-apply', TYPE_JSON)
     if (!r.ok) throw new Error('읽지 못함')
     expect(parseCustomType('survey-apply', serializeCustomType(r.def))).toEqual(r)
+  })
+
+  it('2판은 유형 설정과 단계 설정을 읽고, 비운 확인 방법은 끔이다 (D506, D509~D511)', () => {
+    const r = parseCustomType(
+      'doc-check',
+      JSON.stringify({
+        schema_version: 2,
+        name: '문서 점검',
+        request_hint: ' 점검할 문서 ',
+        branch_prefix: 'docs',
+        target: 'document',
+        steps: [
+          {
+            id: 'check',
+            title: '점검',
+            sections: ['본 곳', '고친 곳'],
+            lead: ['고친 곳'],
+            question_mode: 'confirm_each',
+            step_base: false,
+          },
+        ],
+      }),
+    )
+    expect(r).toMatchObject({
+      ok: true,
+      def: {
+        request_hint: '점검할 문서',
+        branch_prefix: 'docs',
+        check_method: false,
+        target: 'document',
+        steps: [{ lead: ['고친 곳'], question_mode: 'confirm_each', step_base: false }],
+      },
+    })
+    if (!r.ok) return
+    expect(parseCustomType('doc-check', serializeCustomType(r.def))).toEqual(r)
+  })
+
+  it('2판 설정의 틀린 값은 오류다', () => {
+    const r = parseCustomType(
+      'x',
+      JSON.stringify({
+        schema_version: 3,
+        name: 'X',
+        branch_prefix: 'Fix!',
+        check_method: 'yes',
+        target: 'docs',
+        steps: [
+          {
+            id: 'a',
+            title: 'A',
+            sections: ['한 일'],
+            lead: ['없는 절'],
+            question_mode: 'ask',
+            step_base: 1,
+          },
+        ],
+      }),
+    )
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.errors).toEqual([
+      'schema_version: 1이나 2이어야 함',
+      'branch_prefix: 영어 소문자·숫자·`-`로 40자까지',
+      'check_method: true/false여야 함',
+      'target: code | document 중 하나여야 함',
+      'steps[0].lead: `없는 절`은 sections에 없는 절',
+      'steps[0].question_mode: draft_first | confirm_each 또는 null이어야 함',
+      'steps[0].step_base: true/false여야 함',
+    ])
+  })
+
+  it('기본 유형의 type.json은 기본 유형 이름이어야 한다 (D506)', () => {
+    expect(parseBuiltinType('bugfix', TYPE_JSON).ok).toBe(true)
+    expect(parseBuiltinType('survey', TYPE_JSON)).toMatchObject({
+      ok: false,
+      errors: ['기본 유형이 아님: survey'],
+    })
+  })
+
+  it('저장할 때 글이 이 유형에 없는 산출물을 가리키면 경고한다. 앱의 파일과 경로는 보지 않는다 (D513)', () => {
+    expect(
+      referenceWarnings(CUSTOM, [
+        {
+          where: '단계 apply의 절차',
+          text: '`survey.md`와 `design.md`, `verification.md`를 읽는다',
+        },
+        { where: '마무리 판정 규칙', text: '`docs/design.md`와 `CLAUDE.md`, `design.md`' },
+      ]),
+    ).toEqual([
+      '단계 apply의 절차: `design.md`을 가리키지만 이 유형에 그 산출물을 쓰는 단계가 없음',
+      '마무리 판정 규칙: `design.md`을 가리키지만 이 유형에 그 산출물을 쓰는 단계가 없음',
+    ])
   })
 
   it('단계마다 절차 파일이 있어야 한다', () => {

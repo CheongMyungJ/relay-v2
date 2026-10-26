@@ -1,6 +1,6 @@
 // work.json의 모양 (5.1). 상태의 기준이고, main이 전이마다 원자적으로 쓴다 (I11).
 // core/machine만 이 값을 바꾼다. 파일에 쓰는 모양이라 키는 snake_case다.
-import type { WorkSettings } from './config'
+import type { QuestionMode, WorkSettings } from './config'
 import type { AgentEngine } from './agent'
 import type { HandoffStatus, NodeName, TaskNode } from './contracts'
 
@@ -44,7 +44,7 @@ export const WORK_TYPES: readonly BuiltinWorkType[] = [
   'general',
 ]
 
-/** 커스텀 단계 하나 (5.6.13, D449, D453, D457) */
+/** 커스텀 단계 하나 (5.6.13, 5.6.15, D449, D453, D457, D511) */
 export interface CustomStep {
   /** 단계 id. 영어 소문자·숫자·`-`. 절차 파일 `<id>.md`와 산출물 `<id>.md`, task 디렉터리의 이름이다 (D462) */
   id: string
@@ -54,19 +54,42 @@ export interface CustomStep {
   sections: string[]
   /** 자동 승인 기본값 (D457) */
   auto_approve: boolean
+  /** 승인 화면 [요약]에 보일 절 (D511, D223). 비우거나 없으면 모든 절이다 */
+  lead?: string[]
+  /** 질문 방식 기본값 (D511). null이거나 없으면 질문 방식 설정이 없다 (D457) */
+  question_mode?: QuestionMode | null
+  /**
+   * 단계 공통 바탕(skills/custom/SKILL.md)을 절차 앞에 붙이는지 (5.6.15). 없으면 붙인다. 기본 유형의 단계는 절차가 공통
+   * 규칙을 스스로 담아 끈다
+   */
+  step_base?: boolean
 }
 
-/** 커스텀 유형의 정의 (type.json, D449) */
+/** 유형이 다루는 대상 (D510): 코드 / 문서(설계 유형) */
+export type TypeTarget = 'code' | 'document'
+
+/** 유형의 정의 (type.json, D449, D506). 기본 유형도 같은 모양이다(skills/types/<id>/) */
 export interface CustomTypeDef {
   /** 폴더 이름 */
   id: string
   name: string
   description: string
   steps: CustomStep[]
+  /** 새 Work 대화상자의 요청 입력 안내 (D511). 비우거나 없으면 커스텀 유형의 기본 문구다 */
+  request_hint?: string
+  /** 작업 브랜치 규칙의 {type} (D511). 비우거나 없으면 유형 id다 */
+  branch_prefix?: string
+  /** 완료조건마다 확인 방법을 요구한다 (D509). 없으면(schema_version 1의 기록) 켬이다 */
+  check_method?: boolean
+  /** 다루는 대상 (D510). 없으면 code다 */
+  target?: TypeTarget
 }
 
 /** 커스텀 유형의 출처 (D450): 전역(<RELAY_HOME>/types/) / 레포(.relay/types/) */
 export type CustomTypeSource = 'global' | 'repo'
+
+/** 유형 정의의 출처 (D506): 앱에 든 기본 유형(skills/types/) / 전역 / 레포 */
+export type TypeSource = 'builtin' | CustomTypeSource
 
 /** Work를 만들 때 복사한 커스텀 유형 (D458). 단계 목록도 여기 두어 core가 파일 없이 파이프라인을 안다 */
 export interface WorkCustomType extends CustomTypeDef {

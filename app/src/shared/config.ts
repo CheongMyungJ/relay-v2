@@ -202,6 +202,9 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['session', '기본 세션', 'common'],
 ]
 
+/** 질문 방식 (5.6.1) */
+export const QUESTION_MODES: readonly QuestionMode[] = ['draft_first', 'confirm_each']
+
 /** 질문 방식의 화면 이름 (5.6.1) */
 export const QUESTION_MODE_LABEL: Readonly<Record<QuestionMode, string>> = {
   draft_first: '초안 우선',

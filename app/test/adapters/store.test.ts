@@ -8,17 +8,41 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   claudeVersion,
   deploySkill,
+  fillSlots,
   mergeSkill,
+  selectFlags,
   selectType,
   skillText,
   stripFrontMatter,
   taskFooter,
+  type TypeSource,
 } from '../../src/adapters/claude'
+import type { SkillName } from '../../src/shared/config'
 import { WORK_TYPES, type WorkType } from '../../src/shared/work'
 
 /** 공용 스킬을 조립하는 유형: 기본 다섯과 custom (D456) */
 const ASSEMBLY: readonly WorkType[] = [...WORK_TYPES, 'custom']
-import { TYPES, assemble, stripFrontMatter as assembleStrip } from '../../../skills/assemble.mjs'
+/** 유형 재료: 기본 유형은 앱의 것(undefined), 커스텀은 칸 파일이 없는 1판 유형이다 */
+const source = (type: WorkType): TypeSource | undefined =>
+  type === 'custom'
+    ? { dir: path.join(SKILLS, 'types', '.none'), flags: assemblyFlags({ type }) }
+    : undefined
+const outcome = (f: () => string) => {
+  try {
+    return { ok: f() }
+  } catch {
+    return { error: true }
+  }
+}
+import {
+  TYPES,
+  assemble,
+  assembleSkill,
+  fillSlots as assembleSlots,
+  selectFlags as assembleFlags,
+  stripFrontMatter as assembleStrip,
+} from '../../../skills/assemble.mjs'
+import { assemblyFlags } from '../../src/core/builtin-types'
 import {
   WorkFiles,
   loadConfig,
@@ -299,8 +323,9 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
     expect(first.file).toBe(path.join(taskDir, 'instructions.md'))
     // 스킬로 배포하지 않는다. 이전 버전이 남긴 relay 스킬만 지우고 사람이 둔 스킬은 그대로다 (D443)
     expect(fs.readdirSync(skills)).toEqual(['my-own'])
+    // 기본 유형의 단계 절차는 유형 폴더에 있고 공통 바탕을 붙이지 않는다 (D506)
     const expected = mergeSkill(
-      stripFrontMatter(read(path.join(SKILLS, 'fix', 'SKILL.md'))),
+      read(path.join(SKILLS, 'types', 'bugfix', 'fix.md')),
       read(path.join(SKILLS, '_common.md')),
     )
     // 끝에 이 task의 context.md와 task 디렉터리 경로를 붙인다: 첫 프롬프트는 압축이나 /clear로 사라질 수 있다 (D442)
@@ -354,7 +379,8 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
 
   it('머리글 떼기는 skills/assemble.mjs(check.mjs가 크기를 잴 때 씀)와 같다', () => {
     const cases = [
-      ...['fix', 'verify', 'work-start'].map((s) => read(path.join(SKILLS, s, 'SKILL.md'))),
+      ...['verify', 'work-start', 'custom'].map((s) => read(path.join(SKILLS, s, 'SKILL.md'))),
+      read(path.join(SKILLS, 'types', 'bugfix', 'fix.md')),
       '---\r\ndescription: x\r\n---\r\n\r\n# relay: x\r\n',
       '# 머리글 없음\n',
     ]
@@ -444,20 +470,8 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
 
   it('앱의 selectType과 check.mjs의 assemble은 같은 결과와 같은 오류를 낸다 (I68, PR #24 리뷰)', async () => {
     const samples = [
-      ...(await Promise.all(
-        [
-          'work-start',
-          'verify',
-          'pr-respond',
-          'fix',
-          'design',
-          'implement',
-          'refactor',
-          'spec',
-          'execute',
-          'custom',
-        ].map((s) => fsp.readFile(path.join(SKILLS, s, 'SKILL.md'), 'utf8')),
-      )),
+      // 유형 표시는 옛 Work의 verify에만 남는다 (D501, D508)
+      await fsp.readFile(path.join(SKILLS, 'verify', 'SKILL.md'), 'utf8'),
       await fsp.readFile(path.join(SKILLS, '_common.md'), 'utf8'),
       'a\r\n<!-- type: feature refactor -->\r\nb\r\n<!-- /type -->\r\nc',
       'x\n<!--type: bugfix-->\ny',
@@ -467,13 +481,6 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
     ]
     // 커스텀 유형은 모두 custom 구간을 함께 쓴다 (D456)
     expect(TYPES).toEqual([...WORK_TYPES, 'custom'])
-    const outcome = (f: () => string) => {
-      try {
-        return { ok: f() }
-      } catch {
-        return { error: true }
-      }
-    }
     for (const [i, text] of samples.entries()) {
       for (const type of ASSEMBLY) {
         expect(
@@ -484,7 +491,72 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
     }
   })
 
-  it('공용 스킬 셋을 유형마다 조립하면 다른 유형의 산출물과 표시가 남지 않는다 (D279)', async () => {
+  it('설정 구간을 고르는 앱의 selectFlags·fillSlots는 check.mjs의 것과 같은 결과와 같은 오류를 낸다 (D508)', async () => {
+    const samples = [
+      ...(await Promise.all(
+        [
+          'work-start/SKILL.md',
+          'pr-respond/SKILL.md',
+          'custom/SKILL.md',
+          '_final.md',
+          '_review.md',
+        ].map((f) => fsp.readFile(path.join(SKILLS, f), 'utf8')),
+      )),
+      'a\r\n<!-- if: code check-method -->\r\nb\r\n<!-- /if -->\r\nc',
+      'x\n<!--if: code-->\ny',
+      '<!-- if: perf -->\nx\n<!-- /if -->',
+      '<!-- if: code -->\nx',
+      'x\n<!-- /if -->',
+      'x\n<!--slot: finish-->\ny',
+    ]
+    const flagSets = [
+      ...WORK_TYPES.map((type) => assemblyFlags({ type })),
+      ['code', 'check-method', 'custom'],
+      ['document', 'no-check-method', 'custom'],
+    ]
+    for (const [i, text] of samples.entries()) {
+      for (const flags of flagSets) {
+        expect(
+          outcome(() => selectFlags(text, flags)),
+          `${i} ${flags.join(' ')}`,
+        ).toEqual(outcome(() => assembleFlags(text, flags)))
+      }
+    }
+    const slots = { finish: '- 판정', 'pr-template': '```markdown\n# PR\n```\n' }
+    for (const text of [
+      'a\n<!-- slot: finish -->\nb\n<!-- slot: pr-template -->',
+      'x\n<!-- slot: nope -->',
+    ]) {
+      expect(outcome(() => fillSlots(text, slots))).toEqual(
+        outcome(() => assembleSlots(text, slots)),
+      )
+    }
+    expect(fillSlots('a\n<!-- slot: finish -->\nb', {})).toBe('a\nb')
+  })
+
+  it('기본 유형의 조립은 check.mjs의 조립(assembleSkill)과 같다: 단계, intake, PR 대응, 마무리 (5.6.15)', async () => {
+    const steps: Record<string, readonly SkillName[]> = {
+      bugfix: ['fix'],
+      feature: ['design', 'implement'],
+      refactor: ['refactor'],
+      spec: ['spec'],
+      general: ['execute'],
+    }
+    for (const type of WORK_TYPES) {
+      for (const skill of ['work-start', 'pr-respond', 'verify', ...(steps[type] ?? [])] as const) {
+        expect(await skillText(SKILLS, skill, type), `${type} ${skill}`).toBe(
+          assembleSkill(skill, { type }),
+        )
+      }
+      const last = (steps[type] ?? []).at(-1)
+      if (!last) throw new Error(type)
+      expect(await skillText(SKILLS, last, type, undefined, true), `${type} 마무리`).toBe(
+        assembleSkill(last, { type, finishing: true }),
+      )
+    }
+  })
+
+  it('공용 스킬 셋을 유형마다 조립하면 다른 유형의 산출물과 표시가 남지 않는다 (D279, D508)', async () => {
     const own = {
       bugfix: 'fix.md',
       feature: 'design.md',
@@ -494,12 +566,12 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
     } as const
     for (const skill of ['work-start', 'verify', 'pr-respond'] as const) {
       for (const type of ASSEMBLY) {
-        const text = await skillText(SKILLS, skill, type)
-        expect(text, `${skill} ${type}`).not.toContain('<!-- type:')
-        expect(text, `${skill} ${type}`).not.toContain('<!-- /type -->')
-        if (skill === 'work-start') continue
+        const text = await skillText(SKILLS, skill, type, source(type))
+        expect(text, `${skill} ${type}`).not.toMatch(/<!-- \/?(type|if|slot)/)
+        // 옛 verify만 그 유형의 산출물을 이름으로 가리킨다. 다른 스킬은 단계 산출물을 일반 문구로 가리킨다
         for (const [other, file] of Object.entries(own)) {
-          if (other === type) expect(text, `${skill} ${type}`).toContain(`\`${file}\``)
+          if (skill === 'verify' && other === type)
+            expect(text, `${skill} ${type}`).toContain(`\`${file}\``)
           else expect(text, `${skill} ${type}`).not.toContain(`\`${file}\``)
         }
       }
@@ -508,12 +580,19 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
 
   it('설계 문서를 따르는 요청의 줄(D369, D370)은 모든 유형의 intake에, 그 Work의 규칙(D371)은 모든 스킬에 있다 (I107)', async () => {
     for (const type of ASSEMBLY) {
-      const intake = await skillText(SKILLS, 'work-start', type)
+      const intake = await skillText(SKILLS, 'work-start', type, source(type))
       expect(intake, type).toContain('write "`<path>`의 결정을 따른다" in `제약`')
       expect(intake, type).toContain('wait for the merge (`blocked`)')
     }
-    for (const skill of ['fix', 'design', 'implement', 'refactor', 'execute', 'verify'] as const) {
-      const text = await skillText(SKILLS, skill, 'bugfix')
+    for (const [skill, type] of [
+      ['fix', 'bugfix'],
+      ['design', 'feature'],
+      ['implement', 'feature'],
+      ['refactor', 'refactor'],
+      ['execute', 'general'],
+      ['verify', 'bugfix'],
+    ] as const) {
+      const text = await skillText(SKILLS, skill, type)
       expect(text, skill).toContain('## Works that follow a design document')
     }
   })

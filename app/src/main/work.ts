@@ -166,11 +166,13 @@ import {
   customStep,
   finishesWork,
   isPipelineNode,
+  isStepNode,
   nodeTitle,
   taskArtifacts,
   taskTitle,
   workType,
 } from '../core/pipeline'
+import { assemblyFlags, checkMethodOn, typeTarget } from '../core/builtin-types'
 import {
   CHECK_SCHEMA,
   FIND_SCHEMA,
@@ -461,7 +463,13 @@ import {
   type ReviewInput,
   type ReviewRecord,
 } from '../core/knowledge-review'
-import { claudeJson, findClaude, selectType, type CustomSource } from '../adapters/claude'
+import {
+  builtinTypeDir,
+  claudeJson,
+  findClaude,
+  selectFlags,
+  type TypeSource,
+} from '../adapters/claude'
 import {
   INJECTED_FILE,
   INJECT_LIMIT,
@@ -1119,6 +1127,8 @@ export class WorkRunner {
     return checkTask({
       node: task.node,
       type: workType(this.work),
+      checkMethod: checkMethodOn(this.work),
+      target: typeTarget(this.work),
       files,
       config: this.ctx.config(),
       formatVersion: task.format_version,
@@ -1433,9 +1443,9 @@ export class WorkRunner {
     const { env } = this.ctx
     const dir = this.files.taskDir(task)
     const brief = await this.reviewBrief(task, dir)
-    const guide = selectType(
+    const guide = selectFlags(
       await fsp.readFile(path.join(this.ctx.skills, REVIEW_GUIDE_FILE), 'utf8'),
-      workType(this.work),
+      assemblyFlags(this.work),
     )
     const engine = taskEngine(task)
     const bin = engine === 'codex' ? findCodex({ env }) : findClaude({ env })
@@ -1619,10 +1629,11 @@ export class WorkRunner {
       }
     }
     const intent = await this.files.readOwned('intent.md')
-    const points =
-      workType(this.work) === 'custom'
-        ? ((await readText(path.join(this.files.customType, VERIFY_NOTES_FILE))) ?? '')
-        : ''
+    // 유형의 리뷰 관점 (D507): 커스텀은 복사한 유형 폴더, 기본 유형은 앱의 skills/types/<유형>/의 verify.md
+    const type = workType(this.work)
+    const typeDir =
+      type === 'custom' ? this.files.customType : builtinTypeDir(this.ctx.skills, type)
+    const points = (await readText(path.join(typeDir, VERIFY_NOTES_FILE))) ?? ''
     return {
       type: workType(this.work),
       worktree: this.worktree,
@@ -1859,7 +1870,7 @@ export class WorkRunner {
         contextPath,
         skill,
         type: workType(this.work),
-        ...this.customSource(task),
+        ...this.typeSource(task),
         finishing: finishesWork(this.work, task),
       })
       const version = await driver.version(bin, env)
@@ -1986,19 +1997,26 @@ export class WorkRunner {
       contextPath: path.join(dir, CONTEXT_FILE),
       skill: NODE_INFO[task.node].skill,
       type: workType(this.work),
-      ...this.customSource(task),
+      ...this.typeSource(task),
       finishing: finishesWork(this.work, task),
     })
     return deployed.file
   }
 
-  /** 커스텀 Work의 절차 재료 (D452, D456): 복사한 유형 폴더와 커스텀 단계의 id. 커스텀 Work가 아니면 없다 */
-  private customSource(task: TaskRecord): { custom?: CustomSource } {
-    if (workType(this.work) !== 'custom') return {}
+  /**
+   * 이번 task의 유형 재료 (5.6.15, D452, D456, D506): 기본 유형은 앱의 skills/types/<유형>/, 커스텀은 복사한 유형 폴더다.
+   * 단계 task면 단계 id(기본 유형은 노드 이름)와, 커스텀 단계면 공통 바탕을 붙이는지(step_base)를 넣는다
+   */
+  private typeSource(task: TaskRecord): { typeSource: TypeSource } {
+    const type = workType(this.work)
+    const step = task.node === 'custom' ? task.step : isStepNode(task.node) ? task.node : undefined
+    const def = customStep(this.work, task)
     return {
-      custom: {
-        dir: this.files.customType,
-        ...(task.node === 'custom' && task.step ? { step: task.step } : {}),
+      typeSource: {
+        dir: type === 'custom' ? this.files.customType : builtinTypeDir(this.ctx.skills, type),
+        ...(step ? { step } : {}),
+        flags: assemblyFlags(this.work),
+        ...(def ? { stepBase: def.step_base !== false } : {}),
       },
     }
   }
@@ -4798,7 +4816,7 @@ export class WorkRunner {
         REVIEWABLE.includes(task.status)
       completion = {
         verdicts: verdicts(files[VERIFICATION_FILE] ?? ''),
-        revisit: revisitDecisions(workType(this.work), files[VERIFICATION_FILE] ?? ''),
+        revisit: revisitDecisions(typeTarget(this.work), files[VERIFICATION_FILE] ?? ''),
         diff: clip(workDiff),
         mode:
           stopped || (current && !approvalStops(this.work)) ? 'deliver' : current ? 'stop' : null,

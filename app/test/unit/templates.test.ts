@@ -3,12 +3,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ALL_NODES, NODE_INFO, PIPELINES } from '../../src/core/pipeline'
+import { ALL_NODES, NODE_INFO, PIPELINES, STEP_NODES } from '../../src/core/pipeline'
 import { checkIntentDraft, checkTask, isValid } from '../../src/core/validate'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 import { WORK_TYPES, type WorkType } from '../../src/shared/work'
-import { selectType } from '../../src/adapters/claude'
+import { selectFlags } from '../../src/adapters/claude'
+import { assemblyFlags } from '../../src/core/builtin-types'
 
 const SKILLS = path.resolve(__dirname, '../../../skills')
 const read = (p: string) => fs.readFileSync(path.join(SKILLS, p), 'utf8').replace(/\r\n/g, '\n')
@@ -34,18 +35,21 @@ const handoffTemplate = codeBlocks(read('_common.md'), 'yaml').find((b) => b.inc
 const filledHandoff = codeBlocks(read('_common.md'), 'yaml').find(
   (b) => b !== handoffTemplate && b.includes('status: awaiting_approval'),
 )
-/** 유형마다 조립한 work-start의 intent 초안 템플릿 (D279) */
+/** 유형마다 조립한 work-start의 intent 초안 템플릿 (D279, D508): 그 유형의 설정 구간을 고른다 */
 const draftTemplateOf = (type: WorkType) =>
-  codeBlocks(selectType(read('work-start/SKILL.md'), type), 'markdown').find((b) =>
-    b.startsWith('## 목표\n'),
+  codeBlocks(selectFlags(read('work-start/SKILL.md'), assemblyFlags({ type })), 'markdown').find(
+    (b) => b.startsWith('## 목표\n'),
   )
 const draftTemplate = draftTemplateOf('bugfix')
 
 describe('스킬 원본이 있다 (5.6.3)', () => {
-  it('노드마다 skills/<스킬>/SKILL.md가 있다. design, implement, refactor, execute를 포함한다 (D232, D258, D302)', () => {
+  it('노드마다 절차가 있다: 기본 유형의 단계는 skills/types/<유형>/<노드>.md, 나머지는 skills/<스킬>/SKILL.md (D232, D258, D302, D506)', () => {
     for (const n of [...ALL_NODES, 'respond' as const]) {
       const skill = NODE_INFO[n].skill
-      expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
+      if ((STEP_NODES as readonly string[]).includes(n)) {
+        const type = WORK_TYPES.find((t) => (PIPELINES[t] as readonly string[]).includes(n))
+        expect(fs.existsSync(path.join(SKILLS, 'types', type ?? '', `${n}.md`)), n).toBe(true)
+      } else expect(fs.existsSync(path.join(SKILLS, skill, 'SKILL.md')), skill).toBe(true)
     }
   })
 })

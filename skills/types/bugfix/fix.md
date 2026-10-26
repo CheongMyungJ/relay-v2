@@ -1,7 +1,3 @@
----
-description: relay fix step. Reproduces the bug, finds the root cause, fixes the code, commits, and writes it all up (fix.md).
----
-
 # relay: fix
 
 Reproduce the bug, find the cause, fix the code and commit. Write what you found and changed in `fix.md` in the task directory. This is the step that changes code.

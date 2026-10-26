@@ -1,0 +1,3 @@
+- Does the change match the cause in `fix.md`? Does it fix the cause, or only hide the symptom?
+- Do the tests really catch the fix?
+- Code that the reproduction steps use is not unused code.

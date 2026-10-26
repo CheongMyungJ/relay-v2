@@ -1,4 +1,4 @@
-// [어댑터] 커스텀 유형 폴더 (5.6.13, D449~D451, D458, D459)와 커스텀 Work의 절차 조립 (D452, D456)
+// [어댑터] 유형 폴더 (5.6.13, 5.6.15, D449~D451, D458, D459, D506~D514)와 유형의 절차 조립 (D452, D456, D507, D508)
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -7,12 +7,14 @@ import {
   CUSTOM_INTAKE_HEAD,
   CUSTOM_PROCEDURE_HEAD,
   CUSTOM_VERIFY_HEAD,
+  TYPES_DIR,
   deploySkill,
   mergeSkill,
   procedureText,
-  selectType,
+  selectFlags,
   skillText,
   stripFrontMatter,
+  type TypeSource,
 } from '../../src/adapters/claude'
 import { deployCodexSkill } from '../../src/adapters/codex'
 import {
@@ -20,6 +22,7 @@ import {
   deleteCustomType,
   findCustomType,
   globalTypesDir,
+  listBuiltinTypes,
   listGlobalTypes,
   listRepoTypes,
   mergeTypes,
@@ -29,7 +32,10 @@ import {
   repoTypesDir,
   saveCustomType,
   snapshotCustomType,
+  typeBaseFiles,
 } from '../../src/adapters/custom-types'
+import { assemblyFlags } from '../../src/core/builtin-types'
+import { parseCustomType } from '../../src/core/custom-type'
 import { SKILLS } from '../support/harness'
 
 let root: string
@@ -199,6 +205,8 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
       procedures: { survey: '찾는다', apply: '바꾼다' },
       intake: '지시',
       verify: '',
+      finish: '',
+      prTemplate: '',
     })
     const dir = path.join(types, 'survey-apply')
     expect(fs.readdirSync(dir).sort()).toEqual(['apply.md', 'intake.md', 'survey.md', 'type.json'])
@@ -214,6 +222,8 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
       procedures: { apply: '바꾼다' },
       intake: '',
       verify: '관점',
+      finish: '',
+      prTemplate: '',
     })
     expect(fs.readdirSync(dir).sort()).toEqual(['apply.md', 'keep.txt', 'type.json', 'verify.md'])
     await expect(
@@ -222,6 +232,8 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
         procedures: {},
         intake: '',
         verify: '',
+        finish: '',
+        prTemplate: '',
       }),
     ).rejects.toThrow('유형 이름이 없음')
     // id를 바꾸면 폴더를 옮긴다: 사람이 둔 파일이 남는다
@@ -230,6 +242,63 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
     expect(fs.existsSync(dir)).toBe(false)
     await deleteCustomType(types, 'survey-fix')
     expect(fs.existsSync(path.join(types, 'survey-fix'))).toBe(false)
+  })
+
+  it('2판 type.json에 유형 설정과 단계 설정을 쓰고, 마무리 판정 규칙과 PR 템플릿도 칸 파일로 쓴다 (D507, D509~D511)', async () => {
+    const types = path.join(root, 'types')
+    await saveCustomType(types, {
+      def: {
+        id: 'doc-check',
+        name: '문서 점검',
+        description: '',
+        request_hint: '점검할 문서를 적으세요',
+        branch_prefix: 'docs',
+        check_method: false,
+        target: 'document',
+        steps: [
+          {
+            id: 'review-doc',
+            title: '점검',
+            sections: ['본 곳', '고친 곳'],
+            lead: ['고친 곳'],
+            question_mode: 'confirm_each',
+            auto_approve: false,
+            step_base: false,
+          },
+        ],
+      },
+      procedures: { 'review-doc': '문서를 읽고 고친다' },
+      intake: '',
+      verify: '',
+      finish: '- 고친 곳마다 읽어서 판정한다',
+      prTemplate: '```markdown\n# PR 제목\n\n## 고친 곳\n```',
+    })
+    const dir = path.join(types, 'doc-check')
+    expect(fs.readdirSync(dir).sort()).toEqual([
+      'finish.md',
+      'pr-template.md',
+      'review-doc.md',
+      'type.json',
+    ])
+    expect(JSON.parse(read(path.join(dir, 'type.json')))).toMatchObject({
+      schema_version: 2,
+      check_method: false,
+      target: 'document',
+      steps: [{ lead: ['고친 곳'], question_mode: 'confirm_each', step_base: false }],
+    })
+    const files = await readCustomTypeFiles(dir)
+    expect(files?.finish).toBe('- 고친 곳마다 읽어서 판정한다')
+    expect(files?.prTemplate).toContain('## 고친 곳')
+    // 복사본(Work의 type/)에도 칸 파일이 든다
+    const dest = path.join(root, 'w', 'type')
+    const copied = await snapshotCustomType({ dir, source: 'global' }, dest)
+    expect(fs.readdirSync(dest).sort()).toEqual([
+      'finish.md',
+      'pr-template.md',
+      'review-doc.md',
+      'type.json',
+    ])
+    expect(copied).toMatchObject({ check_method: false, target: 'document', branch_prefix: 'docs' })
   })
 
   it('[레포로 복사]는 .relay/types/<id>/에 쓰고, 이미 있으면 덮어쓰지 않는다', async () => {
@@ -245,8 +314,14 @@ describe('[어댑터] 유형 편집과 레포로 복사 (D450, D459)', () => {
   })
 })
 
-describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456)', () => {
+describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456, D507, D508)', () => {
   const typeDir = () => path.join(root, 'work', 'type')
+  /** 1판 커스텀 유형의 재료: 확인 방법을 켠 코드 유형 */
+  const src = (o: Partial<TypeSource> = {}): TypeSource => ({
+    dir: typeDir(),
+    flags: assemblyFlags({ type: 'custom' }),
+    ...o,
+  })
 
   beforeEach(() => {
     writeType(typeDir(), {
@@ -265,14 +340,14 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456)', () => {
       contextPath: path.join(taskDir, 'context.md'),
       skill: 'custom',
       type: 'custom',
-      custom: { dir: typeDir(), step: 'survey' },
+      typeSource: src({ step: 'survey' }),
     })
     const text = read(deployed.file)
-    const base = selectType(
+    const base = selectFlags(
       stripFrontMatter(read(path.join(SKILLS, 'custom', 'SKILL.md'))),
-      'custom',
+      assemblyFlags({ type: 'custom' }),
     )
-    const common = selectType(read(path.join(SKILLS, '_common.md')), 'custom')
+    const common = read(path.join(SKILLS, '_common.md'))
     expect(text.startsWith('# relay: custom step')).toBe(true)
     expect(text).toContain(
       mergeSkill(
@@ -280,34 +355,85 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456)', () => {
         common,
       ),
     )
+    expect(text).toContain('**Self-check:**')
     expect(text.indexOf(CUSTOM_PROCEDURE_HEAD)).toBeLessThan(text.indexOf('## This task'))
   })
 
-  it('절차 파일이 없거나 단계 id가 없으면 배포하지 않는다', async () => {
-    await expect(
-      skillText(SKILLS, 'custom', 'custom', { dir: typeDir(), step: 'gone' }),
-    ).rejects.toThrow('gone.md')
-    await expect(skillText(SKILLS, 'custom', 'custom', { dir: typeDir() })).rejects.toThrow(
-      '단계 id',
+  it('확인 방법을 끈 유형의 공통 바탕에는 자체 확인 규칙이 없고, 공통 바탕을 끈 단계는 절차만이다 (D508, D509)', async () => {
+    const off = await skillText(
+      SKILLS,
+      'custom',
+      'custom',
+      src({ step: 'survey', flags: ['code', 'no-check-method', 'custom'] }),
     )
+    expect(off).not.toContain('**Self-check:**')
+    expect(off).toContain(CUSTOM_PROCEDURE_HEAD)
+    const bare = await skillText(
+      SKILLS,
+      'custom',
+      'custom',
+      src({ step: 'survey', stepBase: false }),
+    )
+    expect(bare.startsWith('바꿀 곳을 모두 찾는다.')).toBe(true)
+    expect(bare).not.toContain(CUSTOM_PROCEDURE_HEAD)
   })
 
-  it('intake와 verify는 커스텀 구간에 유형의 지시를 끝에 붙인다', async () => {
-    const intake = await skillText(SKILLS, 'work-start', 'custom', { dir: typeDir() })
+  it('절차 파일이 없거나 단계 id가 없으면 배포하지 않는다', async () => {
+    await expect(skillText(SKILLS, 'custom', 'custom', src({ step: 'gone' }))).rejects.toThrow(
+      'gone.md',
+    )
+    await expect(skillText(SKILLS, 'custom', 'custom', src())).rejects.toThrow('단계 id')
+    await expect(skillText(SKILLS, 'custom', 'custom')).rejects.toThrow('유형 재료')
+  })
+
+  it('intake는 유형의 지시를 끝에 붙이고, 옛 Work의 verify는 커스텀 구간에 리뷰 관점을 붙인다', async () => {
+    const intake = await skillText(SKILLS, 'work-start', 'custom', src())
     expect(intake).toContain(`${CUSTOM_INTAKE_HEAD}\n\n대상 표를 제약에 적는다.\n`)
     expect(intake).toContain('picked a Work type their team defined')
     expect(intake).not.toContain('`execution.md`')
-    const verify = await skillText(SKILLS, 'verify', 'custom', { dir: typeDir() })
+    const verify = await skillText(SKILLS, 'verify', 'custom', src())
     expect(verify).toContain(`${CUSTOM_VERIFY_HEAD}\n\n바꾼 표마다 되돌리기를 본다.\n`)
     expect(verify).toContain('artifacts of the custom steps (`<step id>.md`')
-    // 커스텀 Work가 아니면 붙이지 않는다
-    const general = await skillText(SKILLS, 'verify', 'general', { dir: typeDir() })
+    // 기본 유형의 옛 verify에는 붙이지 않는다
+    const general = await skillText(SKILLS, 'verify', 'general', src())
     expect(general).not.toContain(`${CUSTOM_VERIFY_HEAD}\n\n`)
     // 선택 파일이 없으면 제목도 없다
     fs.rmSync(path.join(typeDir(), 'verify.md'))
-    expect(await skillText(SKILLS, 'verify', 'custom', { dir: typeDir() })).not.toContain(
+    expect(await skillText(SKILLS, 'verify', 'custom', src())).not.toContain(
       `${CUSTOM_VERIFY_HEAD}\n\n`,
     )
+  })
+
+  it('마무리 단계는 유형의 판정 규칙과 PR 템플릿을 칸 자리에 넣고, PR 템플릿이 없으면 일반 템플릿이다 (D507)', async () => {
+    const plain = await skillText(SKILLS, 'custom', 'custom', src({ step: 'apply' }), true)
+    expect(plain).toContain('## 주요 결정')
+    expect(plain).not.toContain('<!-- slot')
+    fs.writeFileSync(path.join(typeDir(), 'finish.md'), '- **표마다:** 되돌린 표를 다시 연다\n')
+    fs.writeFileSync(
+      path.join(typeDir(), 'pr-template.md'),
+      '```markdown\n# PR 제목\n\n## 바꾼 표\n```\n',
+    )
+    const filled = await skillText(SKILLS, 'custom', 'custom', src({ step: 'apply' }), true)
+    expect(filled).toContain('- **표마다:** 되돌린 표를 다시 연다\n')
+    expect(filled.indexOf('되돌린 표를 다시 연다')).toBeLessThan(
+      filled.indexOf('### Finishing decisions'),
+    )
+    expect(filled).toContain('## 바꾼 표')
+    expect(filled).not.toContain('## 주요 결정\n')
+  })
+
+  it('문서 대상 유형의 마무리는 문서 규칙과 문서 밖 파일 변경 절이다 (D510)', async () => {
+    const doc = await skillText(
+      SKILLS,
+      'custom',
+      'custom',
+      src({ step: 'apply', flags: ['document', 'no-check-method', 'custom'] }),
+      true,
+    )
+    expect(doc).toContain('change the target document only for the findings the human picked')
+    expect(doc).toContain('## 문서 밖 파일 변경')
+    expect(doc).not.toContain('## 나중에 정리할 곳')
+    expect(doc).not.toContain('`확인: 사람` items:')
   })
 
   it('Codex 배포본도 같은 절차를 쓴다 (D461)', async () => {
@@ -319,15 +445,52 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456)', () => {
       contextPath: path.join(taskDir, 'context.md'),
       skill: 'custom',
       type: 'custom',
-      custom: { dir: typeDir(), step: 'apply' },
+      typeSource: src({ step: 'apply' }),
     })
     expect(read(deployed.file)).toContain(`${CUSTOM_PROCEDURE_HEAD}\n\n조사한 대로 바꾼다.\n`)
     expect(read(deployed.file)).toContain('name: relay-custom')
   })
 
-  it('[새 유형]의 시작점은 머리글을 뗀 기존 단계 절차다 (D448)', async () => {
-    const text = await procedureText(SKILLS, 'execute')
+  it('[단계 더하기]의 기반 단계 절차는 기본 유형 폴더의 그 단계 절차다 (D448, D512)', async () => {
+    const text = await procedureText(SKILLS, 'general', 'execute')
     expect(text.startsWith('# relay: execute')).toBe(true)
     expect(text).not.toContain('description:')
+    await expect(procedureText(SKILLS, 'general', 'fix')).rejects.toThrow('fix')
+  })
+})
+
+describe('[어댑터] 기본 유형 폴더 (D506, D512)', () => {
+  it('기본 유형 다섯을 읽고, 모두 형식에 맞다', async () => {
+    const types = await listBuiltinTypes(path.join(SKILLS, TYPES_DIR))
+    expect(types.map((t) => [t.id, t.source, t.errors])).toEqual([
+      ['bugfix', 'builtin', []],
+      ['feature', 'builtin', []],
+      ['refactor', 'builtin', []],
+      ['spec', 'builtin', []],
+      ['general', 'builtin', []],
+    ])
+  })
+
+  it('베이스로 쓰면 모든 칸을 채우고, 산출물 이름을 커스텀 단계의 이름으로 바꾼다', async () => {
+    const bugfix = await typeBaseFiles(path.join(SKILLS, TYPES_DIR, 'bugfix'), 'builtin')
+    expect(bugfix?.def.steps.map((s) => [s.id, s.step_base])).toEqual([['fix', false]])
+    expect(bugfix?.intake).toContain('재현 절차가 더 이상 실패하지 않는다')
+    expect(bugfix?.verify).toContain('`fix.md`')
+    expect(bugfix?.finish).toContain('Reproduction steps')
+    expect(bugfix?.prTemplate).toContain('## 원인')
+    const general = await typeBaseFiles(path.join(SKILLS, TYPES_DIR, 'general'), 'builtin')
+    expect(general?.procedures['execute']).toContain('`execute.md`')
+    expect(general?.procedures['execute']).not.toContain('`execution.md`')
+    expect(general?.verify).toContain('`execute.md`')
+    // 베이스로 고친 정의는 커스텀 유형의 검사를 통과한다
+    if (!general) throw new Error('읽지 못함')
+    const saved = path.join(root, 'types')
+    await saveCustomType(saved, { ...general, def: { ...general.def, id: 'my-general' } })
+    const again = await readCustomTypeFiles(path.join(saved, 'my-general'))
+    expect(again?.def.check_method).toBe(true)
+    expect(again?.procedures['execute']).toBe(general.procedures['execute'])
+    expect(
+      parseCustomType('my-general', read(path.join(saved, 'my-general', 'type.json'))).ok,
+    ).toBe(true)
   })
 })

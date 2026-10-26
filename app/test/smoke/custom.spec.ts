@@ -1,4 +1,5 @@
-// [스모크] 커스텀 유형 (M30, D459, D460): 업무 유형 화면에서 전역 유형을 만들면 새 Work 대화상자의 기본 다섯 뒤에 보이고,
+// [스모크] 커스텀 유형 (M30, M39, D459, D460, D512, D513): 업무 유형 화면에서 기반 단계로 단계를 더해 전역 유형을 만들고
+// (산출물 참조 경고), 기본 유형을 베이스로 고르면 칸이 모두 채워진다. 만든 유형은 새 Work 대화상자의 기본 다섯 뒤에 보이고,
 // 고르면 설명과 단계 목록이 보인다. 시작해 의도를 승인하면 첫 커스텀 단계가 그 이름의 탭으로 돈다. 첫 단계는 유형에서
 // 자동 승인을 켜 두어 승인 화면에 카운트다운과 [취소]가 보이고(4.3, D83, D457), [취소]하면 까닭이 보이며 사람이 [승인]하면
 // 마지막 단계(적용, 시작만 하고 기다린다)로 간다. 마지막 단계는 Work를 마무리해 단계 줄에 리뷰와 검증이 없다 (D493).
@@ -97,7 +98,7 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   // 업무 유형 화면: 새 유형을 만든다 (D459)
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
   await win.getByRole('button', { name: '업무 유형…' }).click()
-  await win.getByRole('button', { name: '새 유형' }).click()
+  await win.getByRole('button', { name: '새 유형', exact: true }).click()
   await win.getByLabel('유형 id').fill('survey-apply')
   await win.getByLabel('유형 이름').fill('조사 후 적용')
   await win.getByLabel('유형 설명').fill('먼저 조사하고 그대로 적용하는 일')
@@ -105,9 +106,12 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await win.getByLabel('단계 1 이름').fill('조사')
   await win.getByLabel('단계 1 절차').fill('바꿀 곳을 모두 찾는다.')
   await win.getByLabel('단계 1 자동 승인').check()
-  await win.getByLabel('시작점').selectOption('execute')
+  // 기반 단계를 고르면 그 단계의 절차와 산출물의 절이 채워진다 (D512)
+  await win.getByLabel('기반 단계').selectOption('general:execute')
   await win.getByRole('button', { name: '단계 더하기' }).click()
   await expect(win.getByLabel('단계 2 절차')).toHaveValue(/^# relay: execute/)
+  await expect(win.getByLabel('단계 2 절', { exact: true })).toHaveValue(/^계획\n변경 요약/)
+  await expect(win.getByLabel('단계 2 공통 바탕')).not.toBeChecked()
   await win.getByLabel('단계 2 id').fill('apply')
   await win.getByLabel('단계 2 이름').fill('적용')
   await win.screenshot({ path: 'test-results/custom-editor.png' })
@@ -115,11 +119,26 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   const row = win.getByRole('listitem', { name: '유형 survey-apply' })
   await expect(row).toContainText('단계: 의도 정리 → 조사 → 적용')
   await expect(row).not.toContainText('리뷰와 검증')
+  // 단계 id를 바꿔 절차가 가리키는 산출물(execute.md)이 없으면 저장하고 경고한다 (D513)
+  await expect(win.getByLabel('산출물 참조 경고')).toContainText('`execute.md`')
   expect(fs.readdirSync(path.join(root, 'home', 'types', 'survey-apply')).sort()).toEqual([
     'apply.md',
     'survey.md',
     'type.json',
   ])
+  // 베이스로 기본 유형을 고르면 단계와 유형 단위 칸이 모두 채워진다 (D512)
+  await expect(win.getByRole('listitem', { name: '유형 bugfix' })).toContainText('버그 수정')
+  await win.getByLabel('새 유형의 베이스').selectOption({ label: '버그 수정 (기본 유형)' })
+  await win.getByRole('button', { name: '새 유형', exact: true }).click()
+  await expect(win.getByLabel('유형 id')).toHaveValue('')
+  await expect(win.getByLabel('단계 1 id')).toHaveValue('fix')
+  await expect(win.getByLabel('intake 지시')).toHaveValue(/재현 절차가 더 이상 실패하지 않는다/)
+  await expect(win.getByLabel('리뷰 관점')).toHaveValue(/`fix\.md`/)
+  await expect(win.getByLabel('마무리 판정 규칙')).toHaveValue(/Reproduction steps/)
+  await expect(win.getByLabel('PR 템플릿')).toHaveValue(/## 원인/)
+  await expect(win.getByLabel('완료조건 확인 방법')).not.toBeChecked()
+  await win.screenshot({ path: 'test-results/custom-base.png' })
+  await win.getByRole('button', { name: '취소' }).click()
   await win.getByRole('button', { name: '닫기' }).click()
 
   // 새 Work: 기본 다섯 뒤에 커스텀 유형이 보이고, 고르면 설명과 단계가 보인다 (D460)

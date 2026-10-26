@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   WorkState,
   WorkStatus,
+  TypeTarget,
   WorkType,
 } from '../shared/work'
 import { badge, holdNeedsNotice, holdText } from './approval'
@@ -575,13 +576,17 @@ const LEAD: Partial<
 export function stageLead(
   node: TaskNode,
   files: Readonly<Record<string, string>>,
-  step?: { id: string; title: string; sections: readonly string[] },
+  step?: { id: string; title: string; sections: readonly string[]; lead?: readonly string[] },
   finishing = false,
 ): StageLead | null {
-  // 커스텀 단계는 산출물 <단계 id>.md의 정의한 절이다 (D453)
+  // 커스텀 단계는 산출물 <단계 id>.md의 정의한 절이다 (D453). 정의가 [요약]에 보일 절을 정했으면 그 절만이다 (D511)
   const lead =
     node === 'custom' && step
-      ? { file: `${step.id}.md`, title: step.title, sections: [...customSections(step)] }
+      ? {
+          file: `${step.id}.md`,
+          title: step.title,
+          sections: step.lead?.length ? [...step.lead] : [...customSections(step)],
+        }
       : LEAD[node]
   const text = lead ? files[lead.file] : undefined
   const own =
@@ -651,11 +656,11 @@ const NONE = /^[-*\s]*[("“]?없음(?![가-힣])/
 const HINT = /^\(.*없으면.*\)$/
 
 /**
- * Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106): 설계 Work의 verification.md `## 다시 볼 결정` 본문.
- * 템플릿 안내 줄은 빼고 본다. 다른 유형이거나, 절이 없거나, 남은 줄이 없거나 모두 "없음"이면 null이다
+ * Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106): 문서를 다루는 유형(설계, D510)의 verification.md `## 다시 볼
+ * 결정` 본문. 템플릿 안내 줄은 빼고 본다. 코드 유형이거나, 절이 없거나, 남은 줄이 없거나 모두 "없음"이면 null이다
  */
-export function revisitDecisions(type: WorkType, verification: string): string | null {
-  if (type !== 'spec') return null
+export function revisitDecisions(target: TypeTarget, verification: string): string | null {
+  if (target !== 'document') return null
   const lines = (sectionText(verification, REVISIT_SECTION) ?? '')
     .split('\n')
     .filter((l) => l.trim() && !HINT.test(l.trim()))

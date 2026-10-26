@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "name": "설계",
+  "description": "큰 일을 만들기 전에 설계만 정해 레포의 설계 문서에 쓰는 일",
+  "request_hint": "무엇을 설계할지, 정해야 할 것, 설계 문서를 둘 곳이나 고칠 문서를 적어 주세요",
+  "branch_prefix": "spec",
+  "check_method": false,
+  "target": "document",
+  "steps": [
+    {
+      "id": "spec",
+      "title": "설계 문답",
+      "sections": [
+        "주제 목록",
+        "문답 기록",
+        "확인한 것",
+        "문서 변경"
+      ],
+      "lead": [
+        "주제 목록"
+      ],
+      "question_mode": null,
+      "auto_approve": false,
+      "step_base": false
+    }
+  ]
+}

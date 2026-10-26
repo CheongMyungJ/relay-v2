@@ -19,10 +19,10 @@ There is no maximum or minimum number of candidates. Do not make up candidates t
 ## What to review
 
 - If the intent's `제약` says to follow a design document ("`<path>`의 결정을 따른다"): does the change match its decisions? Is every decision the change departs from also changed in that document, with its history and the human's decision?
-<!-- type: bugfix feature refactor general custom -->
+<!-- if: code -->
 - Does the change fit the intent's `목표` and `비목표`?
-<!-- /type -->
-<!-- type: spec -->
+<!-- /if -->
+<!-- if: document -->
 - Review the target document, not code: its consistency and grounds. Do not judge whether a decision is good: a decision with a better alternative or a missed risk is not a candidate (the writing session lists those apart).
 - Contradictions inside the document, and mismatches between the decision table and the body.
 - Every statement about the current code: read the code and check them one by one.
@@ -30,48 +30,23 @@ There is no maximum or minimum number of candidates. Do not make up candidates t
 - "<무엇>을 정한다" items of the intent that the document misses.
 - Places so vague that whoever builds it would have to decide again.
 - Do the human-decision marks match the human decisions recorded in the artifacts?
-<!-- /type -->
-<!-- type: bugfix -->
-- Does the change match the cause in `fix.md`? Does it fix the cause, or only hide the symptom?
-<!-- /type -->
-<!-- type: feature -->
-- Does the implementation fit the user scenarios, requirements and approach in `design.md`? Is `계획과 달라진 점` in `implement.md` reasonable? Do not judge requirements added in the design or non-functional requirements: write a mismatch as a candidate.
-- Does the change sit where `구조 맞춤` in `design.md` says?
-- If something goes away: is it all gone? Look for references left, dead code, and config or docs no longer used.
-<!-- /type -->
-<!-- type: refactor -->
-- Did any logic change in the diff (outside the differences the human accepted in `refactor.md`)? A behavior change the human did not accept is a 차단 candidate. Are the structural goals met? Did the scope grow beyond the plan?
-<!-- /type -->
-<!-- type: general -->
-- Does the change fit the plan in `execution.md`? Did the scope grow beyond it?
-- Does each 완료조건's check method (`— 확인: …`) really check it?
-<!-- /type -->
-<!-- type: custom -->
+<!-- /if -->
+<!-- if: custom -->
 - Does the change fit what each custom step's artifact says it did? Did the scope grow beyond it?
+<!-- /if -->
+<!-- if: check-method -->
 - Does each 완료조건's check method (`— 확인: …`) really check it?
-- **The type's review points:** if relay gives you `## This Work type's review points` below, review those points too. They come from whoever defined the type.
-<!-- /type -->
-<!-- type: bugfix feature refactor general custom -->
+<!-- /if -->
+- **The type's review points:** if relay gives you `## This Work type's review points` below, review those points too. They come from the Work type's definition.
+<!-- if: code -->
 - **Line by line:** read every hunk of the diff, then the whole function around it: a defect in an unchanged line of a touched function is in scope too. For each line ask what input, state, timing or platform makes it wrong. Look for missing cases and edge conditions, inverted or wrong conditions, off-by-one, a value used where it can be missing, a missing `await`, zero or empty treated as missing, a copy-pasted wrong variable, an error swallowed in a catch, an unescaped pattern.
 - **Removed behavior:** for every line the diff deletes or replaces, name what it enforced, then find where the new code does it again. If nowhere, it is a candidate: a removed guard, a dropped error path, a narrowed validation, a deleted test that covered a real case.
 - **Callers:** for each function the diff changes, find its callers and check whether the change breaks one: a new precondition, a changed return shape, a new error, an order dependency. Check its callees too: does another change in this diff make a call unsafe?
-<!-- /type -->
-<!-- type: bugfix -->
-- Do the tests really catch the fix?
-<!-- /type -->
-<!-- type: feature -->
-- Do the new behavior tests really catch the behavior?
-<!-- /type -->
-<!-- type: refactor -->
-- Do the safety-net tests really catch the behavior of every changed place?
-<!-- /type -->
-<!-- type: general -->
-- Does every change in code behavior have a test that catches it? If not, is the reason in `execution.md` sound?
-<!-- /type -->
-<!-- type: custom -->
+<!-- /if -->
+<!-- if: custom -->
 - Does every change in code behavior have a test that catches it? If not, is the reason in the custom step's artifact sound?
-<!-- /type -->
-<!-- type: bugfix feature refactor general custom -->
+<!-- /if -->
+<!-- if: code -->
 - **Conventions:** the repo's conventions and readability. Read the instruction files that govern the changed code (such as `CLAUDE.md`, `AGENTS.md` or `CONTRIBUTING.md` at the repo root and in the folders above a changed file). Flag a broken convention only when you can quote the rule and the line that breaks it, and name the file of the rule. No style preferences.
 - Fit with the existing structure: the layer or module each change sits in, dependency directions, the patterns the code around it follows.
 - **Reuse** (Duplication): code that repeats a function or abstraction the repo already has. Search the shared modules and the files next to the change, and name the one to call instead.
@@ -81,10 +56,7 @@ There is no maximum or minimum number of candidates. Do not make up candidates t
 - Maintainability: complexity that grows (deep nesting, long functions, more flags), and tests tied to internal details that will break on any change.
 - A rule in the team knowledge (`kind: rule`, in `context.md`) that the change breaks is a 차단 candidate. For entries listed by title only, open the ones that touch the changed code to see whether they are rules.
 - Changes that are not needed.
-<!-- /type -->
-<!-- type: bugfix -->
-- Code that the reproduction steps use is not unused code.
-<!-- /type -->
+<!-- /if -->
 
 # Checker
 

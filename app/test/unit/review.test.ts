@@ -984,13 +984,13 @@ describe('Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106)
       '',
     ].join('\n')
 
-  it('설계 Work면 verification.md의 다시 볼 결정 본문이다', () => {
+  it('문서를 다루는 유형(설계 Work)이면 verification.md의 다시 볼 결정 본문이다', () => {
     const text = '- 결정 2: 오류를 내는 대안 — 입력 실수를 놓친다\n- 결정 3: 이름'
-    expect(revisitDecisions('spec', verification(text))).toBe(text)
+    expect(revisitDecisions('document', verification(text))).toBe(text)
     // 남은 템플릿 안내 줄은 빼고 보인다
-    expect(revisitDecisions('spec', verification(`${text}\n(없으면 "없음")`))).toBe(text)
+    expect(revisitDecisions('document', verification(`${text}\n(없으면 "없음")`))).toBe(text)
     // "없음"으로 시작하는 낱말이 아닌 줄은 결정이다
-    expect(revisitDecisions('spec', verification('- 없음표시 규칙: 다시 볼 만함'))).toBe(
+    expect(revisitDecisions('document', verification('- 없음표시 규칙: 다시 볼 만함'))).toBe(
       '- 없음표시 규칙: 다시 볼 만함',
     )
   })
@@ -1007,15 +1007,13 @@ describe('Work 완료 화면의 다시 볼 결정 (시나리오 7-3, D362, I106)
       '- 없음\n(없으면 "없음")',
       '(없으면 "없음")',
     ]) {
-      expect(revisitDecisions('spec', verification(none)), none).toBeNull()
+      expect(revisitDecisions('document', verification(none)), none).toBeNull()
     }
-    expect(revisitDecisions('spec', verification(''))).toBeNull()
-    expect(revisitDecisions('spec', '## 남은 위험\n- 없음\n')).toBeNull()
+    expect(revisitDecisions('document', verification(''))).toBeNull()
+    expect(revisitDecisions('document', '## 남은 위험\n- 없음\n')).toBeNull()
   })
 
-  it('설계 Work가 아니면 절이 있어도 null이다', () => {
-    for (const type of ['bugfix', 'feature', 'refactor', 'general'] as const) {
-      expect(revisitDecisions(type, verification('- 결정 2'))).toBeNull()
-    }
+  it('문서를 다루는 유형(설계, D510)이 아니면 절이 있어도 null이다', () => {
+    expect(revisitDecisions('code', verification('- 결정 2'))).toBeNull()
   })
 })
