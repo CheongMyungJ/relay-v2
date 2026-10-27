@@ -6,7 +6,8 @@
 // 표시처럼 보이지만 모양이 다른 줄(`<!--type: x-->`, 대문자, 끝 공백 등), 모르는 유형, 겹침, 짝 없음은 오류다.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'custom'];
 
@@ -107,7 +108,8 @@ export function flagsOf(type, def) {
   return [d.target ?? 'code', (d.check_method ?? true) ? 'check-method' : 'no-check-method', type === 'custom' ? 'custom' : 'builtin'];
 }
 
-const skillsDir = new URL('.', import.meta.url).pathname;
+// fileURLToPath: Windows의 드라이브 문자와 경로의 공백·한글을 바르게 읽는다
+const skillsDir = dirname(fileURLToPath(import.meta.url));
 const readOpt = (p) => (existsSync(p) ? lf(readFileSync(p, 'utf8')) : null);
 export function readType(type, root = skillsDir) {
   return JSON.parse(readFileSync(join(root, 'types', type, 'type.json'), 'utf8'));
@@ -148,7 +150,8 @@ export function assembleSkill(skill, o, root = skillsDir) {
   if (!o.finishing) return merge(own, common);
   const final = fillSlots(selectFlags(readFileSync(join(root, '_final.md'), 'utf8'), flags), {
     finish: readOpt(join(typeDir, 'finish.md')) ?? '',
-    'pr-template': readOpt(join(typeDir, 'pr-template.md')) ?? readFileSync(join(root, '_pr-template.md'), 'utf8'),
+    // 비었거나 빈 줄뿐인 pr-template.md도 없는 것으로 보고 일반 템플릿을 쓴다 (D507)
+    'pr-template': readOpt(join(typeDir, 'pr-template.md'))?.trim() || readFileSync(join(root, '_pr-template.md'), 'utf8'),
   });
   return merge(merge(own, final), common);
 }

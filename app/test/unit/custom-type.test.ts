@@ -173,7 +173,15 @@ describe('type.json 검사 (D449, D453, D457)', () => {
     expect(stepIdError('a--b')).toMatch('영어 소문자')
     expect(stepIdError('survey')).toBeNull()
     // 마지막 단계의 task 디렉터리에 놓이는 파일과 유형 폴더의 칸 파일은 막고, 기본 유형의 단계 이름은 쓸 수 있다 (D514)
-    for (const id of ['pr', 'verification', 'independent-review', 'finish', 'pr-template'])
+    for (const id of [
+      'pr',
+      'verification',
+      'independent-review',
+      'finish',
+      'pr-template',
+      'custom',
+      'respond',
+    ])
       expect(stepIdError(id), id).toMatch('앱이 쓰는 이름')
     for (const id of ['fix', 'design', 'implement', 'refactor', 'spec', 'execute'])
       expect(stepIdError(id), id).toBeNull()
@@ -282,6 +290,31 @@ describe('type.json 검사 (D449, D453, D457)', () => {
       'steps[0].question_mode: draft_first | confirm_each 또는 null이어야 함',
       'steps[0].step_base: true/false여야 함',
     ])
+  })
+
+  it('sections를 비운 단계의 [요약] 절은 기본 두 절에서 고른다 (D453, D511)', () => {
+    const r = parseCustomType(
+      'x',
+      JSON.stringify({
+        name: 'X',
+        steps: [{ id: 'a', title: 'A', lead: ['완료조건별 자체 확인'] }],
+      }),
+    )
+    expect(r).toMatchObject({ ok: true, def: { steps: [{ lead: ['완료조건별 자체 확인'] }] } })
+  })
+
+  it('2판 설정을 쓰지 않는 정의는 1판으로 써서 옛 앱도 읽는다 (D506)', () => {
+    const r = parseCustomType('survey-apply', TYPE_JSON)
+    if (!r.ok) throw new Error('읽지 못함')
+    expect(JSON.parse(serializeCustomType(r.def))).toMatchObject({ schema_version: 1 })
+    expect(JSON.parse(serializeCustomType({ ...r.def, check_method: false }))).toMatchObject({
+      schema_version: 2,
+    })
+    const step = r.def.steps[0]
+    if (!step) throw new Error('단계 없음')
+    expect(
+      JSON.parse(serializeCustomType({ ...r.def, steps: [{ ...step, step_base: false }] })),
+    ).toMatchObject({ schema_version: 2 })
   })
 
   it('기본 유형의 type.json은 기본 유형 이름이어야 한다 (D506)', () => {

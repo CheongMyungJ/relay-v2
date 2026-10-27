@@ -22,7 +22,7 @@ import {
 } from '../adapters/git'
 import { listFiles, readTextFile, relativeFile, writeTextFile } from '../adapters/files'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
-import { TYPES_DIR, builtinTypeDir, procedureText } from '../adapters/claude'
+import { TYPES_DIR, builtinTypeDir } from '../adapters/claude'
 import {
   copyTypeToRepo,
   customTypeView,
@@ -1094,9 +1094,8 @@ export class Relay {
     if (!(WORK_TYPES as readonly string[]).includes(type)) return null
     const files = await readCustomTypeFiles(builtinTypeDir(this.o.skills, type), 'builtin')
     const step = files?.def.steps.find((s) => s.id === stepId)
-    if (!step) return null
-    const procedure = await procedureText(this.o.skills, type, stepId).catch(() => null)
-    if (procedure === null) return null
+    if (!files || !step) return null
+    const procedure = `${(files.procedures[stepId] ?? '').trim()}\n`
     return { step, procedure: renameBuiltinArtifacts(procedure, [stepId]) }
   }
 

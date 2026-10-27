@@ -2,6 +2,7 @@
 // 오류 목록을 돌려준다. 기본 유형(skills/types/)과 커스텀 유형이 같은 형식이다. 파일 읽기와 전역·레포 합치기는
 // adapters/custom-types가 한다
 import { QUESTION_MODES, type QuestionMode } from '../shared/config'
+import { CUSTOM_DEFAULT_SECTIONS } from './pipeline'
 import { WORK_TYPES, type CustomStep, type CustomTypeDef, type TypeTarget } from '../shared/work'
 
 /** 유형 폴더의 정의 파일 */
@@ -37,11 +38,14 @@ export const RESERVED_TYPE_IDS: readonly string[] = [...WORK_TYPES, 'custom']
 /**
  * 단계 id로 쓸 수 없는 이름 (D449, D514): 유형 폴더의 칸 파일(intake.md·verify.md·finish.md·pr-template.md)과 type 폴더,
  * task 디렉터리에서 앱과 에이전트가 쓰는 파일 이름. 마지막 단계의 task 디렉터리에는 판정표·PR 초안·독립 리뷰 결과도 놓인다.
- * 단계 id는 task 디렉터리의 산출물 <id>.md가 된다 (D453). 기본 유형의 단계 이름(fix, design 등)은 쓸 수 있다
+ * 단계 id는 task 디렉터리의 산출물 <id>.md가 된다 (D453). 기본 유형의 단계 이름(fix, design 등)만 풀었다
  */
 export const RESERVED_STEP_IDS: readonly string[] = [
   'intake',
   'verify',
+  // 커스텀 단계와 PR 대응 task의 노드 이름: task 디렉터리 <nn>-<노드>와 헷갈리지 않게 막는다
+  'custom',
+  'respond',
   'finish',
   'pr-template',
   'verification',
@@ -107,11 +111,13 @@ function checkStep(v: unknown, i: number, errors: string[]): CustomStep | null {
   if (typeof auto !== 'boolean') errors.push(`${at}.auto_approve: true/false여야 함`)
   const rawLead = v['lead'] ?? []
   const lead: string[] = []
+  // sections를 비우면 기본 두 절이므로 [요약]의 절도 그 안에서 고른다 (D453)
+  const shown = sections.length ? sections : CUSTOM_DEFAULT_SECTIONS
   if (!Array.isArray(rawLead)) errors.push(`${at}.lead: 목록이어야 함`)
   else {
     for (const s of rawLead) {
       const name = typeof s === 'string' ? s.trim() : ''
-      if (!name || !sections.includes(name))
+      if (!name || !shown.includes(name))
         errors.push(`${at}.lead: \`${String(s)}\`은 sections에 없는 절`)
       else if (!lead.includes(name)) lead.push(name)
     }
@@ -214,10 +220,27 @@ function parseDef(id: string, text: string, errors: string[]): CustomTypeCheck {
   }
 }
 
-/** 정의를 type.json 글로 쓴다 (2판). 기본값(빈 절, 끈 자동 승인 등)도 적어 사람이 고칠 자리를 본다 */
+/**
+ * 2판 설정을 쓰는 정의인가 (D506): 기본값이 아닌 유형 설정이나 단계 설정이 있다. 없으면 1판으로 써서 아직 업데이트하지 않은
+ * 앱(1판만 읽음)도 [레포로 복사]한 유형을 읽는다. 1판 앱은 모르는 키를 무시한다
+ */
+function usesSchema2(def: CustomTypeDef): boolean {
+  return (
+    !checkMethodOf(def) ||
+    targetOf(def) !== 'code' ||
+    Boolean(def.request_hint) ||
+    Boolean(def.branch_prefix) ||
+    def.steps.some((s) => s.lead?.length || s.question_mode || s.step_base === false)
+  )
+}
+
+/**
+ * 정의를 type.json 글로 쓴다. 기본값(빈 절, 끈 자동 승인 등)도 적어 사람이 고칠 자리를 본다. 2판 설정을 쓰지 않으면 1판으로
+ * 적는다 (usesSchema2)
+ */
 export function serializeCustomType(def: CustomTypeDef): string {
   const body = {
-    schema_version: SCHEMA_VERSION,
+    schema_version: usesSchema2(def) ? SCHEMA_VERSION : 1,
     name: def.name,
     description: def.description,
     request_hint: def.request_hint ?? '',

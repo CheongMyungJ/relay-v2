@@ -10,7 +10,6 @@ import {
   TYPES_DIR,
   deploySkill,
   mergeSkill,
-  procedureText,
   selectFlags,
   skillText,
   stripFrontMatter,
@@ -413,6 +412,15 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456, D507, D508)',
       path.join(typeDir(), 'pr-template.md'),
       '```markdown\n# PR 제목\n\n## 바꾼 표\n```\n',
     )
+    // 빈 줄뿐인 PR 템플릿은 없는 것과 같다: 일반 템플릿을 쓴다
+    fs.writeFileSync(path.join(typeDir(), 'pr-template.md'), '\n  \n')
+    expect(await skillText(SKILLS, 'custom', 'custom', src({ step: 'apply' }), true)).toContain(
+      '## 주요 결정',
+    )
+    fs.writeFileSync(
+      path.join(typeDir(), 'pr-template.md'),
+      '```markdown\n# PR 제목\n\n## 바꾼 표\n```\n',
+    )
     const filled = await skillText(SKILLS, 'custom', 'custom', src({ step: 'apply' }), true)
     expect(filled).toContain('- **표마다:** 되돌린 표를 다시 연다\n')
     expect(filled.indexOf('되돌린 표를 다시 연다')).toBeLessThan(
@@ -449,13 +457,6 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456, D507, D508)',
     })
     expect(read(deployed.file)).toContain(`${CUSTOM_PROCEDURE_HEAD}\n\n조사한 대로 바꾼다.\n`)
     expect(read(deployed.file)).toContain('name: relay-custom')
-  })
-
-  it('[단계 더하기]의 기반 단계 절차는 기본 유형 폴더의 그 단계 절차다 (D448, D512)', async () => {
-    const text = await procedureText(SKILLS, 'general', 'execute')
-    expect(text.startsWith('# relay: execute')).toBe(true)
-    expect(text).not.toContain('description:')
-    await expect(procedureText(SKILLS, 'general', 'fix')).rejects.toThrow('fix')
   })
 })
 

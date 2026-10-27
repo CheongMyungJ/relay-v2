@@ -7,6 +7,7 @@ import path from 'node:path'
 import { INSTRUCTIONS_FILE } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { ASSEMBLY_FLAGS, assemblyFlags } from '../core/builtin-types'
+import { NODE_INFO, STEP_NODES } from '../core/pipeline'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
 import { readText, sha256, writeFileAtomic } from './store'
@@ -236,16 +237,8 @@ export const CUSTOM_VERIFY_HEAD = "## This Work type's review points"
 /** 유형 폴더의 글을 제목 아래에 붙인다. 앞뒤 빈 줄은 뗀다 */
 const section = (head: string, text: string) => `\n\n${head}\n\n${lf(text).trim()}\n`
 
-/** 단계 절차를 갖는 스킬: 기본 유형의 단계와 커스텀 단계 */
-const STEP_SKILLS: readonly SkillName[] = [
-  'fix',
-  'design',
-  'implement',
-  'refactor',
-  'spec',
-  'execute',
-  'custom',
-]
+/** 단계 절차를 갖는 스킬: 기본 유형의 단계(core/pipeline STEP_NODES)와 커스텀 단계 */
+const STEP_SKILLS: readonly SkillName[] = [...STEP_NODES.map((n) => NODE_INFO[n].skill), 'custom']
 
 /**
  * 스킬 본문 (5.6.3, 5.6.15, D279, D452, D456, D508). 단계 스킬은 유형 폴더의 그 단계 절차이고, 커스텀 단계가 공통 바탕을
@@ -297,23 +290,15 @@ export async function skillText(
   const own = await skillBody(source, skill, type, src)
   if (!finishing) return mergeSkill(own, common)
   const finish = await readText(path.join(src.dir, 'finish.md'))
+  // 비었거나 빈 줄뿐인 pr-template.md도 없는 것으로 보고 일반 템플릿을 쓴다 (D507)
   const template =
-    (await readText(path.join(src.dir, 'pr-template.md'))) ??
+    (await readText(path.join(src.dir, 'pr-template.md')))?.trim() ||
     (await fsp.readFile(path.join(source, PR_TEMPLATE_DEFAULT_FILE), 'utf8'))
   const final = fillSlots(
     selectFlags(await fsp.readFile(path.join(source, FINAL_FILE), 'utf8'), src.flags),
     { finish: finish ?? '', 'pr-template': template },
   )
   return mergeSkill(mergeSkill(own, final), common)
-}
-
-/**
- * 기본 유형 단계의 절차 글과 정의 (D512): [단계 더하기]에서 기반 단계를 고르면 채운다. 앞뒤 빈 줄을 뗀다
- */
-export async function procedureText(source: string, type: WorkType, step: string): Promise<string> {
-  const text = await readText(path.join(builtinTypeDir(source, type), `${step}.md`))
-  if (text === null) throw new Error(`기본 유형 ${type}에 단계 ${step}이 없습니다`)
-  return `${lf(text).trim()}\n`
 }
 
 export interface DeployedSkill {
