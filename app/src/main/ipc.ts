@@ -4,7 +4,7 @@ import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { IPC, type AppInfo, type UpdateState } from '../shared/api'
 import type { DraftRef } from '../shared/session'
-import type { SkillName } from '../shared/config'
+import { QUESTION_MODES, type QuestionMode } from '../shared/config'
 import type {
   ApproveOptions,
   CustomTypeFiles,
@@ -19,7 +19,7 @@ import type {
 } from '../shared/views'
 import {
   WORK_TYPES,
-  type CustomTypeSource,
+  type TypeSource,
   type DeliveryChoice,
   type MergeMethod,
   type UncommittedAction,
@@ -64,10 +64,18 @@ function workType(v: unknown): WorkType {
   return found
 }
 
-/** 커스텀 유형의 출처 (D450) */
-function typeSource(v: unknown): CustomTypeSource {
-  if (v !== 'global' && v !== 'repo') throw new Error('유형의 출처가 아님')
+/** 유형의 출처 (D450, D506): 기본 유형(builtin), 전역, 레포 */
+function typeSource(v: unknown): TypeSource {
+  if (v !== 'builtin' && v !== 'global' && v !== 'repo') throw new Error('유형의 출처가 아님')
   return v
+}
+
+/** 질문 방식이나 없음(null) (D511) */
+function questionModeOrNull(v: unknown): QuestionMode | null {
+  if (v === null || v === undefined) return null
+  const found = QUESTION_MODES.find((m) => m === v)
+  if (!found) throw new Error('질문 방식이 아님')
+  return found
 }
 
 const optionalText = (v: unknown): string | null => (v === null || v === undefined ? null : text(v))
@@ -81,11 +89,17 @@ function customTypeFiles(v: unknown): CustomTypeFiles {
     throw new Error('유형 정의가 아님')
   const procedures = o['procedures']
   if (!procedures || typeof procedures !== 'object') throw new Error('단계 절차가 아님')
+  const target = def['target']
+  if (target !== 'code' && target !== 'document') throw new Error('유형의 대상이 아님')
   return {
     def: {
       id: text(def['id']),
       name: text(def['name']),
       description: text(def['description']),
+      request_hint: text(def['request_hint']),
+      branch_prefix: text(def['branch_prefix']),
+      check_method: flag(def['check_method']),
+      target,
       steps: def['steps'].map((s: unknown) => {
         const step = s as Record<string, unknown>
         return {
@@ -93,6 +107,9 @@ function customTypeFiles(v: unknown): CustomTypeFiles {
           title: text(step['title']),
           sections: texts(step['sections']),
           auto_approve: flag(step['auto_approve']),
+          lead: texts(step['lead']),
+          question_mode: questionModeOrNull(step['question_mode']),
+          step_base: flag(step['step_base']),
         }
       }),
     },
@@ -101,18 +118,10 @@ function customTypeFiles(v: unknown): CustomTypeFiles {
     ),
     intake: text(o['intake']),
     verify: text(o['verify']),
+    finish: text(o['finish']),
+    prTemplate: text(o['prTemplate']),
   }
 }
-
-/** [새 유형]의 시작점이 될 수 있는 기존 단계 (D448) */
-const PROCEDURE_SKILLS: readonly SkillName[] = [
-  'fix',
-  'design',
-  'implement',
-  'refactor',
-  'spec',
-  'execute',
-]
 
 function texts(v: unknown): string[] {
   if (!Array.isArray(v)) throw new Error('문자열 목록이 아님')
@@ -377,11 +386,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
       return error ? { ok: false, error } : { ok: true }
     },
   )
-  ipcMain.handle(IPC.skillProcedure, async (_e, skill: unknown) => {
-    const found = PROCEDURE_SKILLS.find((s) => s === skill)
-    if (!found) throw new Error('시작점으로 쓸 수 있는 단계가 아님')
-    return (await ready).skillProcedure(found)
-  })
+  ipcMain.handle(IPC.typeBase, async (_e, source: unknown, projectId: unknown, id: unknown) =>
+    (await ready).typeBase(typeSource(source), optionalText(projectId), text(id)),
+  )
+  ipcMain.handle(IPC.baseStep, async (_e, type: unknown, step: unknown) =>
+    (await ready).baseStep(workType(type), text(step)),
+  )
   ipcMain.handle(IPC.submodules, async (_e, projectId: unknown) =>
     (await ready).submodules(text(projectId)),
   )

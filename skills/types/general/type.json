@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "name": "일반",
+  "description": "다른 유형에 맞지 않는 일: 설정, CI, 문서, 의존성 올리기, 섞인 일 등",
+  "request_hint": "할 일과 끝났다고 볼 조건을 적어 주세요(무엇을 바꾸고 어떻게 확인할지)",
+  "branch_prefix": "chore",
+  "check_method": true,
+  "target": "code",
+  "steps": [
+    {
+      "id": "execute",
+      "title": "실행",
+      "sections": [
+        "계획",
+        "변경 요약",
+        "완료조건별 자체 확인",
+        "테스트 실행"
+      ],
+      "lead": [
+        "계획",
+        "완료조건별 자체 확인"
+      ],
+      "question_mode": "draft_first",
+      "auto_approve": false,
+      "step_base": false
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "name": "리팩터링",
+  "description": "동작은 그대로 두고 구조를 바꾸는 일",
+  "request_hint": "바꿀 구조(예: 어느 계산을 한 모듈로 모을지), 바꿀 곳, 지켜야 할 동작을 적어 주세요",
+  "branch_prefix": "refactor",
+  "check_method": false,
+  "target": "code",
+  "steps": [
+    {
+      "id": "refactor",
+      "title": "계획과 리팩터링",
+      "sections": [
+        "계획",
+        "안전망 테스트",
+        "변경 요약",
+        "찾은 버그와 받아들인 차이",
+        "테스트 실행"
+      ],
+      "lead": [
+        "계획",
+        "찾은 버그와 받아들인 차이"
+      ],
+      "question_mode": "draft_first",
+      "auto_approve": false,
+      "step_base": false
+    }
+  ]
+}

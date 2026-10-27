@@ -22,7 +22,7 @@ import {
 } from '../adapters/git'
 import { listFiles, readTextFile, relativeFile, writeTextFile } from '../adapters/files'
 import { filesAt, namesInCode, readKnowledgeAt } from '../adapters/knowledge'
-import { procedureText } from '../adapters/claude'
+import { TYPES_DIR, builtinTypeDir } from '../adapters/claude'
 import {
   copyTypeToRepo,
   customTypeView,
@@ -30,15 +30,18 @@ import {
   findCustomType,
   globalTypesDir,
   renameCustomType,
+  listBuiltinTypes,
   listGlobalTypes,
   listRepoTypes,
   mergeTypes,
   readCustomTypeFiles,
+  renameBuiltinArtifacts,
   repoTypesDir,
   saveCustomType,
   snapshotCustomType,
+  typeBaseFiles,
 } from '../adapters/custom-types'
-import { typeIdError } from '../core/custom-type'
+import { referenceWarnings, typeIdError } from '../core/custom-type'
 import { knowledgeEnabled } from '../core/knowledge'
 import { anchorNames, tidyCandidates, tidyRequest } from '../core/knowledge-tidy'
 import { HookServer } from '../adapters/hooks'
@@ -71,6 +74,7 @@ import { issueMarkId, type InheritedIssue } from '../core/issue'
 import {
   DEFAULT_BRANCH_RULE,
   checkBranchName,
+  customBranchType,
   pickWorkBranch,
   renderBranchRule,
   ruleHasSlug,
@@ -79,12 +83,7 @@ import {
 import { localIso, nextSessionId, nextWorkId, targetBranch, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
 import { resolveAgent } from '../shared/agent'
-import {
-  DEFAULT_CONFIG,
-  type AppConfig,
-  type SkillName,
-  type WorkSettingsPatch,
-} from '../shared/config'
+import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import { issueLogOn, projectName, type ProjectChecks, type ProjectState } from '../shared/project'
 import type { DraftRef, SessionRecord } from '../shared/session'
 import type {
@@ -98,6 +97,7 @@ import type {
   DeliverInput,
   DeliverResult,
   MergeInfoResult,
+  BaseStep,
   CustomTypeFiles,
   CustomTypeList,
   CustomTypeView,
@@ -123,7 +123,7 @@ import type {
 } from '../shared/views'
 import {
   WORK_TYPES,
-  type CustomTypeSource,
+  type TypeSource,
   type DeliveryChoice,
   type WorkCustomType,
   type WorkRepo,
@@ -753,11 +753,18 @@ export class Relay {
       .then((b) => b.local)
       .catch(() => [])
     const workId = await this.nextWorkId(project, this.at(), local)
+    // 커스텀 유형의 {type}은 그 정의의 branch_prefix, 비었으면 id다 (D511)
+    const custom =
+      type === 'custom' && customType
+        ? await findCustomType(this.o.home, project.repo_path, customType)
+        : undefined
     return renderBranchRule(project.branch_rule ?? DEFAULT_BRANCH_RULE, {
       workId,
       type,
       slug,
-      ...(type === 'custom' && customType ? { customId: customType } : {}),
+      ...(type === 'custom' && customType
+        ? { customId: custom?.def ? customBranchType(custom.def) : customType }
+        : {}),
     })
   }
 
@@ -963,28 +970,59 @@ export class Relay {
         }
       }),
     )
-    return { global: global.map((t) => customTypeView(t)), projects }
+    const builtin = await listBuiltinTypes(path.join(this.o.skills, TYPES_DIR))
+    return {
+      builtin: builtin.map((t) => customTypeView(t)),
+      global: global.map((t) => customTypeView(t)),
+      projects,
+    }
   }
 
-  /** 유형이 있는 위치. 레포 유형은 프로젝트의 레포 아래다 (D450) */
-  private typesRoot(source: CustomTypeSource, projectId: string | null): string | null {
+  /** 유형이 있는 위치. 레포 유형은 프로젝트의 레포 아래, 기본 유형은 앱의 skills/types/다 (D450, D506) */
+  private typesRoot(source: TypeSource, projectId: string | null): string | null {
+    if (source === 'builtin') return path.join(this.o.skills, TYPES_DIR)
     if (source === 'global') return globalTypesDir(this.o.home)
     const project = projectId ? this.projects.get(projectId) : undefined
     return project ? repoTypesDir(project.repo_path) : null
   }
 
+  /** 유형 폴더의 id가 맞는지: 기본 유형은 그 이름, 커스텀은 id 규칙 */
+  private typeIdOk(source: TypeSource, id: string): boolean {
+    return source === 'builtin' ? (WORK_TYPES as readonly string[]).includes(id) : !typeIdError(id)
+  }
+
   async customTypeFiles(
-    source: CustomTypeSource,
+    source: TypeSource,
     projectId: string | null,
     id: string,
   ): Promise<CustomTypeFiles | null> {
     const root = this.typesRoot(source, projectId)
-    if (!root || typeIdError(id)) return null
-    return readCustomTypeFiles(path.join(root, id))
+    if (!root || !this.typeIdOk(source, id)) return null
+    return readCustomTypeFiles(path.join(root, id), source)
   }
 
-  /** 전역 유형을 쓴다 (D459). 레포 유형은 앱에서 고치지 않는다 */
-  async saveCustomType(files: CustomTypeFiles, previousId: string | null): Promise<CommandResult> {
+  /**
+   * [새 유형]의 베이스 (D512): 고른 유형(기본·전역·레포)의 정의와 칸의 글 모두. 기본 유형은 산출물 이름을 커스텀 단계의
+   * 이름으로 바꾼다. 사람이 id와 이름을 새로 정해 저장한다
+   */
+  async typeBase(
+    source: TypeSource,
+    projectId: string | null,
+    id: string,
+  ): Promise<CustomTypeFiles | null> {
+    const root = this.typesRoot(source, projectId)
+    if (!root || !this.typeIdOk(source, id)) return null
+    return typeBaseFiles(path.join(root, id), source)
+  }
+
+  /**
+   * 전역 유형을 쓴다 (D459). 레포 유형은 앱에서 고치지 않는다. 쓴 뒤 글이 이 유형에 없는 산출물을 가리키면 경고를 돌려준다
+   * (D513): 막지 않는다
+   */
+  async saveCustomType(
+    files: CustomTypeFiles,
+    previousId: string | null,
+  ): Promise<CommandResult & { warnings?: string[] }> {
     const root = globalTypesDir(this.o.home)
     try {
       if (previousId !== files.def.id) {
@@ -995,7 +1033,17 @@ export class Relay {
         if (previousId) await renameCustomType(root, previousId, files.def.id)
       }
       await saveCustomType(root, files)
-      return { ok: true }
+      const warnings = referenceWarnings(files.def, [
+        ...files.def.steps.map((s) => ({
+          where: `단계 ${s.id}의 절차`,
+          text: files.procedures[s.id] ?? '',
+        })),
+        { where: '의도 정리 지시', text: files.intake },
+        { where: '독립 리뷰 관점', text: files.verify },
+        { where: '마무리 판정 규칙', text: files.finish },
+        { where: 'PR 템플릿', text: files.prTemplate },
+      ])
+      return warnings.length ? { ok: true, warnings } : { ok: true }
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -1028,19 +1076,27 @@ export class Relay {
 
   /** [폴더 열기]가 열 폴더. 전역 위치는 없으면 만든다. 열 수 없으면 null이다 */
   async customTypeFolder(
-    source: CustomTypeSource,
+    source: TypeSource,
     projectId: string | null,
     id: string | null,
   ): Promise<string | null> {
     const root = this.typesRoot(source, projectId)
-    if (!root || (id !== null && typeIdError(id))) return null
+    if (!root || (id !== null && !this.typeIdOk(source, id))) return null
     if (source === 'global') await fsp.mkdir(root, { recursive: true })
     return id === null ? root : path.join(root, id)
   }
 
-  /** [새 유형]의 시작점 (D448): 기존 단계 절차에서 머리글과 유형 표시 구간을 뗀 글 */
-  async skillProcedure(skill: SkillName): Promise<string> {
-    return procedureText(this.o.skills, skill)
+  /**
+   * [단계 더하기]의 기반 단계 (D448, D512): 기본 유형 단계의 정의(절, [요약]의 절, 질문 방식, 공통 바탕)와 절차. 산출물
+   * 이름은 커스텀 단계의 이름으로 바꾼다. 없으면 null이다
+   */
+  async baseStep(type: WorkType, stepId: string): Promise<BaseStep | null> {
+    if (!(WORK_TYPES as readonly string[]).includes(type)) return null
+    const files = await readCustomTypeFiles(builtinTypeDir(this.o.skills, type), 'builtin')
+    const step = files?.def.steps.find((s) => s.id === stepId)
+    if (!files || !step) return null
+    const procedure = `${(files.procedures[stepId] ?? '').trim()}\n`
+    return { step, procedure: renameBuiltinArtifacts(procedure, [stepId]) }
   }
 
   // ---------- Work 생성 (시나리오 1) ----------
@@ -1218,7 +1274,7 @@ export class Relay {
       slug: input.slug ?? '',
       workId,
       type: input.type,
-      ...(custom && input.customType ? { customId: input.customType } : {}),
+      ...(custom?.def ? { customId: customBranchType(custom.def) } : {}),
       existing: [...existing.local, ...existing.remote],
       ...(this.o.random ? { random: this.o.random } : {}),
     })
@@ -1230,7 +1286,10 @@ export class Relay {
     let customType: WorkCustomType | undefined
     if (custom) {
       try {
-        customType = await snapshotCustomType(custom, files.customType)
+        customType = await snapshotCustomType(
+          { dir: custom.dir, source: custom.source === 'repo' ? 'repo' : 'global' },
+          files.customType,
+        )
       } catch (e) {
         await dropFiles()
         return { ok: false, error: e instanceof Error ? e.message : String(e) }

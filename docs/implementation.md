@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -1534,6 +1534,28 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[단위]** `test/unit/finishing.test.ts`: 리뷰 요청과 마무리 때 필수 절은 `완료조건 판정`(설계는 문서 밖 파일 변경도).
 - **[흐름]** 가짜 `claude`의 시나리오 산출물(`test/support/scenarios.ts`)을 새 intent와 `verification.md` 모양으로 바꿨다.
 - **[실제]** work-start 확인을 바꿨다: 기능 추가는 각 동작의 테스트 항목, 기능 추가·리팩터링·일반·커스텀은 테스트 명령과 약화 금지 항목이 없음. `RELAY_REAL_CLAUDE=dry`로 도구만 확인했다.
+
+### M39. 유형 정의 통일 (D506~D515)
+
+사람이 "커스텀 유형을 만들 때 베이스 유형을 고르면 단계별 칸(산출물, 절차)과 유형별 칸(의도, 독립 리뷰, 마무리)이 채워지고, 단계를 더할 때는 기반 단계의 산출물과 절차가 채워지게 하자. 마무리까지 커스텀할 수 있으면 기본 유형과 커스텀 유형의 차이가 없어진다"고 했다. 설계 유형은 `target` 설정으로 같은 형식에 넣고, 확인 방법은 유형 설정으로 두기로 정했다. 설계 v0.34. 이슈 #71을 대신한다.
+
+- 스킬: 기본 유형 폴더 `skills/types/<유형>/`(`type.json`, 단계 절차 = 옮기기 전 단계 스킬 본문, `intake.md`, `verify.md`, `finish.md`, `pr-template.md`), 일반 PR 템플릿 `skills/_pr-template.md`. work-start, pr-respond, `_final.md`, `_review.md`, 커스텀 공통 바탕의 유형 구간을 설정 구간(`<!-- if: … -->`)과 칸 자리(`<!-- slot: … -->`)로 바꿨다(D508). 옛 Work의 verify는 그대로다. `skills/assemble.mjs`에 `selectFlags`, `fillSlots`, `assembleSkill`(앱과 같은 조립), `skills/check.mjs`에 [7] 기본 유형 폴더 검사.
+- core: `custom-type`(2판 type.json: `check_method`, `target`, `request_hint`, `branch_prefix`, 단계의 `lead`·`question_mode`·`step_base`, 1판 호환, 기본 유형 검사 `parseBuiltinType`, 예약 단계 id D514, 산출물 참조 경고 `referenceWarnings`), `builtin-types`(Work의 유형 정의와 설정 `typeDefOf`·`checkMethodOn`·`typeTarget`·`assemblyFlags`), `validate`(확인 방법과 리뷰 요청 필수 절을 유형 설정으로), `review`(다시 볼 결정은 문서 대상, [요약]의 절은 `lead`), `branch`(`{type}`은 `branch_prefix`), `context`(정의의 질문 방식 줄), `pipeline`(`STEP_NODES`). 기본 유형의 정의 표는 `shared/builtin-types`(화면도 씀).
+- 어댑터: `claude`의 `TypeSource`와 `skillText`(유형 폴더의 단계 절차, intake 칸, 마무리 칸, 설정 구간), `procedureText(유형, 단계)`, `codex` 배포본도 같은 글. `custom-types`의 칸 파일 넷 읽기·쓰기·복사, `listBuiltinTypes`, 베이스 글 `typeBaseFiles`(기본 유형 산출물 이름 바꾸기 `renameBuiltinArtifacts`).
+- 앱과 화면: `Relay.typeBase`·`baseStep`(`skillProcedure`를 바꿈), 업무 유형 목록의 기본 유형, 저장 경고. `WorkRunner`는 task마다 유형 재료(기본 유형은 앱의 폴더, 커스텀은 복사본)와 설정 구간으로 조립하고, 독립 리뷰는 모든 유형의 `verify.md`를 넣는다. 업무 유형 화면(`renderer/src/CustomTypes.tsx`): 기본 유형 읽기 전용 목록과 [이 유형으로 새 유형], [새 유형]의 베이스, 실행 순서 편집기(유형 설정, 단계의 질문 방식·공통 바탕·[요약]의 절, 마무리 칸 둘), 기반 단계, 저장 경고. 새 Work 대화상자의 요청 입력 안내는 정의의 `request_hint`다.
+
+**옮기기 전후 대조:** 옮기기 전 스킬로 조립한 글과 옮긴 뒤의 글을 기본 유형마다(intake, 단계, 마무리 단계, 독립 리뷰 찾기, PR 대응) 줄 단위로 견줬다. 단계 절차와 마무리는 같고(버그 수정의 판정 불가 예가 한 줄로 서고 반영 템플릿의 괄호가 빠진 것만 다름), intake는 유형별 지시가 끝의 칸으로 옮겨 가며 일반 규칙(사람 제안, 막연한 목표, 칸의 기본 항목을 따름)이 붙었다. 독립 리뷰는 유형 관점이 브리프 끝으로 옮겨 갔다. PR 대응은 입력 줄이 일반 문구가 됐다. 1판 커스텀 유형도 같은 방법으로 견줘 거의 같다.
+
+**시험**
+
+- **스킬 정적 검사** `skills/check.mjs`: 조립한 글의 명세 항목(설정 구간으로 조립), [7] 기본 유형 폴더(정의, 단계 = 노드, sections = 산출물 템플릿의 절, `lead`, 설정, 표시 줄 없음, 산출물 참조), 공용 스킬에 유형 표시가 없음.
+- **[단위]** `test/unit/builtin-types.test.ts`: 정의 표가 `skills/types/`와 같음, 유형 설정과 표시, 브랜치 접두사, 확인 방법을 끈 커스텀 intent, 문서 대상의 리뷰 요청 절, [요약]의 `lead`, 정의의 질문 방식 줄. `custom-type.test.ts`: 2판 검사와 오류, 1판 기본값, 예약 id, 기본 유형 검사, 참조 경고. `templates.test.ts`, `finishing.test.ts`, `review.test.ts`의 기대값.
+- **[어댑터]** `store.test.ts`: 앱의 `selectFlags`·`fillSlots`와 기본 유형마다의 조립이 `skills/assemble.mjs`와 같음, 남은 표시와 다른 유형의 산출물이 없음. `custom-types.test.ts`: 2판 쓰기·읽기와 칸 파일 복사, 공통 바탕 끔과 확인 방법 끔, 마무리 칸, 문서 대상 마무리, 기본 유형 목록과 베이스 글(산출물 이름 바꾸기, 저장해 다시 검사).
+- **[흐름]** `custom.test.ts`: 기본 유형 목록, 베이스와 기반 단계 명령, 저장 경고.
+- **[스모크]** `custom.spec.ts`: 베이스로 기본 유형을 고르면 칸이 채워지고, 기반 단계로 더한 단계에 절과 절차가 채워진다.
+- **[계약]** 바뀌지 않았다: `claude`의 새 옵션, 훅 본문, gh JSON의 새 필드를 쓰지 않는다.
+- **코드 리뷰 반영:** 내장 code-review(high)의 지적 열 개 가운데 일곱을 반영했다. `skills/assemble.mjs`의 경로를 `fileURLToPath`로(Windows CI), 빈 `pr-template.md`는 일반 템플릿으로, `sections`를 비운 단계의 `lead`는 기본 두 절에서, 단계 id `custom`·`respond`는 다시 막고, 2판 설정이 없으면 1판으로 쓰고, `STEP_SKILLS`는 `STEP_NODES`에서 만들고, `baseStep`은 읽은 절차를 쓴다. 반영하지 않은 셋: `flagsOf`에 2판 정의를 넘기는 곳이 없고, 기본 유형 표를 `skills/`의 JSON에서 읽으면 앱 패키지 밖을 가져오며(같은지는 시험이 봄), 브랜치 미리보기는 유형 폴더 하나만 읽는다.
+- **평가** 돌리지 않았다: 기본 유형의 intake와 독립 리뷰 지시의 자리가 바뀌었으므로, 유형마다 시나리오 하나를 전후로 돌려 보는 것(`relay-eval`)이 남았다.
 
 ## 8. 테스트 전략
 

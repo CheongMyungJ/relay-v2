@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "name": "기능 추가·변경",
+  "description": "새 동작을 더하거나, 의도대로 도는 지금 동작을 바꾸거나 없애는 일",
+  "request_hint": "만들 기능이나 바꾸거나 없앨 동작, 쓰는 흐름, 참고할 이슈 내용을 붙여 넣으세요",
+  "branch_prefix": "feat",
+  "check_method": false,
+  "target": "code",
+  "steps": [
+    {
+      "id": "design",
+      "title": "설계와 계획",
+      "sections": [
+        "유저 시나리오",
+        "요구사항",
+        "접근",
+        "바뀌는 곳",
+        "기존 동작 영향",
+        "구현 계획",
+        "테스트 계획",
+        "위험"
+      ],
+      "lead": [
+        "유저 시나리오",
+        "요구사항"
+      ],
+      "question_mode": "draft_first",
+      "auto_approve": false,
+      "step_base": false
+    },
+    {
+      "id": "implement",
+      "title": "구현",
+      "sections": [
+        "변경 요약",
+        "계획과 달라진 점",
+        "새 동작 테스트",
+        "테스트 실행"
+      ],
+      "lead": [
+        "계획과 달라진 점"
+      ],
+      "question_mode": "draft_first",
+      "auto_approve": false,
+      "step_base": false
+    }
+  ]
+}

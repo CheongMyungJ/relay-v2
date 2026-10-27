@@ -7,7 +7,8 @@ import { parseDocument } from 'yaml'
 import type { AppConfig } from '../shared/config'
 import type { Handoff, HandoffStatus, TaskNode } from '../shared/contracts'
 import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
-import type { CheckSummary, FormatIssue, WorkType } from '../shared/work'
+import type { CheckSummary, FormatIssue, TypeTarget, WorkType } from '../shared/work'
+import { checkMethodOn, typeTarget } from './builtin-types'
 import { NODE_INFO } from './pipeline'
 
 /** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
@@ -551,13 +552,16 @@ function isYamlLine(line: string): boolean {
 }
 
 /**
- * intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58). 일반(general) Work면 완료조건
- * 줄마다 확인 방법이 있는지도 본다 (D305, I86). 유형을 주지 않으면 확인 방법은 보지 않는다
+ * intent.draft.md 검사 (5.3, D38). 본문 절만 본다. 머리글이 있으면 경고만 한다 (I58). 유형이 확인 방법을 요구하면(D509,
+ * checkMethod) 완료조건 줄마다 확인 방법이 있는지도 본다 (D305, I86). checkMethod를 주지 않으면 기본 유형의 설정을
+ * 쓴다(일반만 켬, 커스텀은 켬). 유형도 주지 않으면 확인 방법은 보지 않는다
  */
 export function checkIntentDraft(
   text: string,
-  opts: { warnChars: number; type?: WorkType },
+  opts: { warnChars: number; type?: WorkType; checkMethod?: boolean },
 ): IssueCheck {
+  const needsCheck =
+    opts.checkMethod ?? (opts.type !== undefined && checkMethodOn({ type: opts.type }))
   const file = INTENT_DRAFT_FILE
   const { body, header } = intentDraftBody(text)
   const errors = missingSections(file, body, INTENT_SECTIONS, 'intent 초안 본문')
@@ -570,7 +574,7 @@ export function checkIntentDraft(
         field: CRITERIA_SECTION,
         message: `\`## ${CRITERIA_SECTION}\`의 줄이 \`${CRITERIA_PREFIX}\`로 시작하지 않음 (지금: ${clip(line)})`,
       })
-    } else if ((opts.type === 'general' || opts.type === 'custom') && !CHECK_METHOD.test(line)) {
+    } else if (needsCheck && !CHECK_METHOD.test(line)) {
       errors.push({
         file,
         part: 'body',
@@ -697,6 +701,10 @@ export interface TaskCheckInput {
   node: TaskNode
   /** Work의 업무 유형 (D232) */
   type: WorkType
+  /** Work 유형의 확인 방법 설정 (D509). 없으면 기본 유형의 설정이다 (core/builtin-types checkMethodOn) */
+  checkMethod?: boolean
+  /** Work 유형의 대상 (D510). 없으면 기본 유형의 설정이다 */
+  target?: TypeTarget
   /** task 디렉터리 바로 아래의 .md 파일. 이름 → 내용 */
   files: Readonly<Record<string, string>>
   config: Pick<AppConfig, 'handoff_body_warn_chars' | 'intent_warn_chars'>
@@ -726,11 +734,11 @@ export interface TaskCheckInput {
 }
 
 /**
- * 마무리 단계가 리뷰를 요청할 때 verification.md에 있어야 할 절 (D494). 설계는 문서 밖 파일 변경도 있다 (D374). 테스트 파일
- * 변경은 판정하지 않는다 (D504)
+ * 마무리 단계가 리뷰를 요청할 때 verification.md에 있어야 할 절 (D494). 문서를 다루는 유형(설계, D510)은 문서 밖 파일 변경도
+ * 있다 (D374). 테스트 파일 변경은 판정하지 않는다 (D504)
  */
-export function reviewRequestSections(type: WorkType): readonly string[] {
-  return type === 'spec' ? ['완료조건 판정', '문서 밖 파일 변경'] : ['완료조건 판정']
+export function reviewRequestSections(target: TypeTarget): readonly string[] {
+  return target === 'document' ? ['완료조건 판정', '문서 밖 파일 변경'] : ['완료조건 판정']
 }
 
 /** 리뷰를 받은 뒤 다시 `review_requested`를 쓴 handoff의 오류 (D494). 화면은 리뷰 요청 때의 것이 남은 동안 숨긴다 (I188) */
@@ -781,7 +789,11 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   const draft =
     draftText === undefined
       ? null
-      : checkIntentDraft(draftText, { warnChars: config.intent_warn_chars, type: input.type })
+      : checkIntentDraft(draftText, {
+          warnChars: config.intent_warn_chars,
+          type: input.type,
+          ...(input.checkMethod !== undefined ? { checkMethod: input.checkMethod } : {}),
+        })
   const handoffText = files[HANDOFF_FILE]
   const handoff =
     handoffText === undefined
@@ -823,7 +835,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         ...missingSections(
           VERIFICATION_FILE,
           verification,
-          reviewRequestSections(input.type),
+          reviewRequestSections(input.target ?? typeTarget({ type: input.type })),
           '리뷰 요청',
         ),
       )
@@ -855,7 +867,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
         ...missingSections(
           VERIFICATION_FILE,
           verification,
-          reviewRequestSections(input.type),
+          reviewRequestSections(input.target ?? typeTarget({ type: input.type })),
           '마무리 때 판정표',
         ),
       )

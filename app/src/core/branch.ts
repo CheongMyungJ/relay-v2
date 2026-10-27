@@ -1,7 +1,8 @@
 // 작업 브랜치 이름 (D425~D427). 프로젝트 설정의 규칙으로 만들고, 사람이 새 Work 대화상자에서 고칠 수 있다.
 // 끝에는 앱이 늘 임의의 4자를 붙인다: 같은 날 두 사람이 같은 이름으로 만들어 push해도 겹치지 않게 한다
 import { DEFAULT_BRANCH_RULE } from '../shared/project'
-import type { WorkType } from '../shared/work'
+import { WORK_TYPES, type BuiltinWorkType, type CustomTypeDef, type WorkType } from '../shared/work'
+import { BUILTIN_TYPES } from '../shared/builtin-types'
 
 export { DEFAULT_BRANCH_RULE }
 
@@ -9,20 +10,23 @@ export { DEFAULT_BRANCH_RULE }
 export const BRANCH_RULE_KEYS = ['work-id', 'date', 'seq', 'type', 'slug'] as const
 export type BranchRuleKey = (typeof BRANCH_RULE_KEYS)[number]
 
-/** {type} 자리의 값: 흔히 쓰는 브랜치 접두사 모양이다 */
+/** {type} 자리의 값: 기본 유형의 정의에 적은 브랜치 접두사다(D511). 흔히 쓰는 브랜치 접두사 모양이다 */
 export const BRANCH_TYPE: Readonly<Record<WorkType, string>> = {
-  bugfix: 'fix',
-  feature: 'feat',
-  refactor: 'refactor',
-  spec: 'spec',
-  general: 'chore',
-  // 커스텀 유형은 그 id를 쓴다 (D462). 이 값은 id를 모를 때만 쓴다
+  ...(Object.fromEntries(WORK_TYPES.map((t) => [t, BUILTIN_TYPES[t].branch_prefix ?? t])) as Record<
+    BuiltinWorkType,
+    string
+  >),
+  // 커스텀 유형은 그 정의의 접두사나 id를 쓴다 (D462, D511). 이 값은 모를 때만 쓴다
   custom: 'custom',
 }
 
-/** {type} 자리의 값. 커스텀 유형이면 그 id다 (D462) */
+/** {type} 자리의 값. 커스텀 유형이면 그 정의의 branch_prefix, 비었으면 유형 id다 (customId, D462, D511) */
 export const branchType = (type: WorkType, customId?: string) =>
   type === 'custom' && customId ? customId : BRANCH_TYPE[type]
+
+/** 커스텀 유형의 {type} 값: 정의의 branch_prefix, 비었으면 유형 id (D511) */
+export const customBranchType = (def: Pick<CustomTypeDef, 'id' | 'branch_prefix'>) =>
+  def.branch_prefix || def.id
 
 /** 끝에 붙이는 임의의 글자 수와 글자 (D427) */
 export const SUFFIX_LENGTH = 4
@@ -92,7 +96,7 @@ export interface BranchRuleInput {
   /** w-YYYYMMDD-NNN */
   workId: string
   type: WorkType
-  /** 커스텀 유형의 id. {type}에 들어간다 (D462) */
+  /** 커스텀 유형의 {type} 값(customBranchType). {type}에 들어간다 (D462, D511) */
   customId?: string
   /** 짧은 이름. 비면 {slug}와 그 옆 구분자 하나를 함께 뺀다 */
   slug: string

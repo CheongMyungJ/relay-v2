@@ -255,6 +255,8 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
       procedures: { survey: '찾는다' },
       intake: '',
       verify: '',
+      finish: '',
+      prTemplate: '',
     }
     expect(await s.h.relay.saveCustomType(files, null)).toEqual({ ok: true })
     expect(await s.h.relay.saveCustomType(files, null)).toMatchObject({ ok: false })
@@ -274,6 +276,31 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
     expect((await s.h.relay.customTypes(s.projectId)).map((t) => t.source)).toEqual(['repo'])
     expect(await s.h.relay.deleteCustomType('survey')).toEqual({ ok: true })
     expect(fs.readdirSync(s.globalTypes)).toEqual([])
-    expect(await s.h.relay.skillProcedure('execute')).toMatch(/^# relay: execute/)
+    // 베이스와 기반 단계 (D512): 기본 유형의 정의와 칸, 기본 유형 단계의 절차와 산출물
+    const base = await s.h.relay.typeBase('builtin', null, 'refactor')
+    expect(base?.def.steps.map((x) => x.id)).toEqual(['refactor'])
+    expect(base?.finish).toContain('safety-net commit')
+    expect((await s.h.relay.customTypeList()).builtin.map((t) => t.id)).toEqual([
+      'bugfix',
+      'feature',
+      'refactor',
+      'spec',
+      'general',
+    ])
+    const step = await s.h.relay.baseStep('general', 'execute')
+    expect(step?.procedure).toMatch(/^# relay: execute/)
+    expect(step?.procedure).toContain('`execute.md`')
+    expect(step?.step).toMatchObject({
+      id: 'execute',
+      step_base: false,
+      lead: ['계획', '완료조건별 자체 확인'],
+    })
+    expect(await s.h.relay.baseStep('general', 'fix')).toBeNull()
+    // 없는 산출물을 가리키는 글은 저장하고 경고한다 (D513)
+    const warned = await s.h.relay.saveCustomType(
+      { ...files, procedures: { survey: '`design.md`를 읽는다' } },
+      null,
+    )
+    expect(warned).toMatchObject({ ok: true, warnings: [expect.stringContaining('`design.md`')] })
   })
 })

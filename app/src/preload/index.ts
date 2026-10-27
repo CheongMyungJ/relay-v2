@@ -35,7 +35,8 @@ const api: RelayApi = {
     ipcRenderer.invoke(IPC.copyCustomTypeToRepo, id, projectId),
   openCustomTypeFolder: (source, projectId, id) =>
     ipcRenderer.invoke(IPC.openCustomTypeFolder, source, projectId, id),
-  skillProcedure: (skill) => ipcRenderer.invoke(IPC.skillProcedure, skill),
+  typeBase: (source, projectId, id) => ipcRenderer.invoke(IPC.typeBase, source, projectId, id),
+  baseStep: (type, step) => ipcRenderer.invoke(IPC.baseStep, type, step),
   submodules: (projectId) => ipcRenderer.invoke(IPC.submodules, projectId),
   prepareSubmodule: (projectId, path) => ipcRenderer.invoke(IPC.prepareSubmodule, projectId, path),
   bundleRepos: (projectId, branch, location) =>

@@ -1,7 +1,3 @@
----
-description: relay design step (feature). Writes the user scenarios, requirements, approach, impact on existing behavior and implementation plan of a feature, or of a change or removal of behavior (design.md). Does not change code.
----
-
 # relay: design (설계와 계획)
 
 For a feature Work (a new behavior, or a change or removal of a behavior), write what to build (user scenarios, requirements) and how to build it (approach, what changes, impact on existing behavior, implementation plan, test plan) in one file, `design.md` in the task directory. Small features go through this step too: keep each section to a line or two.

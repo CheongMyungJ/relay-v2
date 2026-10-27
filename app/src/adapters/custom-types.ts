@@ -2,17 +2,31 @@
 // <프로젝트 레포>/.relay/types/<id>/다. 정의 검사는 core/custom-type이 한다
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { BUILTIN_ARTIFACT_NAMES, CUSTOM_REQUEST_HINT } from '../core/builtin-types'
 import {
+  FINISH_NOTES_FILE,
   INTAKE_NOTES_FILE,
+  PR_TEMPLATE_FILE,
   TYPE_FILE,
+  TYPE_NOTE_FILES,
   VERIFY_NOTES_FILE,
+  checkMethodOf,
   missingProcedures,
+  parseBuiltinType,
   parseCustomType,
   serializeCustomType,
+  targetOf,
   typeIdError,
+  type CustomTypeCheck,
 } from '../core/custom-type'
 import type { CustomTypeFiles, CustomTypeView } from '../shared/views'
-import type { CustomTypeDef, CustomTypeSource, WorkCustomType } from '../shared/work'
+import {
+  WORK_TYPES,
+  type CustomTypeDef,
+  type CustomTypeSource,
+  type TypeSource,
+  type WorkCustomType,
+} from '../shared/work'
 import { sha256, writeFileAtomic } from './store'
 
 /** 전역 유형 폴더 (D449) */
@@ -24,7 +38,7 @@ export const repoTypesDir = (repo: string) => path.join(repo, '.relay', 'types')
 /** 읽은 유형 하나. 형식이 깨졌으면 def가 null이고 errors에 까닭이 있다 (D460) */
 export interface CustomTypeEntry {
   id: string
-  source: CustomTypeSource
+  source: TypeSource
   /** 유형 폴더 */
   dir: string
   def: CustomTypeDef | null
@@ -54,15 +68,16 @@ async function fileNames(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isFile()).map((e) => e.name)
 }
 
+/** type.json 검사: 기본 유형은 기본 유형 이름을, 커스텀 유형은 커스텀 id 규칙을 본다 (D506) */
+const parseType = (source: TypeSource, id: string, text: string): CustomTypeCheck =>
+  source === 'builtin' ? parseBuiltinType(id, text) : parseCustomType(id, text)
+
 /** 유형 폴더 하나를 읽고 검사한다: type.json과 단계마다의 절차 파일 (D449) */
-export async function readCustomType(
-  dir: string,
-  source: CustomTypeSource,
-): Promise<CustomTypeEntry> {
+export async function readCustomType(dir: string, source: TypeSource): Promise<CustomTypeEntry> {
   const id = path.basename(dir)
   const text = await readOptional(path.join(dir, TYPE_FILE))
   if (text === null) return { id, source, dir, def: null, errors: [`${TYPE_FILE} 없음`] }
-  const r = parseCustomType(id, text)
+  const r = parseType(source, id, text)
   if (!r.ok) return { id, source, dir, def: null, errors: r.errors }
   const procedures: string[] = []
   for (const s of r.def.steps) {
@@ -108,6 +123,10 @@ async function readAll(root: string, source: CustomTypeSource): Promise<CustomTy
   return Promise.all(dirs.map((d) => readCustomType(path.join(root, d), source)))
 }
 
+/** 기본 유형 폴더 다섯 (D506). 앱에 든 skills/types/<id>/를 읽는다. 새 Work 대화상자의 차례다 */
+export const listBuiltinTypes = (typesDir: string) =>
+  Promise.all(WORK_TYPES.map((id) => readCustomType(path.join(typesDir, id), 'builtin')))
+
 /** 전역 유형 */
 export const listGlobalTypes = (home: string) => readAll(globalTypesDir(home), 'global')
 
@@ -143,14 +162,17 @@ export function customTypeView(entry: CustomTypeEntry, shadowed = false): Custom
       title: s.title,
       autoApprove: s.auto_approve,
     })),
+    requestHint: def?.request_hint || CUSTOM_REQUEST_HINT,
+    checkMethod: def ? checkMethodOf(def) : true,
+    target: def ? targetOf(def) : 'code',
     errors: entry.errors,
     ...(shadowed ? { shadowed: true } : {}),
   }
 }
 
-/** 유형 폴더에서 복사하는 파일: type.json, 단계마다의 절차, 선택 파일 둘 (D458) */
+/** 유형 폴더에서 복사하는 파일: type.json, 단계마다의 절차, 유형 단위 칸의 선택 파일 넷 (D458, D507) */
 function copiedFiles(def: CustomTypeDef): string[] {
-  return [TYPE_FILE, ...def.steps.map((s) => `${s.id}.md`), INTAKE_NOTES_FILE, VERIFY_NOTES_FILE]
+  return [TYPE_FILE, ...def.steps.map((s) => `${s.id}.md`), ...TYPE_NOTE_FILES]
 }
 
 /** 파일들의 해시: 이름 차례로 이름과 내용을 잇는다. 줄 끝은 LF로 맞춘다 */
@@ -164,7 +186,7 @@ function folderHash(files: readonly { name: string; text: string }[]): string {
  * 돌려주는 값은 work.json의 custom_type이다
  */
 export async function snapshotCustomType(
-  entry: Pick<CustomTypeEntry, 'dir' | 'source'>,
+  entry: { dir: string; source: CustomTypeSource },
   dest: string,
 ): Promise<WorkCustomType> {
   // 검사하고 복사하는 글은 한 번 읽은 것이다: 그 사이에 원본이 바뀌어도 work.json의 단계와 복사본이 어긋나지 않는다
@@ -190,20 +212,61 @@ export async function snapshotCustomType(
   return { ...r.def, source: entry.source, hash: folderHash(files) }
 }
 
-/** 유형 폴더의 글을 읽는다. type.json이 깨졌으면 null이다 */
-export async function readCustomTypeFiles(dir: string): Promise<CustomTypeFiles | null> {
+/** 유형 폴더의 글을 읽는다. type.json이 깨졌으면 null이다. 기본 유형(source 'builtin')은 기본 유형 이름으로 검사한다 */
+export async function readCustomTypeFiles(
+  dir: string,
+  source: TypeSource = 'global',
+): Promise<CustomTypeFiles | null> {
   const text = await readOptional(path.join(dir, TYPE_FILE))
   if (text === null) return null
-  const r = parseCustomType(path.basename(dir), text)
+  const r = parseType(source, path.basename(dir), text)
   if (!r.ok) return null
   const procedures: Record<string, string> = {}
   for (const s of r.def.steps)
     procedures[s.id] = (await readOptional(path.join(dir, `${s.id}.md`))) ?? ''
+  const note = async (name: string) => (await readOptional(path.join(dir, name))) ?? ''
   return {
     def: r.def,
     procedures,
-    intake: (await readOptional(path.join(dir, INTAKE_NOTES_FILE))) ?? '',
-    verify: (await readOptional(path.join(dir, VERIFY_NOTES_FILE))) ?? '',
+    intake: await note(INTAKE_NOTES_FILE),
+    verify: await note(VERIFY_NOTES_FILE),
+    finish: await note(FINISH_NOTES_FILE),
+    prTemplate: await note(PR_TEMPLATE_FILE),
+  }
+}
+
+/**
+ * 기본 유형 단계의 산출물 이름을 커스텀 단계의 이름(`<단계 id>.md`)으로 바꾼다 (D512, D453): 기본 유형의 execute는
+ * `execution.md`를 쓰지만 커스텀 단계 execute의 산출물은 `execute.md`다. 백틱으로 감싼 이름만 바꾼다
+ */
+export function renameBuiltinArtifacts(text: string, stepIds: readonly string[]): string {
+  return stepIds.reduce((acc, id) => {
+    const from = BUILTIN_ARTIFACT_NAMES[id]
+    return from ? acc.replaceAll(`\`${from}\``, `\`${id}.md\``) : acc
+  }, text)
+}
+
+/**
+ * [새 유형]의 베이스로 쓸 글 (D512): 유형 폴더의 글 모두. 기본 유형이면 산출물 이름을 커스텀 단계의 이름으로 바꾼다.
+ * 깨졌으면 null이다
+ */
+export async function typeBaseFiles(
+  dir: string,
+  source: TypeSource,
+): Promise<CustomTypeFiles | null> {
+  const files = await readCustomTypeFiles(dir, source)
+  if (!files || source !== 'builtin') return files
+  const ids = files.def.steps.map((s) => s.id)
+  const rename = (s: string) => renameBuiltinArtifacts(s, ids)
+  return {
+    def: files.def,
+    procedures: Object.fromEntries(
+      Object.entries(files.procedures).map(([k, v]) => [k, rename(v)]),
+    ),
+    intake: rename(files.intake),
+    verify: rename(files.verify),
+    finish: rename(files.finish),
+    prTemplate: rename(files.prTemplate),
   }
 }
 
@@ -228,6 +291,8 @@ export async function saveCustomType(root: string, files: CustomTypeFiles): Prom
   for (const [name, body] of [
     [INTAKE_NOTES_FILE, files.intake],
     [VERIFY_NOTES_FILE, files.verify],
+    [FINISH_NOTES_FILE, files.finish],
+    [PR_TEMPLATE_FILE, files.prTemplate],
   ] as const) {
     if (body.trim()) await writeFileAtomic(path.join(dir, name), body)
     else await fsp.rm(path.join(dir, name), { force: true })

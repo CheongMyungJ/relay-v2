@@ -27,7 +27,8 @@ extraResources:
     to: README.md
   - from: ../skills
     to: skills
-    # 맨 위의 공용 스킬(_common.md, 마무리 절차 _final.md, 독립 리뷰 지침 _review.md, D493·D495)과 단계 폴더
+    # 맨 위의 공용 스킬(_common.md, 마무리 절차 _final.md, 독립 리뷰 지침 _review.md, 일반 PR 템플릿 _pr-template.md,
+    # D493·D495·D507)과 스킬 폴더, 기본 유형 폴더 types/ (D506)
     filter:
       - '_*.md'
       - '*/**'

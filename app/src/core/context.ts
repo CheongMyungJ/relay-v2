@@ -158,9 +158,20 @@ export const SPEC_QUESTION_LINE = `${QUESTION_LABEL.confirm_each}. 설계 문답
 export const CUSTOM_QUESTION_LINE =
   '설정 없음. 커스텀 단계는 질문 방식을 고르지 않는다 (D457). 묻는 방법과 답의 기록은 공통 규칙을 따른다'
 
-/** context.md의 질문 방식 줄 (5.6.1). 설계 문답과 커스텀 단계는 고정 문구다 (I104, D457) */
-function questionLine(config: AppConfig, settings: WorkSettings, node: TaskNode): string {
-  if (node === 'custom') return CUSTOM_QUESTION_LINE
+/**
+ * context.md의 질문 방식 줄 (5.6.1). 설계 문답은 고정 문구다 (I104). 커스텀 단계는 정의가 질문 방식을 정했으면 그것이고(D511),
+ * 아니면 고정 문구다 (D457)
+ */
+function questionLine(
+  config: AppConfig,
+  settings: WorkSettings,
+  node: TaskNode,
+  step?: CustomStep,
+): string {
+  if (node === 'custom')
+    return step?.question_mode
+      ? `${QUESTION_LABEL[step.question_mode]}. 이 유형의 정의가 정한 질문 방식이다 (D511)`
+      : CUSTOM_QUESTION_LINE
   const mode = questionMode(config, settings, node)
   return mode ? QUESTION_LABEL[mode] : SPEC_QUESTION_LINE
 }
@@ -712,7 +723,7 @@ export function buildContext(input: ContextInput): string {
     ...(finishesWork(work, task)
       ? [finishingSection(input, codeReviewOn(config, work.settings))]
       : []),
-    ['질문 방식', questionLine(config, work.settings, task.node)],
+    ['질문 방식', questionLine(config, work.settings, task.node, customStep(work, task))],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge, completes)] : []),
     ...(input.target ? [targetSection(input.target)] : []),
     ...(input.bundle

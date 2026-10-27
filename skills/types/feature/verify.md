@@ -1,0 +1,4 @@
+- Does the implementation fit the user scenarios, requirements and approach in `design.md`? Is `계획과 달라진 점` in `implement.md` reasonable? Do not judge requirements added in the design or non-functional requirements: write a mismatch as a candidate.
+- Does the change sit where `구조 맞춤` in `design.md` says?
+- If something goes away: is it all gone? Look for references left, dead code, and config or docs no longer used.
+- Do the new behavior tests really catch the behavior?

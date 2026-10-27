@@ -6,6 +6,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { INSTRUCTIONS_FILE } from '../core/settings'
 import type { SkillName } from '../shared/config'
+import { ASSEMBLY_FLAGS, assemblyFlags } from '../core/builtin-types'
+import { NODE_INFO, STEP_NODES } from '../core/pipeline'
 import { WORK_TYPES, type WorkType } from '../shared/work'
 import { describeFailure, run } from './exec'
 import { readText, sha256, writeFileAtomic } from './store'
@@ -70,6 +72,10 @@ const SKILL_FILE = 'SKILL.md'
 const COMMON_FILE = '_common.md'
 /** 마무리 절차 (5.6.14, D493). 마무리 단계 task에만 스킬 본문과 공통 규칙 사이에 붙인다 */
 export const FINAL_FILE = '_final.md'
+/** 유형에 PR 템플릿(pr-template.md)이 없을 때의 템플릿 (D507, D313) */
+export const PR_TEMPLATE_DEFAULT_FILE = '_pr-template.md'
+/** 기본 유형 폴더들 (D506) */
+export const TYPES_DIR = 'types'
 
 /**
  * 스킬 원본 위치 (D103). RELAY_SKILLS_DIR가 있으면 그 폴더, 없으면 앱에 묶어 배포한 skills/다.
@@ -98,8 +104,8 @@ const TYPE_CLOSE = '<!-- /type -->'
 const TYPE_LIKE = /^\s*<!--\s*\/?\s*type\b/i
 
 /**
- * 공용 스킬에서 그 Work 유형의 구간만 남긴다 (5.6.3, D279). `<!-- type: feature refactor -->` 줄과 `<!-- /type -->` 줄
- * 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다. 구간은 겹치지 않는다. 표시처럼 보이지만
+ * 옛 Work의 verify(D501)에서 그 Work 유형의 구간만 남긴다 (5.6.3, D279). 다른 공용 스킬은 유형 설정으로 고른다
+ * (selectFlags). `<!-- type: feature refactor -->` 줄과 `<!-- /type -->` 줄 사이는 적힌 유형에만 남고, 표시 줄은 지운다. 표시 밖은 모든 유형에 남는다. 구간은 겹치지 않는다. 표시처럼 보이지만
  * 모양이 다른 줄, 모르는 유형, 닫히지 않거나 짝이 없는 표시는 배포하지 않도록 오류다(원본을 고친 실수를 task 시작에서
  * 드러낸다). skills/assemble.mjs(check.mjs가 씀)와 같은 결과인지 [어댑터] 시험이 비교한다 (I68)
  */
@@ -134,75 +140,165 @@ export function stripFrontMatter(text: string): string {
   return lf(text).replace(/^---\n[\s\S]*?\n---\n+/, '')
 }
 
+const FLAG_OPEN = /^<!-- if: ([a-z-]+(?: [a-z-]+)*) -->$/
+const FLAG_CLOSE = '<!-- /if -->'
+const FLAG_LIKE = /^\s*<!--\s*\/?\s*if\b/i
+const SLOT = /^<!-- slot: ([a-z-]+) -->$/
+const SLOT_LIKE = /^\s*<!--\s*slot\b/i
+
+/** 공용 스킬의 칸 자리 (5.6.15, D507): 마무리 판정 규칙과 PR 템플릿 */
+export const SLOTS = ['finish', 'pr-template'] as const
+export type SlotName = (typeof SLOTS)[number]
+
 /**
- * 커스텀 Work의 절차 재료 (D452, D456, D458): Work 디렉터리에 복사한 유형 폴더와, 커스텀 단계 task면 그 단계 id
+ * 공용 스킬에서 그 Work 유형의 설정 구간만 남긴다 (5.6.15, D508). `<!-- if: code check-method -->` 줄과 `<!-- /if -->` 줄
+ * 사이는 적힌 표시가 모두 flags에 있을 때만 남고, 표시 줄은 지운다. 표시 밖은 늘 남는다. 구간은 겹치지 않는다. 칸 자리
+ * (`<!-- slot: … -->`)는 그대로 둔다(fillSlots). 모양이 틀린 표시, 모르는 표시, 짝 없음은 selectType처럼 오류다.
+ * skills/assemble.mjs의 selectFlags와 같은 결과인지 [어댑터] 시험이 비교한다
  */
-export interface CustomSource {
-  /** Work 디렉터리의 type/ (복사본) */
-  dir: string
-  /** 커스텀 단계 task의 단계 id. intake와 verify에는 없다 */
-  step?: string
+export function selectFlags(text: string, flags: readonly string[]): string {
+  const out: string[] = []
+  let open: readonly string[] | null = null
+  for (const [i, line] of lf(text).split('\n').entries()) {
+    const m = FLAG_OPEN.exec(line)
+    if (m) {
+      if (open) throw new Error(`스킬의 설정 구간이 겹침 (${i + 1}행)`)
+      const names = (m[1] ?? '').split(' ')
+      const unknown = names.filter((f) => !ASSEMBLY_FLAGS.includes(f))
+      if (unknown.length) {
+        throw new Error(`스킬의 설정 구간에 모르는 표시: ${unknown.join(', ')} (${i + 1}행)`)
+      }
+      open = names
+    } else if (line === FLAG_CLOSE) {
+      if (!open) throw new Error(`스킬의 설정 구간 닫기에 짝이 없음 (${i + 1}행)`)
+      open = null
+    } else if (FLAG_LIKE.test(line)) {
+      throw new Error(`스킬의 설정 구간 모양이 틀림: ${line.trim()} (${i + 1}행)`)
+    } else if (SLOT_LIKE.test(line) && !SLOT.test(line)) {
+      throw new Error(`스킬의 칸 자리 모양이 틀림: ${line.trim()} (${i + 1}행)`)
+    } else if (!open || open.every((f) => flags.includes(f))) {
+      out.push(line)
+    }
+  }
+  if (open) throw new Error('스킬의 설정 구간이 닫히지 않음')
+  return out.join('\n')
 }
 
-/** 커스텀 단계 절차의 제목. 공통 바탕과 사람이 쓴 절차 사이에 둔다 (D452) */
+/**
+ * 칸 자리(`<!-- slot: … -->` 줄)에 유형의 글을 넣는다 (5.6.15, D507). 글은 앞뒤 빈 줄을 뗀다. 글이 없으면 자리 줄을 지운다.
+ * 모르는 칸 이름은 오류다
+ */
+export function fillSlots(text: string, slots: Partial<Record<SlotName, string>>): string {
+  return lf(text)
+    .split('\n')
+    .flatMap((line, i) => {
+      const m = SLOT.exec(line)
+      if (!m) return [line]
+      const name = m[1] as SlotName
+      if (!SLOTS.includes(name)) throw new Error(`스킬의 모르는 칸 자리: ${name} (${i + 1}행)`)
+      const body = lf(slots[name] ?? '').trim()
+      return body ? [body] : []
+    })
+    .join('\n')
+}
+
+/**
+ * 이번 task의 유형 재료 (5.6.15, D452, D456, D458, D506): 유형 폴더(기본 유형은 앱의 skills/types/<id>/, 커스텀은 Work
+ * 디렉터리에 복사한 type/), 단계 task면 그 단계 id, 설정 구간 표시, 단계 공통 바탕을 붙이는지
+ */
+export interface TypeSource {
+  dir: string
+  /** 단계 task의 단계 id. 기본 유형은 노드 이름과 같다. intake와 PR 대응에는 없다 */
+  step?: string
+  /** 설정 구간 표시 (core/builtin-types assemblyFlags) */
+  flags: readonly string[]
+  /** 단계 공통 바탕(skills/custom/SKILL.md)을 절차 앞에 붙인다. 커스텀 단계 정의의 step_base다 */
+  stepBase?: boolean
+}
+
+/** 기본 유형 폴더 (D506) */
+export const builtinTypeDir = (source: string, type: WorkType) => path.join(source, TYPES_DIR, type)
+
+/** 기본 유형의 유형 재료. 커스텀 유형은 Work의 복사본이라 부른 쪽이 만든다 */
+export function builtinTypeSource(source: string, type: WorkType, step?: string): TypeSource {
+  return {
+    dir: builtinTypeDir(source, type),
+    ...(step ? { step } : {}),
+    flags: assemblyFlags({ type }),
+  }
+}
+
+/** 단계 절차의 제목. 공통 바탕과 그 단계의 절차 사이에 둔다 (D452) */
 export const CUSTOM_PROCEDURE_HEAD = "## This step's procedure"
 /** 공용 스킬 끝에 붙이는 유형 지시의 제목 (D456) */
 export const CUSTOM_INTAKE_HEAD = "## This Work type's intake instructions"
 export const CUSTOM_VERIFY_HEAD = "## This Work type's review points"
 
-/** 사람이 쓴 글을 제목 아래에 붙인다. 앞뒤 빈 줄은 뗀다 */
+/** 유형 폴더의 글을 제목 아래에 붙인다. 앞뒤 빈 줄은 뗀다 */
 const section = (head: string, text: string) => `\n\n${head}\n\n${lf(text).trim()}\n`
 
+/** 단계 절차를 갖는 스킬: 기본 유형의 단계(core/pipeline STEP_NODES)와 커스텀 단계 */
+const STEP_SKILLS: readonly SkillName[] = [...STEP_NODES.map((n) => NODE_INFO[n].skill), 'custom']
+
 /**
- * 커스텀 Work의 스킬 본문 (D452, D456). 커스텀 단계는 공통 바탕 뒤에 사람이 쓴 그 단계의 절차를, work-start와 verify는
- * 유형 폴더의 intake.md·verify.md가 있으면 본문 끝에 붙인다. 다른 스킬은 그대로다
+ * 스킬 본문 (5.6.3, 5.6.15, D279, D452, D456, D508). 단계 스킬은 유형 폴더의 그 단계 절차이고, 커스텀 단계가 공통 바탕을
+ * 켰으면(step_base) 공통 바탕 뒤에 붙인다. work-start는 의도 정리 지시(intake.md)를 끝에 붙이고, PR 대응은 설정 구간만
+ * 고른다. 옛 Work의 verify는 유형 구간(selectType)을 고르고 커스텀이면 리뷰 관점(verify.md)을 붙인다 (D501)
  */
-async function customBody(body: string, skill: SkillName, custom: CustomSource): Promise<string> {
-  if (skill === 'custom') {
-    if (!custom.step) throw new Error('커스텀 단계의 단계 id가 없음')
-    const procedure = await readText(path.join(custom.dir, `${custom.step}.md`))
-    if (procedure === null) throw new Error(`커스텀 단계의 절차 파일이 없음: ${custom.step}.md`)
-    return `${lf(body).trimEnd()}${section(CUSTOM_PROCEDURE_HEAD, procedure)}`
+async function skillBody(
+  source: string,
+  skill: SkillName,
+  type: WorkType,
+  src: TypeSource,
+): Promise<string> {
+  if (STEP_SKILLS.includes(skill)) {
+    const step = src.step ?? (skill === 'custom' ? undefined : skill)
+    if (!step) throw new Error('커스텀 단계의 단계 id가 없음')
+    const procedure = await readText(path.join(src.dir, `${step}.md`))
+    if (procedure === null) throw new Error(`단계의 절차 파일이 없음: ${step}.md`)
+    if (skill !== 'custom' || src.stepBase === false) return lf(procedure)
+    const base = await fsp.readFile(path.join(source, 'custom', SKILL_FILE), 'utf8')
+    return `${selectFlags(stripFrontMatter(base), src.flags).trimEnd()}${section(CUSTOM_PROCEDURE_HEAD, procedure)}`
   }
-  const extra =
-    skill === 'work-start'
-      ? { head: CUSTOM_INTAKE_HEAD, file: 'intake.md' }
-      : skill === 'verify'
-        ? { head: CUSTOM_VERIFY_HEAD, file: 'verify.md' }
-        : null
-  const text = extra ? await readText(path.join(custom.dir, extra.file)) : null
-  return extra && text?.trim() ? `${lf(body).trimEnd()}${section(extra.head, text)}` : body
+  const raw = stripFrontMatter(await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8'))
+  if (skill === 'verify') {
+    const body = selectType(raw, type)
+    const notes = type === 'custom' ? await readText(path.join(src.dir, 'verify.md')) : null
+    return notes?.trim() ? `${body.trimEnd()}${section(CUSTOM_VERIFY_HEAD, notes)}` : body
+  }
+  const body = selectFlags(raw, src.flags)
+  if (skill !== 'work-start') return body
+  const notes = await readText(path.join(src.dir, 'intake.md'))
+  return notes?.trim() ? `${body.trimEnd()}${section(CUSTOM_INTAKE_HEAD, notes)}` : body
 }
 
 /**
- * 배포할 단계 절차: 스킬 원본의 머리글을 떼고, 그 Work 유형의 구간만 남기고(D279) 공통 규칙을 끝에 붙인다 (5.6.3, D440).
- * 커스텀 Work는 유형 폴더의 글을 붙인다 (customBody). 마무리 단계(finishing)는 그 뒤에 마무리 절차(_final.md)의 그 유형
- * 구간을 붙인다 (5.6.14, D493). Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
+ * 배포할 단계 절차 (5.6.3, 5.6.15, D440): 스킬 본문(skillBody)에, 마무리 단계(finishing)면 마무리 절차(_final.md)의 설정
+ * 구간과 유형의 칸(판정 규칙 finish.md, PR 템플릿 pr-template.md, 없으면 _pr-template.md)을 붙이고(D493, D507), 공통 규칙을
+ * 끝에 붙인다. 유형 재료를 주지 않으면 기본 유형의 것이다. Codex 배포본은 이 글 앞에 자기 머리글을 붙인다 (engines.md)
  */
 export async function skillText(
   source: string,
   skill: SkillName,
   type: WorkType,
-  custom?: CustomSource,
+  typeSource?: TypeSource,
   finishing = false,
 ): Promise<string> {
-  const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
+  if (type === 'custom' && !typeSource) throw new Error('커스텀 Work의 유형 재료가 없음')
+  const src = typeSource ?? builtinTypeSource(source, type)
   const common = await fsp.readFile(path.join(source, COMMON_FILE), 'utf8')
-  const body = selectType(stripFrontMatter(raw), type)
-  const own = custom && type === 'custom' ? await customBody(body, skill, custom) : body
-  const final = finishing
-    ? mergeSkill(own, selectType(await fsp.readFile(path.join(source, FINAL_FILE), 'utf8'), type))
-    : own
-  return mergeSkill(final, selectType(common, type))
-}
-
-/**
- * 기존 단계의 절차 글 (D448, D459): 커스텀 단계를 만들 시작점이다. 머리글을 떼고 유형 표시 구간은 뺀다(어느 기본 유형에도
- * 속하지 않는 글만 남는다). 공통 규칙은 붙이지 않는다: 커스텀 단계에도 앱이 붙인다
- */
-export async function procedureText(source: string, skill: SkillName): Promise<string> {
-  const raw = await fsp.readFile(path.join(source, skill, SKILL_FILE), 'utf8')
-  return `${selectType(stripFrontMatter(raw), 'custom').trim()}\n`
+  const own = await skillBody(source, skill, type, src)
+  if (!finishing) return mergeSkill(own, common)
+  const finish = await readText(path.join(src.dir, 'finish.md'))
+  // 비었거나 빈 줄뿐인 pr-template.md도 없는 것으로 보고 일반 템플릿을 쓴다 (D507)
+  const template =
+    (await readText(path.join(src.dir, 'pr-template.md')))?.trim() ||
+    (await fsp.readFile(path.join(source, PR_TEMPLATE_DEFAULT_FILE), 'utf8'))
+  const final = fillSlots(
+    selectFlags(await fsp.readFile(path.join(source, FINAL_FILE), 'utf8'), src.flags),
+    { finish: finish ?? '', 'pr-template': template },
+  )
+  return mergeSkill(mergeSkill(own, final), common)
 }
 
 export interface DeployedSkill {
@@ -236,12 +332,12 @@ export async function deploySkill(o: {
   skill: SkillName
   /** Work 유형. 공용 스킬에서 그 유형의 구간만 배포한다 (D279) */
   type: WorkType
-  /** 커스텀 Work의 유형 폴더와 단계 (D452, D456) */
-  custom?: CustomSource
+  /** 유형 재료 (5.6.15). 없으면 기본 유형의 것이다 */
+  typeSource?: TypeSource
   /** 마무리 단계 task다: 마무리 절차를 붙인다 (5.6.14, D493) */
   finishing?: boolean
 }): Promise<DeployedSkill> {
-  const text = await skillText(o.source, o.skill, o.type, o.custom, o.finishing)
+  const text = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
   await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))
