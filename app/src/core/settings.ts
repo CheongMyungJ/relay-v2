@@ -177,6 +177,73 @@ export interface LaunchInput {
   model?: string
   /** task에 고정한 추론 수준. 없으면 엔진의 기본 */
   effort?: string
+  /**
+   * 질문을 relay MCP로 묻는 task(D521)의 MCP 설정 파일 (relayMcpConfig). 있으면 --mcp-config로 주고 AskUserQuestion을
+   * 뺀다. 없으면 넣지 않아 지금과 같은 인자다
+   */
+  mcpConfigPath?: string
+}
+
+/** 앱 질문창 대신 터미널에서 묻는 Claude Code 도구 (D24). relay MCP로 묻는 task에서는 뺀다 (D521) */
+export const CLI_ASK_TOOL = 'AskUserQuestion'
+
+/** relay MCP의 질문 도구 (engines.md, D521). 단계 절차의 질문 도구 이름을 이것으로 바꾼다 */
+export const RELAY_ASK_TOOL = 'mcp__relay__ask_human'
+
+/** 단계 절차의 질문 도구를 relay MCP의 것으로 바꾼다 (engines.md, D521) */
+export function askViaRelay(text: string): string {
+  return text.replaceAll(`\`${CLI_ASK_TOOL}\``, `\`${RELAY_ASK_TOOL}\``)
+}
+
+/**
+ * relay MCP 호출자가 답하는 task의 절차 끝에 붙이는 안내 (D521). 호출자는 터미널을 보지 못하므로 답에 필요한 것을 질문에
+ * 담게 한다(설계 문답의 쟁점 목록처럼 터미널에 먼저 쓰라는 절차가 있다)
+ */
+export const CALLER_ASK_NOTE =
+  '\n## Who answers\n\nA relay MCP caller (another agent working for the human) answers your questions and approves this step. It cannot see this terminal. Put everything it needs to answer (lists, scenarios, explanations you would write in terminal text) into the question text itself.\n'
+
+/**
+ * 질문을 relay MCP로 묻는 task의 옵션 (D521): relay 서버를 더하고 터미널의 질문 도구를 뺀다. 두 옵션은 값을 여럿 받아
+ * 뒤에 오는 첫 프롬프트까지 값으로 먹는다(Claude Code 2.1.312에서 확인): 늘 --settings 앞에 둔다
+ */
+function askArgs(input: { mcpConfigPath?: string }): string[] {
+  return input.mcpConfigPath
+    ? ['--mcp-config', input.mcpConfigPath, '--disallowedTools', CLI_ASK_TOOL]
+    : []
+}
+
+/** relay MCP 서버 (D521). 브리지는 Codex task와 같은 것이고 훅 서버의 /question으로 묻는다 */
+export interface RelayMcpConfig {
+  mcpServers: {
+    relay: { type: 'stdio'; command: string; args: string[]; env: Record<string, string> }
+  }
+}
+
+/**
+ * --mcp-config로 줄 relay 서버 (D521). command는 앱 실행 파일(ELECTRON_RUN_AS_NODE로 Node처럼 돈다), bridge는
+ * codex-bridge.mjs다. 포트와 task id는 비밀이 아니라 파일에 두고, 훅 토큰은 PTY 환경 변수(launchEnv)로만 넘긴다:
+ * claude는 MCP 서버에 자기 환경을 물려준다(Claude Code 2.1.312에서 확인)
+ */
+export function relayMcpConfig(o: {
+  command: string
+  bridge: string
+  port: number
+  taskId: string
+}): RelayMcpConfig {
+  return {
+    mcpServers: {
+      relay: {
+        type: 'stdio',
+        command: o.command,
+        args: [o.bridge, 'mcp'],
+        env: {
+          ELECTRON_RUN_AS_NODE: '1',
+          RELAY_HOOK_PORT: String(o.port),
+          RELAY_HOOK_TASK: o.taskId,
+        },
+      },
+    },
+  }
 }
 
 /** 더 줄 폴더의 --add-dir (D414). 없으면 넣지 않아 지금과 같은 인자다 */
@@ -206,6 +273,7 @@ export function launchArgs(input: LaunchInput): string[] {
     '--add-dir',
     input.workDir,
     ...extraDirArgs(input),
+    ...askArgs(input),
     '--settings',
     input.settingsPath,
     ...instructionsArgs(input),
@@ -240,6 +308,7 @@ export function resumeArgs(input: ResumeInput): string[] {
     '--add-dir',
     input.workDir,
     ...extraDirArgs(input),
+    ...askArgs(input),
     '--settings',
     input.settingsPath,
     ...instructionsArgs(input),

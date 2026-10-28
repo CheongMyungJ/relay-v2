@@ -196,6 +196,16 @@ export function appFlags(): string[] {
       model: 'm',
       effort: 'low',
     }),
+    // relay MCP로 묻는 caller Work의 task (D521)
+    ...launchArgs({
+      sessionId: 'id',
+      workDir: p,
+      settingsPath: p,
+      instructionsPath: p,
+      skill: 'work-start',
+      contextPath: p,
+      mcpConfigPath: p,
+    }),
     ...cleanupArgs(p),
     ...sideArgs({ sessionId: 'id', resume: false, workDir: p, settingsPath: p, guidePath: p }),
     ...sideArgs({ sessionId: 'id', resume: true, workDir: p, settingsPath: p, guidePath: p }),

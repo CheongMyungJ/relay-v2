@@ -105,7 +105,11 @@ export function projectId(folderName: string, pathHash: string): string {
 
 // ---------- decisions.md (5.4) ----------
 
-const APPROVAL_LABEL: Record<ApprovalBy, string> = { human: '사람 승인', auto: '자동 승인' }
+const APPROVAL_LABEL: Record<ApprovalBy, string> = {
+  human: '사람 승인',
+  auto: '자동 승인',
+  caller: '호출자 승인',
+}
 const DECIDER_LABEL: Record<Decision['by'], string> = { human: '[사람]', ai: '[AI]' }
 
 /** 결정을 읽지 못했을 때 남기는 줄 ([오류 무시하고 승인], D112) */

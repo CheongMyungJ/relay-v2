@@ -196,8 +196,16 @@ export interface CheckSummary {
   warnings: FormatIssue[]
 }
 
-/** 승인 방식 (5.4, 5.5): 사람 승인, 자동 승인 (4.3) */
-export type ApprovalBy = 'human' | 'auto'
+/** 승인 방식 (5.4, 5.5): 사람 승인, 자동 승인 (4.3), relay MCP 호출자의 승인 (D522) */
+export type ApprovalBy = 'human' | 'auto' | 'caller'
+
+/**
+ * Work를 진행하는 쪽 (D519): 사람(앱 화면)이나 relay MCP 호출자. 사람이 [직접 맡기]를 누르면 사람이 된다 (D523)
+ */
+export type WorkDriver = 'human' | 'caller'
+
+/** relay MCP 호출자가 맡긴 Work의 질문 처리 (D521): 호출자에게 돌려줌 / 앱이 "알아서 해"로 답함 */
+export type CallerQuestions = 'return' | 'recommend'
 
 /**
  * 자동 승인 카운트다운 (4.3, D127). Stop으로 승인 대기가 될 때 조건을 만족하면 시작하고, 끝나면 그때의 설정과
@@ -356,6 +364,11 @@ export interface TaskRecord {
   repo_starts?: Record<string, string>
   /** 마무리 단계 task의 독립 리뷰 (D494~D497). 리뷰를 요청한 마무리 단계 task에만 있다 */
   review?: TaskReview
+  /**
+   * 질문을 relay MCP의 ask_human으로 묻는 Claude task (D521). caller Work에서 시작한 task에 있고, 재개도 같은 길로 연다.
+   * Codex task는 늘 그 길이라 두지 않는다
+   */
+  ask?: 'mcp'
 }
 
 /**
@@ -867,6 +880,10 @@ export interface WorkState {
    * 파이프라인이다. 읽는 쪽은 core/pipeline을 쓴다
    */
   pipeline?: 2
+  /** relay MCP 호출자가 진행하는 Work (D519). 없으면 사람이 진행한다. [직접 맡기]가 지운다 (D523) */
+  driver?: 'caller'
+  /** caller Work에서 앱이 질문에 "알아서 해"로 답한다 (D521). 없으면 호출자에게 돌려준다 */
+  caller_questions?: 'recommend'
   tasks: TaskRecord[]
 }
 
@@ -877,6 +894,7 @@ export type LifecycleEventType =
   | 'work.abandoned'
   | 'work.cleaned'
   | 'work.repo_added'
+  | 'work.taken_over'
   | 'task.started'
   | 'task.session_identified'
   | 'task.first_output'

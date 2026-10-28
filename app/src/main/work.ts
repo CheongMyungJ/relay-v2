@@ -16,7 +16,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { agentRuntime } from '../adapters/agent'
-import { codexJson, codexSkillPath, findCodex } from '../adapters/codex'
+import { codexBridgePath, codexJson, codexSkillPath, findCodex } from '../adapters/codex'
 import { AGENT_LABELS, resolveAgent, type AgentEngine } from '../shared/agent'
 import { codexToolDenial } from '../core/codex'
 import { humanAnswers, humanQuestions } from '../core/questions'
@@ -326,7 +326,15 @@ import {
 import { DRAFTS_DIR } from '../core/draft'
 import { treeChanges } from '../core/files'
 import { DraftFolder } from './drafts'
-import { continuePrompt, INSTRUCTIONS_FILE } from '../core/settings'
+import { continuePrompt, INSTRUCTIONS_FILE, relayMcpConfig } from '../core/settings'
+import {
+  REVISABLE,
+  asksViaMcp,
+  driverBlock,
+  recommendAnswers,
+  workDriver,
+  type Actor,
+} from '../core/driver'
 import { sideBlock, sideGuide } from '../core/side'
 import {
   HANDOFF_FILE,
@@ -590,6 +598,10 @@ type SideSession = ChatSession
 const SIDE_ID = 'side'
 const CONTEXT_FILE = 'context.md'
 const SETTINGS_FILE = 'task.settings.json'
+/** relay MCP로 묻는 Claude task의 MCP 설정 (D521). --mcp-config로 준다 */
+const MCP_CONFIG_FILE = 'task.mcp.json'
+/** relay MCP 질문의 도구 제한 시간 (D521). Codex의 tool_timeout_sec(하루)와 같다 */
+const ASK_TIMEOUT_MS = 24 * 60 * 60 * 1000
 const MAX_DIFF_CHARS = 2_000_000
 const KILL_WAIT_MS = 10_000
 
@@ -739,6 +751,8 @@ export class WorkRunner {
    */
   /** 다시 열 세션의 첫 입력 (D218, D496). resumeTask가 적고 resumeSession이 한 번 쓴다 */
   private readonly resumeInput = new Map<string, ResumeInput>()
+  /** relay MCP 호출자가 고칠 점으로 보낸 글 (D524). 다시 여는 세션의 첫 입력으로 한 번 쓴다 */
+  private readonly resumeMessage = new Map<string, string>()
   /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
   private readonly reviews = new Map<string, AbortController>()
   /** 도는 독립 리뷰가 끝나는 때 (호출 프로세스가 끝남). 앱 종료가 worktree를 놓기 전에 기다린다 */
@@ -1761,6 +1775,8 @@ export class WorkRunner {
   }
 
   private notify(body: string): void {
+    // relay MCP 호출자가 진행하는 Work는 사람이 움직일 때가 아니다 (D523)
+    if (workDriver(this.work) === 'caller') return
     this.ctx.ui.notify({ workKey: this.key, title: `relay: ${this.title}`, body })
   }
 
@@ -1863,6 +1879,9 @@ export class WorkRunner {
       if (!bin) throw new Error(driver.installGuide)
       const skill = NODE_INFO[task.node].skill
       const contextPath = path.join(dir, CONTEXT_FILE)
+      // relay MCP 호출자가 진행하는 Work의 Claude task는 relay MCP로 묻는다 (D521). 시작할 때 정해 task에 남긴다
+      const caller = workDriver(this.work) === 'caller'
+      const ask = asksViaMcp({ ask: caller ? 'mcp' : undefined }, driver.engine)
       const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
@@ -1872,6 +1891,8 @@ export class WorkRunner {
         type: workType(this.work),
         ...this.typeSource(task),
         finishing: finishesWork(this.work, task),
+        askViaMcp: ask,
+        callerAnswers: caller,
       })
       const version = await driver.version(bin, env)
 
@@ -1883,6 +1904,7 @@ export class WorkRunner {
       // Codex의 id는 SessionStart/턴 훅에서 받는다. 임의의 UUID로 재개하지 않는다.
       const sessionId = driver.engine === 'claude' ? randomUUID() : ''
       const token = randomBytes(32).toString('hex')
+      const claudeAsk = ask && driver.engine === 'claude'
       const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1893,8 +1915,11 @@ export class WorkRunner {
         skill,
         contextPath,
         ...pinnedAgent(task),
+        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task))
+      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task), {
+        ask: claudeAsk,
+      })
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.started',
@@ -1907,6 +1932,7 @@ export class WorkRunner {
         ...(Object.keys(repoStarts).length ? { repoStarts } : {}),
         skillHash: deployed.hash,
         engineVersion: version,
+        ...(claudeAsk ? { ask: 'mcp' as const } : {}),
       })
       if (driver.engine === 'codex')
         await this.feed({ type: 'input.required', taskId: task.id, at: this.ctx.at() })
@@ -1939,15 +1965,21 @@ export class WorkRunner {
       const token = randomBytes(32).toString('hex')
       // 중단됨의 [재개]는 이어서 하라고 알리고(D218), 독립 리뷰가 끝난 세션은 결과를 읽고 이어 하라고 알린다 (D496)
       const input = this.resumeInput.get(task.id)
+      // relay MCP 호출자가 보낸 고칠 점이 있으면 그 글을 첫 입력으로 준다 (D524)
+      const message = this.resumeMessage.get(task.id)
       const prompt =
-        input === 'review'
+        message ??
+        (input === 'review'
           ? reviewResumePrompt(path.join(this.files.taskDir(task), REVIEW_RESULT_FILE))
           : input === 'continue'
             ? continuePrompt(task.session?.app_ended !== undefined)
-            : undefined
+            : undefined)
       this.resumeInput.delete(task.id)
+      this.resumeMessage.delete(task.id)
       const instructionsPath =
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
+      // 시작할 때 relay MCP로 묻게 띄운 task는 재개도 같은 길이다 (D521)
+      const claudeAsk = driver.engine === 'claude' && task.ask === 'mcp'
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1956,6 +1988,7 @@ export class WorkRunner {
         ...(instructionsPath ? { instructionsPath } : {}),
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
+        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
       })
       const session = this.launch(
         task,
@@ -1964,6 +1997,7 @@ export class WorkRunner {
         args,
         await this.turnState(task, files),
         RESUME_MARK,
+        { ask: claudeAsk },
       )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -1999,8 +2033,28 @@ export class WorkRunner {
       type: workType(this.work),
       ...this.typeSource(task),
       finishing: finishesWork(this.work, task),
+      askViaMcp: task.ask === 'mcp',
+      callerAnswers: task.ask === 'mcp',
     })
     return deployed.file
+  }
+
+  /**
+   * relay MCP로 묻는 Claude task의 MCP 설정 파일 (D521). 훅 서버의 포트가 바뀔 수 있어 띄울 때마다 새로 쓴다(I13과 같음).
+   * 브리지는 Codex task와 같은 것이다
+   */
+  private async writeMcpConfig(task: TaskRecord): Promise<string> {
+    const file = path.join(this.files.taskDir(task), MCP_CONFIG_FILE)
+    await writeJson(
+      file,
+      relayMcpConfig({
+        command: process.execPath,
+        bridge: codexBridgePath(),
+        port: this.ctx.hooks.port,
+        taskId: task.id,
+      }),
+    )
+    return file
   }
 
   /**
@@ -2378,6 +2432,7 @@ export class WorkRunner {
     args: string[],
     turnFiles: string,
     mark?: string,
+    opts: { ask?: boolean } = {},
   ): LiveSession {
     const { cols, rows } = this.ctx.size()
     const pty = startPty({
@@ -2387,6 +2442,8 @@ export class WorkRunner {
       env: {
         ...this.agentEnv(),
         ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
+        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521)
+        ...(opts.ask ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
       },
       cols,
       rows,
@@ -2443,7 +2500,9 @@ export class WorkRunner {
             failClosed: true,
             question: (body, signal) => this.askHuman(task.id, session, body, signal),
           }
-        : {},
+        : opts.ask
+          ? { question: (body, signal) => this.askHuman(task.id, session, body, signal) }
+          : {},
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -2471,6 +2530,13 @@ export class WorkRunner {
       if (owner.question)
         return { reply: { cancelled: true, reason: '앞 질문의 답변을 먼저 기다리세요.' } }
       const questions = humanQuestions(body['questions'])
+      // 호출자가 추천안으로 진행하라고 맡긴 Work는 "알아서 해"로 바로 답한다 (5.6.1, D521). 정리 세션은 사람의 것이다
+      if (
+        taskId !== CLEANUP_ID &&
+        workDriver(this.work) === 'caller' &&
+        this.work.caller_questions === 'recommend'
+      )
+        return { reply: { cancelled: false, answers: recommendAnswers(questions) } }
       let resolve!: (reply: HumanAnswerReply) => void
       const waiting = new Promise<HumanAnswerReply>((r) => {
         resolve = r
@@ -2536,8 +2602,16 @@ export class WorkRunner {
   }
 
   /** question id로 앞 대화/앞 질문의 늦은 답변과 중복 제출을 거절한다. null은 취소다. */
-  answerQuestion(taskId: string, questionId: string, answers: unknown): Promise<CommandResult> {
+  answerQuestion(
+    taskId: string,
+    questionId: string,
+    answers: unknown,
+    actor: Actor = 'human',
+  ): Promise<CommandResult> {
     return this.enqueue(async () => {
+      // 정리 세션은 사람이 연 터미널이다. task의 질문은 Work를 진행하는 쪽만 답한다 (D523)
+      const block = taskId === CLEANUP_ID ? null : driverBlock(this.work, actor)
+      if (block) return { ok: false, error: block }
       const owner = taskId === CLEANUP_ID ? this.cleanup : this.live.get(taskId)
       const pending = owner?.question
       if (!owner || !pending || pending.view.id !== questionId)
@@ -2900,6 +2974,7 @@ export class WorkRunner {
         at: this.ctx.at(),
         check,
         ...(opts.force ? { force: true } : {}),
+        ...(opts.by ? { by: opts.by } : {}),
       })
       const failed = this.opError
       this.opError = null
@@ -3004,6 +3079,49 @@ export class WorkRunner {
   /** [재개], [세션 재개]: 같은 옵션과 --resume으로 다시 연다. 세션 상한을 넘으면 대기열에 넣는다 */
   resume(taskId: string): Promise<CommandResult> {
     return this.enqueue(() => this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() }))
+  }
+
+  /**
+   * [직접 맡기] (D523): relay MCP 호출자가 진행하던 Work를 사람이 맡는다. 살아 있는 세션의 질문(ask_human)은 그대로
+   * 남아 이제 사람이 앱 질문창에서 답한다. 카운트다운은 그대로다(4.3의 조건은 진행하는 쪽과 관계없다)
+   */
+  takeOver(): Promise<CommandResult> {
+    return this.enqueue(() => this.command({ type: 'driver.take', at: this.ctx.at() }))
+  }
+
+  /**
+   * relay MCP 호출자의 고칠 점 (D524). 턴이 끝난 지금 task에만 받는다. 세션이 살아 있으면 끝내고, 같은 대화를 다시 열며
+   * 그 글을 첫 입력으로 준다: 실행 중인 세션에 글을 넣지 않는다(1.2). 끝낸 세션의 종료(pty.exit)는 처리 줄에서 다시 열기
+   * 앞에 온다
+   */
+  revise(taskId: string, text: string, actor: Actor): Promise<CommandResult> {
+    const body = text.trim()
+    if (!body) return Promise.resolve({ ok: false, error: '고칠 점이 비었습니다' })
+    return this.enqueue(async (): Promise<CommandResult> => {
+      const block = driverBlock(this.work, actor)
+      if (block) return { ok: false, error: block }
+      if (this.cleanupOpen()) return { ok: false, error: CLEANUP_BLOCKS }
+      const task = this.task(taskId)
+      if (!task || task !== currentTask(this.work))
+        return { ok: false, error: `${taskId}는 지금 task가 아님` }
+      if (!REVISABLE.includes(task.status))
+        return {
+          ok: false,
+          error: `${taskId}는 턴이 끝난 상태가 아님(${TASK_STATUS_LABEL[task.status]}). 턴이 끝난 뒤 보내세요`,
+        }
+      if (!task.session) return { ok: false, error: `${taskId}에 다시 열 대화가 없음` }
+      if (this.live.has(taskId)) await this.endSession(taskId)
+      return { ok: true }
+    }).then((r) =>
+      r.ok
+        ? this.enqueue(async () => {
+            this.resumeMessage.set(taskId, body)
+            const resumed = await this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() })
+            if (!resumed.ok) this.resumeMessage.delete(taskId)
+            return resumed
+          })
+        : r,
+    )
   }
 
   /** [이 단계 끝나면 멈춤]을 켜거나 끈다 */
@@ -3122,7 +3240,9 @@ export class WorkRunner {
    * (7-5). 고른 처리는 사람에게 보인 목록과 지금 목록이 같을 때만 받는다. 전달이 실패하면 오류를 돌려주고,
    * 실패는 Work 완료 화면에도 남는다.
    */
-  deliver(input: DeliverInput): Promise<DeliverResult> {
+  deliver(input: DeliverInput, actor: Actor = 'human'): Promise<DeliverResult> {
+    const block = driverBlock(this.work, actor)
+    if (block) return Promise.resolve({ ok: false, error: block })
     if (input.repos && isBundle(this.work)) {
       const repos = input.repos
       return this.enqueue(() => this.deliverBundle(repos, input.repoUncommitted ?? []))
@@ -3567,6 +3687,9 @@ export class WorkRunner {
    */
   openCleanup(choice: DeliveryChoice): Promise<CommandResult> {
     return this.enqueue(async () => {
+      // 정리 세션 뒤에 전달한다: 전달하는 쪽만 연다 (D523)
+      const block = driverBlock(this.work, 'human')
+      if (block) return { ok: false, error: block }
       if (cutOperation(this.work)) return { ok: false, error: OPERATION_BLOCKS }
       // 정리 세션 뒤의 전달은 레포 하나의 것이다. 묶음 Work는 레포마다 고른다 (D475)
       if (isBundle(this.work)) {
@@ -6849,6 +6972,7 @@ export class WorkRunner {
           }
         : null,
       title: this.title,
+      driver: workDriver(w),
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,

@@ -34,6 +34,7 @@ relay는 Claude Code(또는 Codex) CLI를 앱 안의 터미널에 그대로 띄�
 - **이슈 기록:** 의도를 승인하면 GitHub 이슈를 만들고 단계마다 코멘트를 남겨, 리뷰어가 맥락을 봅니다.
 - **엔진 선택:** Claude Code(기본)나 Codex CLI. 단계마다 바꿀 수 있습니다.
 - **곁 세션:** Work마다 언제든 열고 닫는 에이전트 세션. 단계와 따로 질문, 논의, 별도 리뷰, 앱 문제 진단을 합니다.
+- **relay MCP:** 다른 에이전트가 MCP 도구로 Work를 맡기고, 질문에 답하고, 승인합니다([다른 에이전트에서 부르기](#다른-에이전트에서-부르기-relay-mcp)).
 - **기본 세션:** 프로젝트나 Work에 매이지 않는 에이전트 세션. 맨 CLI처럼 아무 일이나 하고, relay 사용법과 여러 Work의 상태를 묻고, 새 Work를 구상해 초안으로 넘깁니다.
 - **터미널에 그림과 파일:** 캡처한 그림을 붙여넣고 파일을 끌어 놓아 에이전트에 넘기고, 출력의 파일 경로는 Ctrl+클릭으로 엽니다.
 
@@ -214,6 +215,34 @@ npm run dev
 - **엔진:** [설정]의 기본 엔진을 따르고, 상세 설정의 "기본 세션" 줄에서 따로 고릅니다. Codex는 곁 세션처럼 처음 열 때 터미널의 `/hooks`에서 relay 훅을 신뢰해야 안내가 들어갑니다.
 - 동시 세션 수 제한에 들지 않고, 자동 메모리는 Claude Code 설정을 따릅니다.
 
+### 다른 에이전트에서 부르기 (relay MCP)
+
+Claude Code 같은 다른 에이전트가 MCP 도구로 relay에 일을 맡길 수 있습니다. 에이전트(호출자)가 Work를 만들고, 단계마다 질문에 답하고 결과를 보고 승인합니다. 사람은 그 에이전트와 대화하면서 relay 앱에서 진행을 봅니다.
+
+**등록:** MCP 클라이언트에 relay 브리지를 stdio 서버로 더합니다. Claude Code라면:
+
+```bash
+# Linux (.deb)
+claude mcp add relay -s user -e ELECTRON_RUN_AS_NODE=1 -- /opt/relay/relay /opt/relay/resources/relay-mcp.mjs
+```
+
+```powershell
+# Windows
+claude mcp add relay -s user -e ELECTRON_RUN_AS_NODE=1 -- "$env:LOCALAPPDATA\Programs\relay\relay.exe" "$env:LOCALAPPDATA\Programs\relay\resources\relay-mcp.mjs"
+```
+
+소스에서 실행할 때는 `node <레포>/app/scripts/relay-mcp.mjs`를 등록하고 앱(`npm run dev`)을 먼저 켜 둡니다.
+
+- **앱:** relay 앱이 떠 있어야 합니다. 꺼져 있으면 도구를 처음 부를 때 브리지가 앱을 띄우고 기다립니다. 도구 목록은 앱 없이도 보입니다.
+- **도구:** `list_projects`, `register_project`, `list_types`, `start_work`, `list_works`, `get_work`, `wait`, `answer`, `approve`, `revise`, `resume`, `deliver`, `pr_respond`, `abandon`. 프로젝트 등록 해제, Work 기록 지우기와 정리, 머지는 없습니다(앱에서 사람이 합니다). 커스텀 유형은 유형 폴더를 직접 쓰고 `list_types`로 형식 오류를 봅니다.
+- **흐름:** `start_work`로 맡기고 `wait`를 되풀이합니다. 질문이 오면(`state: question`) `answer`로, 단계가 끝나면(`awaiting_approval`) 요약·결정·위험·산출물을 보고 `approve`나 `revise`(고칠 점)로 답합니다. 마지막 단계에서 `approve`는 전달 없이 완료, `deliver`는 push나 PR 생성입니다.
+- **질문:** `start_work`의 `questions: recommend`를 주면 앱이 질문마다 "알아서 해"로 답해 에이전트가 추천안으로 정합니다. 기본은 호출자에게 돌려줍니다. 의도 승인과 마지막 단계는 늘 호출자가 승인합니다. 다른 단계의 자동 승인은 `settings`(Work 설정)로 켭니다.
+- **사람이 진행:** `driver: human`으로 맡기면 사람이 [새 Work]로 만든 Work와 같습니다. 질문과 승인은 앱에서 사람이 하고, 호출자는 상태만 봅니다.
+- **앱 화면:** 호출자가 진행하는 Work는 사이드바에 `MCP` 표시가 붙고, 패널 맨 위에 띠가 보이며 승인·답·전달 버튼이 꺼집니다. **[직접 맡기]**를 누르면 그 뒤로 사람이 진행합니다. [즉시 중단], 카운트다운 [취소], [Work 포기]는 언제나 됩니다. 이 Work는 OS 알림을 보내지 않습니다.
+- **승인 기록:** 호출자의 승인은 `decisions.md`에 "호출자 승인"으로 남습니다.
+- **Claude Code의 첫 실행 창:** 처음 띄우는 Claude Code는 터미널에 확인 창을 띄울 수 있습니다. 첫 턴이 오래 시작하지 않으면 `get_work`의 `hint`가 알려 주니, 앱에서 그 Work의 터미널을 보고 수락합니다.
+- relay 앱 안의 세션(곁 세션, 기본 세션)에 relay MCP가 보여도 조회만 됩니다. 새 Work는 Work 초안으로 만듭니다.
+
 ### 터미널에서 그림과 파일
 
 task, 곁 세션, 기본 세션의 터미널에서 씁니다.
@@ -260,7 +289,7 @@ relay는 에이전트를 권한 확인 없이 실행합니다(Claude Code의 `--
 
 ## 데이터 위치와 설정
 
-- **앱 데이터:** 산출물, 기록, worktree는 `RELAY_HOME`(기본 사용자 폴더의 `.relay`)에 프로젝트와 Work별로 둡니다. 커스텀 유형은 `types/`에 둡니다. [Work 정리]는 worktree만 지우고 기록은 남깁니다. 기본 세션의 기록과 Work 초안은 `sessions/`에 둡니다.
+- **앱 데이터:** 산출물, 기록, worktree는 `RELAY_HOME`(기본 사용자 폴더의 `.relay`)에 프로젝트와 Work별로 둡니다. 커스텀 유형은 `types/`에 둡니다. [Work 정리]는 worktree만 지우고 기록은 남깁니다. 기본 세션의 기록과 Work 초안은 `sessions/`에 둡니다. 앱이 떠 있는 동안 relay MCP의 연결 정보(`mcp.json`, 본인만 읽음)를 둡니다.
 - **레포에 남는 것:** Work 브랜치의 커밋과 `docs/knowledge/`의 지식 파일입니다. [레포로 복사]한 커스텀 유형은 `.relay/types/`에 생깁니다(커밋은 직접 합니다). 브랜치 이름은 기본으로 `relay/<work-id>-<임의의 4자>`이고, 프로젝트 설정의 "작업 브랜치 규칙"으로 바꿉니다(예: `{type}/{date}-{seq}-{slug}` → `fix/20261021-001-login-k7q2`). 새 Work 창에서 이름을 고칠 수도 있습니다. 끝의 4자는 다른 사람과 이름이 겹치지 않게 앱이 붙입니다.
 
 | 환경 변수 | 설명 |
@@ -270,6 +299,7 @@ relay는 에이전트를 권한 확인 없이 실행합니다(Claude Code의 `--
 | `CODEX_BIN` | `codex`가 PATH에 없을 때 실행 파일 경로 |
 | `RELAY_KNOWLEDGE=off` | 팀 지식 기능을 끕니다 |
 | `RELAY_UPDATE=off` | 설치본의 자동 업데이트를 끕니다 |
+| `RELAY_APP_EXE` | relay MCP 브리지가 앱이 꺼져 있을 때 띄울 실행 파일 (기본은 브리지를 띄운 relay 실행 파일) |
 
 ## 문제 해결
 

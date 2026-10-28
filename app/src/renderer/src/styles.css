@@ -1335,6 +1335,17 @@ textarea {
   border-left-color: var(--good);
 }
 
+/* relay MCP 호출자가 진행하는 Work (D523) */
+.notice.caller-band,
+.notice.caller-drives {
+  border-left-color: var(--accent);
+}
+
+.type-tag.caller-tag {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
 .review {
   display: flex;
   flex-direction: column;

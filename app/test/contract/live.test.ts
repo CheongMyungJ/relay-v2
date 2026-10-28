@@ -10,7 +10,10 @@
 //    일을 잇고 다음 Stop에 stop_hook_active: true를 보낸다(S2, D21)
 // 3. 지식 검토 호출(claudeJson, D300)이 구조화된 출력과 사용량을 읽는다
 // 4. 독립 리뷰 호출의 출력 이벤트(stream-json, D502)가 계약을 지키고 진행 표시와 결과를 읽는다
+// 5. relay MCP로 묻는 task의 옵션(--mcp-config, --disallowedTools, D521)이 relay 서버를 붙이고 AskUserQuestion을 뺀다
+//    (시작 이벤트의 도구와 MCP 서버 목록. 앱은 이 이벤트를 읽지 않아 계약에 넣지 않는다)
 import { execFileSync, spawn } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -18,7 +21,16 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { cleanEnv, makeClaudeConfig } from '../../eval/lib/env.mjs'
 import { claudeJson } from '../../src/adapters/claude'
 import { reviewSteps } from '../../src/core/independent-review'
-import { HOOK_TOKEN_ENV, hookSettings, type HookEvent } from '../../src/core/settings'
+import { codexBridgePath } from '../../src/adapters/codex'
+import {
+  CLI_ASK_TOOL,
+  HOOK_TOKEN_ENV,
+  RELAY_ASK_TOOL,
+  hookSettings,
+  launchArgs,
+  relayMcpConfig,
+  type HookEvent,
+} from '../../src/core/settings'
 import {
   appFlags,
   FIXTURE,
@@ -216,6 +228,75 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
     expect(r.costUsd).not.toBeNull()
     expect(broken).toEqual([])
     expect(steps.some((x) => x.kind === 'tool' && x.label === 'Read(a.js)')).toBe(true)
+  })
+
+  it('relay MCP로 묻는 task의 옵션이 relay 서버를 붙이고 AskUserQuestion을 뺀다 (D521)', async () => {
+    const cwd = path.join(root, 'ask')
+    fs.mkdirSync(cwd, { recursive: true })
+    fs.writeFileSync(path.join(cwd, 'settings.json'), '{}')
+    const config = path.join(cwd, 'task.mcp.json')
+    fs.writeFileSync(
+      config,
+      JSON.stringify(
+        relayMcpConfig({
+          command: process.execPath,
+          bridge: codexBridgePath(),
+          port: 1,
+          taskId: 't-01',
+        }),
+      ),
+    )
+    const out = await new Promise<string>((resolve, reject) => {
+      const p = spawn(
+        BIN,
+        [
+          '-p',
+          '--model',
+          MODEL,
+          '--output-format',
+          'stream-json',
+          '--verbose',
+          ...launchArgs({
+            sessionId: crypto.randomUUID(),
+            workDir: cwd,
+            settingsPath: path.join(cwd, 'settings.json'),
+            instructionsPath: '',
+            skill: 'work-start',
+            contextPath: path.join(cwd, 'context.md'),
+            mcpConfigPath: config,
+          }).filter((a) => a !== '--dangerously-skip-permissions' && !a.startsWith('relay ')),
+          'Reply with the single word: ok',
+        ],
+        { cwd, env },
+      )
+      let text = ''
+      p.stdout.on('data', (c: Buffer) => (text += c.toString('utf8')))
+      p.stdin.end()
+      const timer = setTimeout(() => p.kill('SIGKILL'), 3 * 60 * 1000)
+      p.on('error', reject)
+      p.on('close', () => {
+        clearTimeout(timer)
+        resolve(text)
+      })
+    })
+    const init = out
+      .split('\n')
+      .flatMap((l) => {
+        try {
+          return [JSON.parse(l) as Record<string, unknown>]
+        } catch {
+          return []
+        }
+      })
+      .find((e) => e['type'] === 'system' && e['subtype'] === 'init')
+    const tools = (init?.['tools'] as string[] | undefined) ?? []
+    const servers = (init?.['mcp_servers'] as { name: string; status: string }[] | undefined) ?? []
+    lines.push(
+      `- relay MCP로 묻는 task: relay 서버 ${servers.find((x) => x.name === 'relay')?.status ?? '없음'}, ask_human ${tools.includes(RELAY_ASK_TOOL) ? '있음' : '없음'}, AskUserQuestion ${tools.includes(CLI_ASK_TOOL) ? '남음' : '빠짐'}`,
+    )
+    expect(servers).toContainEqual(expect.objectContaining({ name: 'relay', status: 'connected' }))
+    expect(tools).toContain(RELAY_ASK_TOOL)
+    expect(tools).not.toContain(CLI_ASK_TOOL)
   })
 
   it('녹화본과 견준다 (RELAY_CONTRACT_UPDATE=1이면 새로 쓴다)', () => {
