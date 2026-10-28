@@ -127,7 +127,16 @@ function launch(stale) {
     const env = { ...process.env }
     delete env.ELECTRON_RUN_AS_NODE
     delete env.RELAY_HOOK_TOKEN
-    const child = spawn(command.cmd, command.args, { detached: true, stdio: 'ignore', env })
+    // Windows의 .cmd(RELAY_APP_EXE로 준 실행 스크립트)는 셸 없이 띄울 수 없다
+    const script = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command.cmd)
+    const child = script
+      ? spawn(`"${command.cmd}"`, command.args, {
+          detached: true,
+          stdio: 'ignore',
+          env,
+          shell: true,
+        })
+      : spawn(command.cmd, command.args, { detached: true, stdio: 'ignore', env })
     child.on('error', () => {})
     child.unref()
     const until = Date.now() + LAUNCH_WAIT_MS
