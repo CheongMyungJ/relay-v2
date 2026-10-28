@@ -27,7 +27,7 @@ import {
   openChat,
   type ChatSession,
 } from './chat'
-import type { TerminalBuffer } from './terminals'
+import { noBacklog, type TerminalBuffer } from './terminals'
 import { DraftFolder } from './drafts'
 
 export interface SessionContext {
@@ -415,7 +415,7 @@ export class SessionRunner {
   }
 
   async attach(id: string): Promise<TerminalBacklog> {
-    return this.terminals.get(id)?.backlog() ?? { data: '', next: 0, live: false }
+    return this.terminals.get(id)?.backlog() ?? noBacklog()
   }
 
   private ptyOf(id: string) {
@@ -431,8 +431,7 @@ export class SessionRunner {
     const pty = this.ptyOf(id)
     if (!pty) return
     pty.resize(cols, rows)
-    const buffer = this.terminals.get(id)
-    if (buffer) buffer.ptySize = { cols, rows }
+    this.terminals.get(id)?.resized({ cols, rows })
   }
 
   cwd(): string {

@@ -130,6 +130,7 @@ import {
   type WorkState,
   type WorkType,
 } from '../shared/work'
+import { noBacklog } from './terminals'
 import { SessionPool } from './pool'
 import type { UiPort } from './ports'
 import { PASTE_KEEP_MS, linkPath, opensSafely, realLinkPath, type LinkFs } from './links'
@@ -1935,7 +1936,7 @@ export class Relay {
 
   async terminalAttach(key: string): Promise<TerminalBacklog> {
     const t = this.terminal(key)
-    return t ? t.runner.attach(t.taskId) : { data: '', next: 0, live: false }
+    return t ? t.runner.attach(t.taskId) : noBacklog()
   }
 
   terminalWrite(key: string, data: string): void {

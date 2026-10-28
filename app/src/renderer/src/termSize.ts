@@ -29,9 +29,12 @@ export function sizeFix(
 }
 
 export interface PtyFollower {
-  /** 지난 출력을 쓴다. PTY 크기를 모르면 fallback 크기로 그린다. done은 다 그린 뒤 부른다 */
+  /**
+   * 지난 출력을 그린 크기로 다시 그린다(크기가 바뀐 자리마다 바꾼다). 크기를 모르면 숨은 터미널은 fallback 크기로
+   * 그린다. 다 그리면 done을 부르고, 보이면 화면에 다시 맞춘다(refit)
+   */
   backlog(
-    b: Pick<TerminalBacklog, 'data' | 'size'>,
+    b: Pick<TerminalBacklog, 'data' | 'sizes'>,
     fallback: TerminalSize | null,
     done: () => void,
   ): void
@@ -39,18 +42,19 @@ export interface PtyFollower {
   chunk(c: TerminalChunk): void
   /** PTY를 따라 xterm 크기를 바꾸는 중이다. 이 크기는 PTY와 main(새 PTY의 크기)에 보내지 않는다 */
   readonly following: boolean
+  /** 지난 출력을 그리는 중이다. 그동안 화면에 맞추지 않는다: 다 그린 뒤에 맞춘다 */
+  readonly replaying: boolean
 }
 
 export function ptyFollower(
   term: SizedTerm,
-  opts: { shown: () => boolean; resizePty: (size: TerminalSize) => void },
+  opts: { shown: () => boolean; resizePty: (size: TerminalSize) => void; refit: () => void },
 ): PtyFollower {
   let following = false
+  let replaying = false
   let ptySize: TerminalSize | null = null
-  const follow = (size: TerminalSize | null | undefined) => {
-    const fix = sizeFix({ cols: term.cols, rows: term.rows }, size, opts.shown())
-    if (fix === 'pty') opts.resizePty({ cols: term.cols, rows: term.rows })
-    if (fix !== 'term' || !size) return
+  const toSize = (size: TerminalSize) => {
+    if (sameSize({ cols: term.cols, rows: term.rows }, size)) return
     following = true
     try {
       term.resize(size.cols, size.rows)
@@ -58,11 +62,28 @@ export function ptyFollower(
       following = false
     }
   }
+  const follow = (size: TerminalSize) => {
+    const fix = sizeFix({ cols: term.cols, rows: term.rows }, size, opts.shown())
+    if (fix === 'pty') opts.resizePty({ cols: term.cols, rows: term.rows })
+    else if (fix === 'term') toSize(size)
+  }
   return {
     backlog(b, fallback, done) {
-      ptySize = b.size ?? null
-      follow(b.size ?? fallback)
-      term.write(b.data, done)
+      const sizes = b.sizes
+      ptySize = sizes.at(-1)?.size ?? null
+      replaying = true
+      const first = sizes[0]?.size ?? (opts.shown() ? null : fallback)
+      if (first) toSize(first)
+      if (sizes.length === 0) term.write(b.data)
+      sizes.forEach((s, i) => {
+        if (i > 0) term.write('', () => toSize(s.size))
+        term.write(b.data.slice(i === 0 ? 0 : s.at, sizes[i + 1]?.at ?? b.data.length))
+      })
+      term.write('', () => {
+        replaying = false
+        done()
+        if (opts.shown()) opts.refit()
+      })
     },
     chunk(c) {
       if (c.size && !sameSize(c.size, ptySize)) {
@@ -74,6 +95,9 @@ export function ptyFollower(
     },
     get following() {
       return following
+    },
+    get replaying() {
+      return replaying
     },
   }
 }

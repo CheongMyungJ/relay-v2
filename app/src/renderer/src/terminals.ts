@@ -7,11 +7,12 @@ import '@xterm/xterm/css/xterm.css'
 import type { AppInfo } from '../../shared/api'
 import type { FilesOpenTarget, TerminalChunk, TerminalSize } from '../../shared/views'
 import { findLinks, logicalLine, pasteText, pastesFiles, type LinkMatch } from './links'
-import { ptyFollower } from './termSize'
+import { ptyFollower, type PtyFollower } from './termSize'
 
 export interface TermEntry {
   term: Terminal
   fit: FitAddon
+  follower: PtyFollower
   dispose: () => void
 }
 
@@ -23,10 +24,16 @@ const entries = new Map<string, TermEntry>()
  */
 let lastFit: TerminalSize | null = null
 
-/** 화면에 보여 크기를 잴 수 있다 */
-function shown(term: Terminal): boolean {
-  const el = term.element
+/** 화면에 보여 크기를 잴 수 있다. 숨긴 탭(display:none)은 크기가 0이다 */
+function measurable(el: HTMLElement | null | undefined): el is HTMLElement {
   return !!el && el.clientWidth > 0 && el.clientHeight > 0
+}
+
+/** 화면에 맞춘다. 글자 크기를 아직 잴 수 없으면 맞추지 않는다 */
+function fitNow(term: Terminal, fit: FitAddon): void {
+  if (!fit.proposeDimensions()) return
+  fit.fit()
+  lastFit = { cols: term.cols, rows: term.rows }
 }
 
 /**
@@ -102,8 +109,9 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
 
   // 숨은 xterm은 PTY 크기를 따른다 (I189)
   const follower = ptyFollower(term, {
-    shown: () => shown(term),
+    shown: () => measurable(term.element?.parentElement),
     resizePty: ({ cols, rows }) => void api.resize(key, cols, rows),
+    refit: () => fitNow(term, fit),
   })
 
   // 붙기 전에 온 조각은 모았다가, 지금까지의 출력 뒤에 이어 쓴다 (seq로 겹침을 뺀다)
@@ -115,7 +123,7 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     else if (c.seq >= next) follower.chunk(c)
   })
   void api.attach(key).then((b) => {
-    // 지난 출력은 그린 크기로 다시 그린다. 모르면 마지막으로 맞춘 크기로
+    // 지난 출력은 그린 크기로 다시 그린다. 모르면 숨은 터미널은 마지막으로 맞춘 크기로
     follower.backlog(b, lastFit, () => {
       replaying = false
     })
@@ -134,6 +142,7 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
   const entry: TermEntry = {
     term,
     fit,
+    follower,
     dispose: () => {
       offData()
       links.dispose()
@@ -146,11 +155,12 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
   return entry
 }
 
-/** 보이는 상태일 때만 맞춘다. 숨긴 탭은 크기가 0이라 맞추면 안 된다. 숨긴 탭은 PTY 크기를 따른다 (I189) */
+/**
+ * 보이는 상태일 때만 맞춘다. 숨긴 탭은 크기가 0이라 맞추면 안 된다. 숨긴 탭은 PTY 크기를 따르고, 지난 출력을 그리는
+ * 동안은 그린 크기를 지킨다: 다 그린 뒤에 맞춘다 (I189)
+ */
 export function fitIfVisible(entry: TermEntry, el: HTMLElement): void {
-  if (el.clientWidth === 0 || el.clientHeight === 0) return
-  entry.fit.fit()
-  lastFit = { cols: entry.term.cols, rows: entry.term.rows }
+  if (measurable(el) && !entry.follower.replaying) fitNow(entry.term, entry.fit)
 }
 
 // ---------- 파일 열기 (D411) ----------

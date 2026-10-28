@@ -1,5 +1,5 @@
 // [흐름] 터미널 조각과 지난 출력의 PTY 크기 (I189). 숨은 탭의 xterm이 PTY와 같은 크기로 그리게, main은 PTY를 띄운 크기와
-// 바꾼 크기를 조각과 지난 출력에 붙인다. xterm 쪽은 [단위] terminal-size.test.ts가 본다
+// 바꾼 크기를 조각(바뀔 때)과 지난 출력(바뀐 자리마다)에 붙인다. xterm 쪽은 [단위] terminal-size.test.ts가 본다
 import { afterEach, describe, expect, it } from 'vitest'
 import { harness, makeRepo, register, type Harness } from '../support/harness'
 import { REPO_FILES, REQUEST, scenario } from '../support/scenarios'
@@ -32,12 +32,12 @@ describe('터미널의 PTY 크기 (I189)', () => {
     expect(hh.ui.sizes.get(key)).toEqual({ cols: 120, rows: 32 })
     expect(await hh.relay.terminalAttach(key)).toMatchObject({
       live: true,
-      size: { cols: 120, rows: 32 },
+      sizes: [{ at: 0, size: { cols: 120, rows: 32 } }],
     })
 
     hh.relay.terminalResize(key, 100, 30)
     await hh.ui.until(() => out().includes('SIZE 100x30'), 'CLI가 받은 바뀐 크기')
     expect(hh.ui.sizes.get(key)).toEqual({ cols: 100, rows: 30 })
-    expect((await hh.relay.terminalAttach(key)).size).toEqual({ cols: 100, rows: 30 })
+    expect((await hh.relay.terminalAttach(key)).sizes.at(-1)?.size).toEqual({ cols: 100, rows: 30 })
   })
 })
