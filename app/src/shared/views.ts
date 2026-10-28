@@ -642,8 +642,8 @@ export interface TaskView {
    * 다시 켰거나 다시 열지 못함. [재개]가 결과를 첫 입력으로 준다). 그 밖에는 null. codeReview는 그때의 설정이다 (D497)
    */
   review?: { state: 'running' | 'ready'; codeReview: boolean } | null
-  /** 독립 리뷰 중에 남긴 리뷰 뒤 전할 말 (D529). 없으면 null */
-  reviewNote?: string | null
+  /** 독립 리뷰 중에 남긴 리뷰 뒤 전할 말 (D529). sent면 다시 연 대화에 전했다. 없으면 null */
+  reviewNote?: { text: string; sent: boolean } | null
 }
 
 /**

@@ -975,7 +975,7 @@ describe('[흐름] 리뷰 뒤 전할 말 (D529)', () => {
     expect(await s.h.relay.reviewNote(s.workKey, 't-02', '먼저 남긴 말')).toEqual({ ok: true })
     expect(await s.h.relay.reviewNote(s.workKey, 't-02', '빈 칸도\n따옴표로')).toEqual({ ok: true })
     await ui.until(
-      () => ui.works.get(s.workKey)?.tasks[1]?.reviewNote === '빈 칸도\n따옴표로' || null,
+      () => ui.works.get(s.workKey)?.tasks[1]?.reviewNote?.text === '빈 칸도\n따옴표로' || null,
       '남긴 말 표시',
     )
     await ui.until(
@@ -989,8 +989,11 @@ describe('[흐름] 리뷰 뒤 전할 말 (D529)', () => {
     expect(reopened.args.at(-1)).toContain('사람이 리뷰하는 동안 남긴 말')
     expect(reopened.args.at(-1)).toContain('"빈 칸도 / 따옴표로"')
     expect(reopened.args.at(-1)).not.toContain('먼저 남긴 말')
-    // 다시 열면 남긴 말은 지운다
-    expect(ui.works.get(s.workKey)?.tasks[1]?.reviewNote ?? null).toBeNull()
+    // 다시 열면 전한 것으로 보인다
+    expect(ui.works.get(s.workKey)?.tasks[1]?.reviewNote).toEqual({
+      text: '빈 칸도\n따옴표로',
+      sent: true,
+    })
     // 모든 세션은 대체 화면 없이 띄운다 (D527)
     expect(starts.every((r) => r['inlineScreen'] === true)).toBe(true)
     // 닫고 다시 연 까닭을 터미널에 남긴다: 닫은 줄 뒤에 다시 연 줄 (D529)

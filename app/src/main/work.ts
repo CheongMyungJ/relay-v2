@@ -767,6 +767,8 @@ export class WorkRunner {
   private readonly resumeMessage = new Map<string, string>()
   /** 독립 리뷰 중에 사람이 남긴 리뷰 뒤 전할 말 (D529). 결과로 세션을 다시 열 때 첫 입력에 붙인다. 앱을 끄면 사라진다 */
   private readonly reviewNotes = new Map<string, string>()
+  /** 다시 연 대화에 전한 리뷰 뒤 전할 말 (D529). 전해졌는지 패널에 보인다 */
+  private readonly sentNotes = new Map<string, string>()
   /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
   private readonly reviews = new Map<string, AbortController>()
   /** 도는 독립 리뷰가 끝나는 때 (호출 프로세스가 끝남). 앱 종료가 worktree를 놓기 전에 기다린다 */
@@ -2006,7 +2008,11 @@ export class WorkRunner {
             : undefined)
       this.resumeInput.delete(task.id)
       this.resumeMessage.delete(task.id)
-      if (input === 'review') this.reviewNotes.delete(task.id)
+      if (input === 'review') {
+        const note = this.reviewNotes.get(task.id)
+        if (note) this.sentNotes.set(task.id, note)
+        this.reviewNotes.delete(task.id)
+      }
       const instructionsPath =
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       // 시작할 때 relay MCP로 묻게 띄운 task는 재개도 같은 길이다 (D521)
@@ -7158,7 +7164,11 @@ export class WorkRunner {
         : null,
       activity: this.activityOf(t),
       review: reviewState(t),
-      reviewNote: this.reviewNotes.get(t.id) ?? null,
+      reviewNote: this.reviewNotes.has(t.id)
+        ? { text: this.reviewNotes.get(t.id) ?? '', sent: false }
+        : this.sentNotes.has(t.id)
+          ? { text: this.sentNotes.get(t.id) ?? '', sent: true }
+          : null,
     }
   }
 

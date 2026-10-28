@@ -369,8 +369,21 @@ function TaskNotice({ task, pr, workKey }: { task: TaskView; pr: boolean; workKe
                 : '변경을 리뷰하고 판정표를 확인합니다'
             }. 끝나면 같은 대화를 결과와 함께 다시 엽니다. 그동안 세션이 닫혀 터미널에 말할 수 없으니, 에이전트에게 할 말은 아래에 남기세요. 물을 것은 곁 세션에 말하세요.`}
         {task.review?.state === 'running' ? (
-          <ReviewNote workKey={workKey} taskId={task.id} saved={task.reviewNote ?? null} />
+          <ReviewNote
+            workKey={workKey}
+            taskId={task.id}
+            saved={task.reviewNote?.sent ? null : (task.reviewNote?.text ?? null)}
+          />
         ) : null}
+      </div>
+    )
+  }
+  // 리뷰 뒤 전할 말을 다시 연 대화에 전했다 (D529): 전해졌는지 화면에서 안다
+  if ((task.status === 'working' || task.status === 'asking') && task.reviewNote?.sent) {
+    return (
+      <div className="notice review-note-sent">
+        리뷰 뒤 전할 말을 다시 연 대화의 첫 입력에 함께 전했습니다: “{task.reviewNote.text}”.
+        에이전트가 리뷰 지적과 함께 다룹니다. 더 할 말은 터미널에 하세요.
       </div>
     )
   }
@@ -438,10 +451,6 @@ function TaskNotice({ task, pr, workKey }: { task: TaskView; pr: boolean; workKe
 }
 
 /**
- * Work 완료 화면의 독립 리뷰 줄 (D495, D497): 코드 리뷰를 껐거나, 리뷰가 실패했거나, 리뷰를 받지 않았으면 경고로 보인다.
- * 코드 리뷰와 확인을 모두 했으면 한 줄로만 알린다
- */
-/**
  * 리뷰 뒤 전할 말 (D529): 독립 리뷰 동안 세션이 닫혀 있으므로, 사람이 떠올린 말을 남겨 두면 결과로 세션을 다시 열 때 첫
  * 입력에 붙여 전한다
  */
@@ -495,6 +504,10 @@ function ReviewNote({
   )
 }
 
+/**
+ * Work 완료 화면의 독립 리뷰 줄 (D495, D497): 코드 리뷰를 껐거나, 리뷰가 실패했거나, 리뷰를 받지 않았으면 경고로 보인다.
+ * 코드 리뷰와 확인을 모두 했으면 한 줄로만 알린다
+ */
 function ReviewLine({
   review,
 }: {
