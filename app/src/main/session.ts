@@ -428,7 +428,11 @@ export class SessionRunner {
   }
 
   resize(id: string, cols: number, rows: number): void {
-    this.ptyOf(id)?.resize(cols, rows)
+    const pty = this.ptyOf(id)
+    if (!pty) return
+    pty.resize(cols, rows)
+    const buffer = this.terminals.get(id)
+    if (buffer) buffer.ptySize = { cols, rows }
   }
 
   cwd(): string {

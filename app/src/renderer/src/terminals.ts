@@ -5,8 +5,9 @@ import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { AppInfo } from '../../shared/api'
-import type { FilesOpenTarget, TerminalChunk } from '../../shared/views'
+import type { FilesOpenTarget, TerminalChunk, TerminalSize } from '../../shared/views'
 import { findLinks, logicalLine, pasteText, pastesFiles, type LinkMatch } from './links'
+import { ptyFollower } from './termSize'
 
 export interface TermEntry {
   term: Terminal
@@ -15,6 +16,18 @@ export interface TermEntry {
 }
 
 const entries = new Map<string, TermEntry>()
+
+/**
+ * 마지막으로 화면에 맞춘 크기. PTY 크기를 모르는 숨은 터미널(pty.log로 채운 것, 대기열)이 따른다. main도 새 PTY를 마지막에
+ * 받은 크기로 띄운다 (I189)
+ */
+let lastFit: TerminalSize | null = null
+
+/** 화면에 보여 크기를 잴 수 있다 */
+function shown(term: Terminal): boolean {
+  const el = term.element
+  return !!el && el.clientWidth > 0 && el.clientHeight > 0
+}
 
 /**
  * xterm의 색. styles.css의 --term-bg, --term-fg, --term-selection을 읽는다: 둘레의 .terminal과 같은 바탕이어야
@@ -87,27 +100,36 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
     return true
   })
 
+  // 숨은 xterm은 PTY 크기를 따른다 (I189)
+  const follower = ptyFollower(term, {
+    shown: () => shown(term),
+    resizePty: ({ cols, rows }) => void api.resize(key, cols, rows),
+  })
+
   // 붙기 전에 온 조각은 모았다가, 지금까지의 출력 뒤에 이어 쓴다 (seq로 겹침을 뺀다)
   let next = -1
   let replaying = true
   const pending: TerminalChunk[] = []
   const offData = api.onData(key, (c) => {
     if (next < 0) pending.push(c)
-    else if (c.seq >= next) term.write(c.data)
+    else if (c.seq >= next) follower.chunk(c)
   })
   void api.attach(key).then((b) => {
-    term.write(b.data, () => {
+    // 지난 출력은 그린 크기로 다시 그린다. 모르면 마지막으로 맞춘 크기로
+    follower.backlog(b, lastFit, () => {
       replaying = false
     })
     next = b.next
-    for (const c of pending) if (c.seq >= next) term.write(c.data)
+    for (const c of pending) if (c.seq >= next) follower.chunk(c)
     pending.length = 0
   })
   // 지나간 출력을 다시 그리는 동안 xterm이 만든 응답은 보내지 않는다
   const inData = term.onData((d) => {
     if (!replaying) void api.write(key, d)
   })
-  const inResize = term.onResize(({ cols, rows }) => void api.resize(key, cols, rows))
+  const inResize = term.onResize(({ cols, rows }) => {
+    if (!follower.following) void api.resize(key, cols, rows)
+  })
 
   const entry: TermEntry = {
     term,
@@ -124,9 +146,11 @@ export function ensureTerm(key: string, info: AppInfo): TermEntry {
   return entry
 }
 
-/** 보이는 상태일 때만 맞춘다. 숨긴 탭은 크기가 0이라 맞추면 안 된다 */
+/** 보이는 상태일 때만 맞춘다. 숨긴 탭은 크기가 0이라 맞추면 안 된다. 숨긴 탭은 PTY 크기를 따른다 (I189) */
 export function fitIfVisible(entry: TermEntry, el: HTMLElement): void {
-  if (el.clientWidth > 0 && el.clientHeight > 0) entry.fit.fit()
+  if (el.clientWidth === 0 || el.clientHeight === 0) return
+  entry.fit.fit()
+  lastFit = { cols: entry.term.cols, rows: entry.term.rows }
 }
 
 // ---------- 파일 열기 (D411) ----------

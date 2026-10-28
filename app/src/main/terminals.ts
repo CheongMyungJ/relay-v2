@@ -1,6 +1,7 @@
 // task 터미널의 출력 보관 (I14). task는 main이 시작하고 탭은 그 뒤에 붙으므로,
 // 붙을 때 지금까지의 출력을 넘겨 준다. 조각마다 seq를 붙여 겹치거나 빠지지 않게 한다.
-import type { TerminalBacklog, TerminalChunk } from '../shared/views'
+// 조각과 지난 출력에는 PTY의 크기를 붙인다: 숨은 탭의 xterm이 같은 크기로 그려야 글자가 엉키지 않는다 (I189)
+import type { TerminalBacklog, TerminalChunk, TerminalSize } from '../shared/views'
 
 /** 탭에 다시 보여 줄 최대 분량 (글자 수). 넘으면 앞부분을 버린다. 전체는 pty.log에 있다 */
 const MAX_CHARS = 4 * 1024 * 1024
@@ -10,9 +11,12 @@ export class TerminalBuffer {
   private size = 0
   private seq = 0
   live = true
+  /** PTY의 크기. PTY를 띄울 때와 크기를 바꿀 때 적는다. PTY가 끝나도 남긴다(지난 출력을 그린 크기) */
+  ptySize: TerminalSize | null = null
 
   push(data: string): TerminalChunk {
-    const chunk = { seq: this.seq++, data }
+    const chunk: TerminalChunk = { seq: this.seq++, data }
+    if (this.ptySize) chunk.size = { ...this.ptySize }
     this.chunks.push(data)
     this.size += data.length
     while (this.size > MAX_CHARS && this.chunks.length > 1) {
@@ -22,7 +26,12 @@ export class TerminalBuffer {
   }
 
   backlog(): TerminalBacklog {
-    return { data: this.chunks.join(''), next: this.seq, live: this.live }
+    return {
+      data: this.chunks.join(''),
+      next: this.seq,
+      live: this.live,
+      ...(this.ptySize ? { size: { ...this.ptySize } } : {}),
+    }
   }
 
   /** pty.log로 채운 읽기 전용 보관 (세션이 이 앱에서 돌지 않은 task) */

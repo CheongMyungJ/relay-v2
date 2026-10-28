@@ -151,6 +151,7 @@ export async function openChat(input: ChatOpenInput): Promise<number> {
       answerQueries: true,
     })
     pty = started
+    buffer.ptySize = { ...input.size }
     let exited!: () => void
     s.exited = new Promise<void>((r) => (exited = r))
     s.pty = started

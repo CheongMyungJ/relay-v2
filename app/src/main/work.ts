@@ -2396,6 +2396,7 @@ export class WorkRunner {
     const log = this.files.openPtyLog(task)
     const buffer = this.terminals.get(task.id) ?? new TerminalBuffer()
     buffer.live = true
+    buffer.ptySize = { cols, rows }
     this.terminals.set(task.id, buffer)
     const key = this.terminalKey(task.id)
     let exited!: () => void
@@ -3669,6 +3670,7 @@ export class WorkRunner {
       })
       const buffer = this.terminals.get(c.id) ?? new TerminalBuffer()
       buffer.live = true
+      buffer.ptySize = { cols, rows }
       this.terminals.set(c.id, buffer)
       const key = this.terminalKey(c.id)
       let exited!: () => void
@@ -6553,7 +6555,11 @@ export class WorkRunner {
   }
 
   resize(taskId: string, cols: number, rows: number): void {
-    this.ptyOf(taskId)?.resize(cols, rows)
+    const pty = this.ptyOf(taskId)
+    if (!pty) return
+    pty.resize(cols, rows)
+    const buffer = this.terminals.get(taskId)
+    if (buffer) buffer.ptySize = { cols, rows }
   }
 
   /** 터미널의 폴더. task와 보조 세션 모두 worktree에서 돈다. 정리한 Work는 worktree가 없어 메인 체크아웃이다 */

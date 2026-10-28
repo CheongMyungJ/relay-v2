@@ -7,6 +7,7 @@ import type {
   ProjectView,
   SessionView,
   TerminalChunk,
+  TerminalSize,
   WorkView,
 } from '../../src/shared/views'
 
@@ -23,6 +24,8 @@ export class FakeUi implements UiPort {
   /** 기본 세션 목록 (D405). 마지막으로 받은 것 */
   sessionList: SessionView[] = []
   readonly output = new Map<string, string>()
+  /** 터미널마다 마지막으로 받은 조각의 PTY 크기 (I189) */
+  readonly sizes = new Map<string, TerminalSize>()
   readonly notices: Notice[] = []
   /** 도구 훅으로 따로 온 진행 표시 (D216). 받은 것 전부는 activityLog에 남는다 */
   readonly activities = new Map<string, ActivityView | null>()
@@ -75,6 +78,7 @@ export class FakeUi implements UiPort {
 
   terminal(key: string, chunk: TerminalChunk): void {
     this.output.set(key, (this.output.get(key) ?? '') + chunk.data)
+    if (chunk.size) this.sizes.set(key, chunk.size)
     this.wake()
   }
 
