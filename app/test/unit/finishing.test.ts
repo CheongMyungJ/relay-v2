@@ -392,6 +392,17 @@ describe('독립 리뷰의 결과 글 (D495, D497)', () => {
     expect(p).toContain('리뷰를 다시 요청하지 마세요')
     expect(p).not.toContain('\n')
   })
+
+  it('리뷰 중에 사람이 남긴 말은 첫 입력 끝에 한 줄로 붙인다 (D529)', () => {
+    const file = '/w/tasks/02-fix/independent-review.md'
+    expect(reviewResumePrompt(file, '')).toBe(reviewResumePrompt(file))
+    expect(reviewResumePrompt(file, '  \n ')).toBe(reviewResumePrompt(file))
+    const p = reviewResumePrompt(file, '빈 칸도 따옴표로\r\n\n감싸 주세요 ')
+    expect(p.startsWith(reviewResumePrompt(file))).toBe(true)
+    expect(p).toContain('사람이 리뷰하는 동안 남긴 말')
+    expect(p).toContain('"빈 칸도 따옴표로 / 감싸 주세요"')
+    expect(p).not.toContain('\n')
+  })
 })
 
 describe('code_review 설정 (D497, 5.1.1)', () => {

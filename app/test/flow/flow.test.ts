@@ -957,6 +957,51 @@ describe('[흐름] 독립 리뷰 중에 앱을 끌 때 (D496)', () => {
   })
 })
 
+describe('[흐름] 리뷰 뒤 전할 말 (D529)', () => {
+  it('독립 리뷰 중에 남긴 말을 결과로 다시 연 세션의 첫 입력에 붙이고, 리뷰 중이 아니면 받지 않는다', async () => {
+    const s = await start(scenario(), { FAKE_CLAUDE_INDEPENDENT_MS: '4000' })
+    const ui = s.h.ui
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[0]?.status === 'awaiting_approval' || null,
+      'intake 승인 대기',
+    )
+    expect((await s.h.relay.reviewNote(s.workKey, 't-01', '아직')).ok).toBe(false)
+    expect(await s.h.relay.approve(s.workKey, 't-01', {})).toEqual({ ok: true })
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[1]?.review?.state === 'running' || null,
+      '독립 리뷰 중',
+      60_000,
+    )
+    expect(await s.h.relay.reviewNote(s.workKey, 't-02', '먼저 남긴 말')).toEqual({ ok: true })
+    expect(await s.h.relay.reviewNote(s.workKey, 't-02', '빈 칸도\n따옴표로')).toEqual({ ok: true })
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[1]?.reviewNote === '빈 칸도\n따옴표로' || null,
+      '남긴 말 표시',
+    )
+    await ui.until(
+      () => ui.works.get(s.workKey)?.tasks[1]?.status === 'awaiting_approval' || null,
+      '마무리 승인 대기',
+      60_000,
+    )
+    const starts = s.h.records().filter((r) => r['type'] === 'start')
+    const reopened = starts[2] as { args: string[]; resume: boolean; inlineScreen: boolean }
+    expect(reopened.resume).toBe(true)
+    expect(reopened.args.at(-1)).toContain('사람이 리뷰하는 동안 남긴 말')
+    expect(reopened.args.at(-1)).toContain('"빈 칸도 / 따옴표로"')
+    expect(reopened.args.at(-1)).not.toContain('먼저 남긴 말')
+    // 다시 열면 남긴 말은 지운다
+    expect(ui.works.get(s.workKey)?.tasks[1]?.reviewNote ?? null).toBeNull()
+    // 모든 세션은 대체 화면 없이 띄운다 (D527)
+    expect(starts.every((r) => r['inlineScreen'] === true)).toBe(true)
+    // 닫고 다시 연 까닭을 터미널에 남긴다: 닫은 줄 뒤에 다시 연 줄 (D529)
+    const log = read(path.join(s.workDir, 'tasks', '02-fix', 'pty.log'))
+    const closed = log.indexOf('relay: 독립 리뷰 중 · 세션을 잠시 닫았습니다')
+    expect(closed).toBeGreaterThan(-1)
+    expect(log.indexOf('relay: 독립 리뷰가 끝나 같은 대화를 다시 엽니다')).toBeGreaterThan(closed)
+    expect(log).not.toContain('relay: 세션 재개 (--resume)')
+  })
+})
+
 describe('[흐름] 세션을 끝낼 때 (D231)', () => {
   it('앱이 끝내는 세션의 SessionEnd 훅은 줄에 넣지 않고 바로 답한다. 승인 뒤 다음 단계가 곧바로 뜬다', async () => {
     const s = await start(scenario({ fix: fixAsking() }))

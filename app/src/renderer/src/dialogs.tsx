@@ -21,6 +21,7 @@ import {
 import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
+  FINAL_STEP_NODES,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
   SKILL_TITLES,
@@ -766,8 +767,12 @@ export function NewWorkDialog({
     if (!type) return
     setBusy(true)
     setError(null)
-    // 고른 유형에 없는 단계의 설정은 보내지 않는다 (D256)
-    const auto_approve = only(auto, AUTO_APPROVE_TITLES, type)
+    // 고른 유형에 없는 단계와 마지막 단계의 설정은 보내지 않는다 (D256, D528)
+    const auto_approve = Object.fromEntries(
+      Object.entries(only(auto, AUTO_APPROVE_TITLES, type)).filter(
+        ([n]) => !FINAL_STEP_NODES.includes(n as AutoApproveNode),
+      ),
+    )
     const question_mode = only(modes, SKILL_TITLES, type)
     const settings: WorkSettings = {
       ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
@@ -1011,10 +1016,16 @@ export function NewWorkDialog({
         <div className="dim">
           {AGENT_APPROVAL_NOTICE} 마지막 단계(Work 완료 화면)는 늘 수동이라 켜도 쓰이지 않습니다.
         </div>
-        <AutoApproveOverrides config={config} type={type} value={auto} onChange={setAuto} />
+        <AutoApproveOverrides
+          config={config}
+          type={type}
+          nodes={NEW_WORK_AUTO_NODES}
+          value={auto}
+          onChange={setAuto}
+        />
         {chosenCustom ? (
           <CustomAutoApprove
-            steps={chosenCustom.steps}
+            steps={chosenCustom.steps.slice(0, -1)}
             value={customAuto}
             onChange={setCustomAuto}
           />
@@ -1338,20 +1349,27 @@ function QuestionModes({
 
 type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
 
+/** 새 Work에서 자동 승인 설정을 쓰는 노드: 마지막 단계는 늘 수동이다 (D528) */
+const NEW_WORK_AUTO_NODES: readonly AutoApproveNode[] = AUTO_APPROVE_TITLES.map(([n]) => n).filter(
+  (n) => !FINAL_STEP_NODES.includes(n),
+)
+
 const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
 
 /**
  * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 리뷰와 검증은 늘 수동이다 (4.2).
- * type이 있으면 그 유형의 단계만 보인다 (D256)
+ * type이 있으면 그 유형의 단계만, nodes가 있으면 그 노드만 보인다 (D256, D528)
  */
 function AutoApproveOverrides({
   config,
   type,
+  nodes,
   value,
   onChange,
 }: {
   config: AppConfig | null
   type: WorkType | null
+  nodes?: readonly AutoApproveNode[]
   value: AutoOverrides
   onChange: (v: AutoOverrides) => void
 }) {
@@ -1365,7 +1383,7 @@ function AutoApproveOverrides({
   }
   return (
     <Groups
-      items={AUTO_APPROVE_TITLES}
+      items={nodes ? AUTO_APPROVE_TITLES.filter(([n]) => nodes.includes(n)) : AUTO_APPROVE_TITLES}
       type={type}
       row={(node, title) => (
         <label key={node} className="form-row">
@@ -1406,6 +1424,8 @@ function CustomAutoApprove({
     const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== step))
     onChange(v ? { ...rest, [step]: v === 'on' } : rest)
   }
+  // 단계가 하나뿐인 유형은 그 단계가 마지막이라 고를 것이 없다 (D528)
+  if (!steps.length) return null
   return (
     <div className="form-grid">
       <div className="form-group" role="group" aria-label="커스텀 단계">
@@ -1525,7 +1545,11 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
     const r = await call(() =>
       // 보이지 않는 다른 유형의 단계 값은 남기지 않는다. 사람이 보거나 지울 수 없어서다 (D256, PR #23 리뷰)
       window.relay.updateWorkSettings(work.key, {
-        auto_approve: only(auto, AUTO_APPROVE_TITLES, work.type),
+        auto_approve: Object.fromEntries(
+          Object.entries(only(auto, AUTO_APPROVE_TITLES, work.type)).filter(([n]) =>
+            work.autoApprove.nodes.includes(n as AutoApproveNode),
+          ),
+        ),
         ...(work.customType ? { custom_auto_approve: customAuto } : {}),
         question_mode: only(modes, SKILL_TITLES, work.type),
         respond_auto_start: autoStart ?? null,
@@ -1548,10 +1572,16 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
         바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. Work의
         마지막 단계(Work 완료 화면)는 늘 수동입니다.
       </div>
-      <AutoApproveOverrides config={config} type={work.type} value={auto} onChange={setAuto} />
+      <AutoApproveOverrides
+        config={config}
+        type={work.type}
+        nodes={work.autoApprove.nodes}
+        value={auto}
+        onChange={setAuto}
+      />
       {work.customType ? (
         <CustomAutoApprove
-          steps={work.customType.steps}
+          steps={work.customType.steps.filter((s) => work.autoApprove.customSteps.includes(s.id))}
           value={customAuto}
           onChange={setCustomAuto}
         />
@@ -2019,6 +2049,10 @@ export function SettingsDialog({
               <label key={node} className="form-row">
                 <span>
                   {title} <span className="dim">({node})</span>
+                  {/* 새 Work에서는 마지막 단계라 쓰지 않는다 (D528) */}
+                  {FINAL_STEP_NODES.includes(node) ? (
+                    <span className="dim"> · 마지막 단계라 늘 수동, 옛 Work만</span>
+                  ) : null}
                 </span>
                 <input
                   type="checkbox"

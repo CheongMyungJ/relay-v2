@@ -49,6 +49,7 @@ const api: RelayApi = {
   review: (workKey, taskId) => ipcRenderer.invoke(IPC.review, workKey, taskId),
   approve: (workKey, taskId, opts) => ipcRenderer.invoke(IPC.approve, workKey, taskId, opts),
   cancelCountdown: (workKey, taskId) => ipcRenderer.invoke(IPC.cancelCountdown, workKey, taskId),
+  reviewNote: (workKey, taskId, text) => ipcRenderer.invoke(IPC.reviewNote, workKey, taskId, text),
   takeOver: (workKey) => ipcRenderer.invoke(IPC.takeOver, workKey),
   answerQuestion: (workKey, taskId, questionId, answers) =>
     ipcRenderer.invoke(IPC.answerQuestion, workKey, taskId, questionId, answers),

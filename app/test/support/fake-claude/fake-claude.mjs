@@ -655,6 +655,8 @@ async function run() {
         : {}),
     cwd: process.cwd(),
     token: Boolean(env.RELAY_HOOK_TOKEN),
+    // 대체 화면을 끄는 환경 변수를 받았는가 (D527)
+    inlineScreen: env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN === '1',
     skill: ctx.skill,
     taskId: ctx.taskId,
     taskDir: ctx.taskDir,

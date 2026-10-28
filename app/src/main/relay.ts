@@ -1595,6 +1595,11 @@ export class Relay {
     return this.withWork(workKey, (w) => w.cancelCountdown(taskId))
   }
 
+  /** 독립 리뷰 중에 리뷰 뒤 전할 말을 남긴다 (D529) */
+  reviewNote(workKey: string, taskId: string, text: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.reviewNote(taskId, text))
+  }
+
   answerQuestion(
     workKey: string,
     taskId: string,

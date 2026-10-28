@@ -209,6 +209,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I193 | relay MCP로 묻는 Claude task(D521): caller Work에서 새로 시작하는 Claude task는 `deploySkill`의 `askViaMcp`(절차의 `` `AskUserQuestion` ``을 `` `mcp__relay__ask_human` ``으로, Codex와 같은 `askViaRelay`)와 `callerAnswers`(호출자가 터미널을 보지 못한다는 `CALLER_ASK_NOTE`, Codex 배포본에도)로 절차를 쓰고, task 디렉터리의 `task.mcp.json`(`relayMcpConfig`: 서버 이름 `relay_task`, 앱 실행 파일 + `codex-bridge.mjs mcp`, 포트와 task id. 토큰은 PTY 환경 변수로만. 이름을 `relay`로 두면 사람이 README대로 사용자 범위에 등록한 바깥용 relay MCP와 겹친다. 절차의 도구 이름은 `mcp__relay_task__ask_human`이다)을 `--mcp-config`로, `--disallowedTools AskUserQuestion`을 준다. 두 옵션은 값을 여럿 받아 바로 뒤의 첫 프롬프트까지 먹으므로 늘 `--settings` 앞에 둔다(live 계약 시험이 찾았고, 가짜 claude도 그렇게 읽는다). 훅 경로에 질문 처리(`askHuman`)를 걸고 PTY에 `MCP_TOOL_TIMEOUT`(하루)을 준다. `session.started`의 `ask: 'mcp'`가 task에 남고, 재개는 그것으로 같은 인자를 다시 준다(포트가 바뀌어 설정 파일은 다시 씀). `caller_questions: recommend`면 `askHuman`이 질문 상태를 만들지 않고 질문마다 `RECOMMEND_ANSWER`로 답한다. 정리 세션의 질문은 늘 사람의 것이다. 브리지의 `initialize` 안내는 Codex 스킬 / 정리 세션 / Claude task로 가른다 | Codex task가 실제 모델로 확인한 질문 길을 그대로 쓴다. claude가 MCP 서버에 자기 환경을 물려주는 것은 2.1.312에서 확인했다(I13처럼 토큰을 파일에 쓰지 않음) | |
 | I194 | `revise`(D524): `WorkRunner.revise`가 지금 task이고 턴이 끝난 상태(`REVISABLE`)이며 같은 대화를 다시 열 수 있을 때(대화 ID가 있고 아는 엔진)만 받는다: 세션을 끝낸 뒤에 열지 못하거나 새 세션이 되면 글이 닿지 않는다. 글은 task 디렉터리의 `revise-<n>.txt`(산출물로 보이지 않게 `.md`가 아님)에 쓰고 첫 입력은 그 경로를 가리키는 한 줄(`revisePrompt`)이다: 여러 줄 인자는 Windows의 `.cmd` 래퍼(npm 설치 claude, 가짜 claude)에서 첫 줄 뒤가 잘렸고(Windows CI), '-'로 시작하는 목록은 옵션으로 읽힌다. 새 세션을 띄울 때는 남은 글을 지운다. 처리 줄 안에서 살아 있는 세션을 `endSession`으로 끝내고, 그 줄이 끝난 뒤의 줄에서 `resumeMessage`를 적고 `resume` 이벤트를 넣는다(끝낸 세션의 `pty.exit`가 그 사이에 들어가 세션이 살아 있지 않게 된다). `resumeSession`은 그 글을 다른 첫 입력(이어서 하라, 리뷰 결과)보다 먼저 쓰고 한 번만 쓴다 | 1.2(실행 중인 세션에 글을 넣지 않음)를 지키며 사람이 터미널에서 말하는 것과 같은 효과를 낸다 | |
 | I195 | `get_work`의 모양(D526, `core/mcp.workSummary`): `state`는 끊긴 작업이면 `operation`, 끝난 Work면 그 상태, 질문이 있으면 `question`, PR 진행에서 대응 task가 없으면 `pr`, 아니면 지금 task 상태(승인됨은 `working`). `review`·`completion`은 승인 화면을 보일 상태(`ReviewView.reviewable`)일 때만이고, 산출물은 task 디렉터리의 경로, 바뀐 파일은 diff의 `diff --git` 줄에서 읽고, diff는 `include_diff`일 때 10만 자까지다. `state_key`는 진행하는 쪽, 상태, 지금 task와 그 상태·세션·질문·카운트다운·오류 수, 전달, PR 상태·CI·항목 수, 끊긴 작업이다(진행 표시와 revision은 넣지 않음). `wait`는 `seen`이 지금과 다르면 바로 돌려준다. 첫 턴 힌트는 `ActivityView`의 `turn: false`가 60초를 넘을 때다 | 호출자는 앱 화면 대신 이것을 읽는다. 일하는 동안 도구마다 바뀌는 값으로 `wait`가 깨지 않게 한다 | |
+| I196 | D527의 자리: `core/settings`의 `launchEnv`가 훅 토큰과 함께 `INLINE_SCREEN_ENV`(`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`)를 준다. Claude 엔진의 task, 정리 세션, 곁 세션, 기본 세션이 모두 이 함수를 거친다. Codex의 `launchEnv`는 그대로다. 가짜 claude의 `start` 기록에 `inlineScreen`을 더해 [흐름]이 본다 | 환경 변수는 `--help`에 없어 [계약]의 옵션 검사로 볼 수 없다. 실제 동작은 손으로 확인해 `docs/checks.md`에 적었다 | |
+| I197 | D528의 자리: 쓰이는 자리는 `core/pipeline.autoApproveStages`(Work 완료 task가 아닌 `STEP_NODES`, 커스텀 단계, `respond`)가 정하고 `WorkView.autoApprove`로 보낸다. 앱 설정 화면은 `shared/config.FINAL_STEP_NODES`로 표시하고, [새 Work]는 새 Work가 늘 새 파이프라인이라 `FINAL_STEP_NODES`를 빼고 커스텀 단계의 마지막을 뺀다. `FINAL_STEP_NODES`가 `PIPELINES`의 마지막 노드와 같은지 [단위]가 본다 | 렌더러는 core를 부르지 않는다(I9). 옛 Work인지는 Work마다 달라 main이 정해 보낸다 | |
+| I198 | D529의 자리: `WorkRunner.reviewNotes`(task id → 글, 메모리). `reviewNote`는 `reviewState`가 있을 때만 받고 `REVIEW_NOTE_MAX`(2000)를 넘으면 거절한다. `resumeSession`이 `review` 입력이면 `reviewResumePrompt(결과 경로, 남긴 말)`로 만들고 지운다. 닫는 줄은 `startReview`가 세션을 끝낸 뒤 `markTerminal`(터미널 버퍼와 `appendPtyMark`)로, 다시 여는 줄은 `launch`의 첫 줄로 넣는다. IPC `work:review-note`, `TaskView.reviewNote`, 패널의 `ReviewNote` | 남긴 말을 `work.json`에 두려면 상태 기계 이벤트가 하나 늘고, 리뷰는 10~20초라 그사이 앱을 끄는 일은 드물다 | |
 
 ## 3. 확인한 사실
 
@@ -1582,6 +1585,22 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[흐름]** `test/flow/mcp.test.ts`: 조회 도구, caller Work의 relay MCP 질문(가짜 claude의 `mcpAsk`가 `--mcp-config`의 서버로 물음)과 호출자의 답, 사람의 답·승인 막기, 승인 대기의 요약과 산출물 경로, 호출자 승인과 다음 task, OS 알림 없음, `recommend`, [직접 맡기] 뒤 사람의 답과 승인, `revise`의 다시 열기와 첫 입력, `driver: human`, 앱 안의 세션과 틀린 인자, `wait`의 제한 시간과 `seen`.
 - **[계약]** `appFlags`에 relay MCP로 묻는 task의 인자(`--mcp-config`, `--disallowedTools`)를 더하고 녹화본의 옵션을 2.1.312로 새로 썼다. live 시험 5가 그 인자로 실제 claude의 시작 이벤트에 relay 서버가 연결되고 `mcp__relay__ask_human`이 있으며 `AskUserQuestion`이 빠진 것을 본다. 가짜 claude는 `--mcp-config`의 서버를 띄우고 MCP 도구의 앞뒤 훅을 녹화본의 도구 훅 모양으로 보내며, 두 옵션의 값을 실제처럼 다음 옵션 앞까지 읽는다.
 - **[스모크]** `test/smoke/mcp.spec.ts`: 앱을 띄우고 브리지(설치본은 `resources/relay-mcp.mjs`)를 Electron의 Node 모드로 띄워 도구로 프로젝트를 등록하고 Work를 맡긴다. 사이드바의 MCP 표시와 패널의 호출자 띠, 사람에게 질문창이 뜨지 않음, [직접 맡기] 뒤 "에이전트 질문" 창으로 답하고 [의도 승인]이 켜짐.
+
+### M41. 2026-10-28 평가 반영 (D527~D529)
+
+사람이 "relay의 사용성을 높이는 방법을 제안하고 끝까지 진행하라"고 맡겼다. M36 뒤 첫 평가(relay 60fb560 대 맨 CLI, 7개 시나리오 × 2회, `app/eval/reports/2026-10-28-baseline.md`)에서 되풀이된 불편 셋을 골라 고치고, 같은 시나리오로 고치기 전 빌드와 견주었다(`app/eval/reports/2026-10-28-after.md`). 설계 v0.36.
+
+- core: `settings`의 `INLINE_SCREEN_ENV`와 `launchEnv`(I196), `pipeline.autoApproveStages`(I197), `independent-review`의 `REVIEW_NOTE_MAX`와 `reviewResumePrompt`의 남긴 말(I198).
+- 앱과 화면: `WorkView.autoApprove`, `TaskView.reviewNote`, `WorkRunner.reviewNote`·`markTerminal`, 독립 리뷰의 닫는 줄과 다시 여는 줄, IPC `work:review-note`. 설정 화면의 마지막 단계 표시, [새 Work]와 [Work 설정]의 자동 승인 줄 고르기, 패널의 리뷰 뒤 전할 말.
+- 평가 도구: 사람 역할 설명서(`eval/guides/relay.md`)를 M36 뒤의 단계(리뷰와 검증 단계 없음, 마지막 단계의 독립 리뷰)에 맞췄다. 쪽 이름의 설정 묶음 `relay+<이름>`과 `eval/presets/`(`docs/eval.md`).
+- 넣지 않은 것: 일반 유형에서 더 맞는 유형을 묻지 않게 하기(D319와 부딪힘), 작은 일의 빠른 경로(의도 승인을 건너뛰면 의도 승인은 늘 수동이라는 4.2를 바꾼다. 평가에서 수고는 여전히 맨 CLI가 앞서 다음에 사람과 정할 거리로 남긴다).
+
+**시험**
+
+- **[단위]** `test/unit/settings.test.ts`: `launchEnv`의 대체 화면 끔. `test/unit/pipeline.test.ts`: 자동 승인 설정을 쓰는 자리(새 Work, 옛 Work, 커스텀), `FINAL_STEP_NODES`와 `PIPELINES`. `test/unit/finishing.test.ts`: 남긴 말을 붙인 첫 입력.
+- **[흐름]** `test/flow/flow.test.ts` "리뷰 뒤 전할 말": 리뷰 중이 아니면 거절, 바꿔 남긴 말만 첫 입력에 붙음, 다시 열면 지움, 모든 세션의 `inlineScreen`, pty.log의 닫는 줄과 다시 여는 줄.
+- **[스모크]** `test/smoke/app.spec.ts`: 설정 화면의 "마지막 단계라 늘 수동, 옛 Work만", [새 Work]의 버그 수정에 원인 분석과 수정 줄이 없고 PR 대응 줄이 있음.
+- **[평가 도구]** `eval/test/measure.test.mjs`: 쪽 이름의 설정 묶음 읽기, 모든 설정 묶음이 앱 설정으로 경고 없이 읽힘.
 
 ## 8. 테스트 전략
 

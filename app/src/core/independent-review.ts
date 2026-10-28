@@ -461,10 +461,24 @@ export function reviewMarkdown(r: ReviewResult): string {
   ].join('\n')
 }
 
-/** 다시 연 마무리 세션의 첫 입력 (D496) */
-export function reviewResumePrompt(resultPath: string): string {
-  return (
+/** 리뷰 뒤 전할 말의 최대 글자 수 (D529) */
+export const REVIEW_NOTE_MAX = 2000
+
+/**
+ * 다시 연 마무리 세션의 첫 입력 (D496). 독립 리뷰 중에 사람이 남긴 말이 있으면 뒤에 붙인다 (D529): 사람이 터미널에 한
+ * 말과 같게 다루라고 알린다. 줄바꿈은 실행 인자에서 흐트러지지 않게 " / "로 잇는다
+ */
+export function reviewResumePrompt(resultPath: string, note?: string): string {
+  const base =
     `relay: 독립 리뷰가 끝났습니다. ${resultPath}를 읽고 절차의 '독립 리뷰를 받은 뒤' 순서대로 이어 하세요. ` +
     '리뷰를 다시 요청하지 마세요.'
-  )
+  const said = note
+    ?.split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(' / ')
+  return said
+    ? `${base} 사람이 리뷰하는 동안 남긴 말이 있습니다. 터미널에서 들은 말처럼 다루세요(고칠 점이면 리뷰 지적과 함께 ` +
+        `그 자리에서 고치고 결정 기록에 사람의 요청으로 남깁니다): "${said}"`
+    : base
 }

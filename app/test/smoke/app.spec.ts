@@ -366,6 +366,11 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.getByRole('group', { name: '버그 수정' }).nth(1)).toContainText(
     '원인 분석과 수정',
   )
+  // 기본 유형의 마지막 단계는 새 Work에서 늘 수동이라 그렇게 적는다 (D498, D528)
+  await expect(win.getByRole('group', { name: '버그 수정' }).nth(1)).toContainText(
+    '마지막 단계라 늘 수동, 옛 Work만',
+  )
+  await expect(featureAuto).not.toContainText('설계와 계획 (design) · 마지막 단계')
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
   // 리뷰와 검증(옛 Work, D501)은 질문 방식만 고른다. 의도 정리와 리뷰와 검증은 늘 수동이라 자동 승인이 없다 (4.2, D229)
   await expect(win.getByLabel('리뷰와 검증 질문 방식', { exact: true })).toHaveValue('draft_first')
@@ -452,9 +457,11 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 이슈 기록이 켜진 프로젝트(기본, D337)는 기존 이슈 번호를 적는 칸이 있다 (D338)
   await expect(newWork.getByLabel('이슈 번호')).toBeVisible()
   await win.screenshot({ path: 'test-results/new-work.png' })
-  const fixAuto = win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })
-  await expect(fixAuto).toHaveValue('')
-  await expect(fixAuto.locator('option').first()).toHaveText('앱 설정 따름 (켜짐)')
+  // 원인 분석과 수정은 버그 수정의 마지막 단계라 늘 수동이어서 고르지 않는다 (D528). PR 대응은 고른다
+  await expect(win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })).toHaveCount(0)
+  const respondAuto = win.getByLabel('PR 대응 자동 승인', { exact: true })
+  await expect(respondAuto).toHaveValue('')
+  await expect(respondAuto.locator('option').first()).toHaveText('앱 설정 따름 (꺼짐)')
   // 고른 유형의 단계만 보인다: 버그 수정에는 설계와 계획, 구현이 없다 (D256)
   await expect(win.getByLabel('설계와 계획 자동 승인', { exact: true })).toHaveCount(0)
   await expect(win.getByLabel('구현 질문 방식', { exact: true })).toHaveCount(0)

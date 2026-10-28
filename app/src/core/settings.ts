@@ -339,9 +339,19 @@ export function continuePrompt(appEnded: boolean): string {
   )
 }
 
-/** PTY에 넘길 환경 변수. 토큰은 여기로만 넘긴다 (I13) */
+/**
+ * 대체 화면(전체 화면)을 쓰지 않게 하는 Claude Code의 환경 변수 (D527). Claude Code는 설정 폴더의 두 번째 실행부터
+ * 대체 화면에 그리고 마우스를 잡는다(2.1.312에서 확인). 그러면 세션이 끝나 대체 화면을 나올 때 대화가 터미널에서 사라지고
+ * "Resume this session with: claude --resume …"만 남는다
+ */
+export const INLINE_SCREEN_ENV = 'CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN'
+
+/**
+ * PTY에 넘길 환경 변수. 토큰은 여기로만 넘긴다 (I13). 대화가 터미널 스크롤에 남게 대체 화면을 끈다 (D527): 끝난 단계의
+ * 터미널(pty.log를 다시 그린 것 포함)에서 대화를 다시 읽고, 마우스를 잡지 않아 끌어 고르기와 Ctrl+클릭이 된다
+ */
 export function launchEnv(token: string): Record<string, string> {
-  return { [HOOK_TOKEN_ENV]: token }
+  return { [HOOK_TOKEN_ENV]: token, [INLINE_SCREEN_ENV]: '1' }
 }
 
 /**

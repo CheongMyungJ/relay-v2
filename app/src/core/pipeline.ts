@@ -3,7 +3,7 @@
 // PR 대응 task(노드 respond)는 파이프라인 밖이다 (D187, D188): 순서에 없고 다음 단계가 없다.
 // 커스텀 유형(D447)은 노드 custom을 단계 수만큼 지나고, 단계마다의 이름과 산출물은 work.json의 custom_type에서 읽는다 (D458, D462).
 // 새 Work(pipeline: 2)는 verify 없이 마지막 작업 단계(마무리 단계)가 Work를 마무리하고(D493), 옛 Work는 verify를 지난다 (D501).
-import type { SkillName } from '../shared/config'
+import type { AutoApproveNode, SkillName } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { CustomStep, TaskRecord, WorkState, WorkType } from '../shared/work'
 
@@ -202,6 +202,24 @@ export function completesWork(
   const stage = stageOf(task)
   if (!stage || stage.node === 'intake') return false
   return stage.node === 'verify' || nextStage(work, stage) === WORK_COMPLETE
+}
+
+/**
+ * 이 Work에서 자동 승인 설정을 쓰는 자리 (D528): Work 완료 화면이 아닌 기본 유형의 단계와 PR 대응(nodes), 커스텀 단계
+ * (customSteps, D457)다. 새 Work의 마지막 단계는 늘 수동이라 들지 않는다. [Work 설정]이 이 자리만 보인다
+ */
+export function autoApproveStages(work: PipelineWork): {
+  nodes: AutoApproveNode[]
+  customSteps: string[]
+} {
+  const open = stagesOf(work).filter((s) => !completesWork(work, { node: s.node, step: s.step }))
+  return {
+    nodes: [
+      ...open.filter((s) => isStepNode(s.node)).map((s) => s.node as AutoApproveNode),
+      'respond',
+    ],
+    customSteps: open.flatMap((s) => (s.node === 'custom' && s.step ? [s.step] : [])),
+  }
 }
 
 /**

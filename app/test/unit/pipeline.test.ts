@@ -6,6 +6,7 @@ import {
   NODE_INFO,
   PIPELINES,
   RESPOND,
+  autoApproveStages,
   completesWork,
   defaultNext,
   finishesWork,
@@ -16,6 +17,7 @@ import {
   stagesOf,
   workType,
 } from '../../src/core/pipeline'
+import { FINAL_STEP_NODES } from '../../src/shared/config'
 import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
 
@@ -178,5 +180,47 @@ describe('Work 완료 task와 마무리 단계 (D493, D501)', () => {
     expect(finishesWork(work, { node: 'custom', step: 'apply' })).toBe(true)
     expect(stagesOf({ type: 'custom', ...v2 }).map((s) => s.node)).toEqual(['intake', 'verify'])
     expect(nextStage(work, { node: 'custom', step: 'gone' })).toEqual({ node: 'verify' })
+  })
+})
+
+describe('자동 승인 설정을 쓰는 자리 (D498, D528)', () => {
+  const v2 = { pipeline: 2 as const }
+  it('새 Work는 마지막 단계를 빼고, 옛 Work는 verify 앞의 단계를 모두 넣는다', () => {
+    expect(autoApproveStages({ type: 'bugfix', ...v2 })).toEqual({
+      nodes: ['respond'],
+      customSteps: [],
+    })
+    expect(autoApproveStages({ type: 'feature', ...v2 }).nodes).toEqual(['design', 'respond'])
+    expect(autoApproveStages({ type: 'bugfix' }).nodes).toEqual(['fix', 'respond'])
+    expect(autoApproveStages({ type: 'feature' }).nodes).toEqual(['design', 'implement', 'respond'])
+  })
+
+  it('커스텀 유형은 마지막이 아닌 단계만 고른다', () => {
+    const custom_type = {
+      id: 'survey-apply',
+      name: '조사 후 적용',
+      description: '',
+      source: 'global' as const,
+      hash: 'h',
+      steps: [
+        { id: 'survey', title: '조사', sections: [], auto_approve: false },
+        { id: 'apply', title: '적용', sections: [], auto_approve: true },
+      ],
+    }
+    expect(autoApproveStages({ type: 'custom', custom_type, ...v2 })).toEqual({
+      nodes: ['respond'],
+      customSteps: ['survey'],
+    })
+    expect(autoApproveStages({ type: 'custom', custom_type }).customSteps).toEqual([
+      'survey',
+      'apply',
+    ])
+  })
+
+  it('FINAL_STEP_NODES는 기본 유형의 새 파이프라인에서 마지막 단계인 노드다', () => {
+    const finals = (Object.keys(PIPELINES) as WorkType[])
+      .filter((t) => t !== 'custom')
+      .map((t) => PIPELINES[t].at(-1))
+    expect([...FINAL_STEP_NODES].sort()).toEqual([...new Set(finals)].sort())
   })
 })

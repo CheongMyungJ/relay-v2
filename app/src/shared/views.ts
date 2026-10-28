@@ -1,5 +1,5 @@
 // 렌더러로 보내는 스냅샷과 조회 결과 (I14). main이 core로 계산하고, 화면은 받은 것을 그리기만 한다.
-import type { WorkSettings } from './config'
+import type { AutoApproveNode, WorkSettings } from './config'
 import type { Decision, HandoffStatus, TaskNode } from './contracts'
 import type { PendingQuestionView } from './questions'
 import type { PrItemKind, PrItemStatus } from './pr'
@@ -642,6 +642,8 @@ export interface TaskView {
    * 다시 켰거나 다시 열지 못함. [재개]가 결과를 첫 입력으로 준다). 그 밖에는 null. codeReview는 그때의 설정이다 (D497)
    */
   review?: { state: 'running' | 'ready'; codeReview: boolean } | null
+  /** 독립 리뷰 중에 남긴 리뷰 뒤 전할 말 (D529). 없으면 null */
+  reviewNote?: string | null
 }
 
 /**
@@ -702,6 +704,8 @@ export interface WorkView {
     source: CustomTypeSource
     steps: { id: string; title: string; autoApprove: boolean }[]
   } | null
+  /** 이 Work에서 자동 승인 설정을 쓰는 자리 (D528). [Work 설정]은 이 자리의 줄만 보인다 */
+  autoApprove: { nodes: AutoApproveNode[]; customSteps: string[] }
   /** 요청의 첫 줄 */
   title: string
   /** Work를 진행하는 쪽 (D519). caller면 패널에 띠와 [직접 맡기]를 보이고 승인·답·전달 버튼을 끈다 (D523) */

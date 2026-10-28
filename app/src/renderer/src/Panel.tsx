@@ -141,7 +141,7 @@ export function Panel({
       ) : null}
       {(work.status === 'active' || (work.status === 'pr' && task.node === 'respond')) &&
       task.id === work.current ? (
-        <TaskNotice task={task} pr={work.status === 'pr'} />
+        <TaskNotice task={task} pr={work.status === 'pr'} workKey={work.key} />
       ) : null}
       {showsPr(work, task.id) ? (
         <PrSection
@@ -350,7 +350,7 @@ function Recovery({
  * 중단]과 [재개]만 있다 (D182). 중단됨의 [재개]는 이어서 하라고 알리고, [세션 재개]는 입력을 기다린다 (D218). 앱이 꺼져
  * 끝난 세션은 그렇다고 보인다 (D219)
  */
-function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
+function TaskNotice({ task, pr, workKey }: { task: TaskView; pr: boolean; workKey: string }) {
   if (task.status === 'queued') {
     return (
       <div className="notice">
@@ -367,7 +367,10 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
               task.review?.codeReview === false
                 ? '판정표를 확인합니다(코드 리뷰는 끔)'
                 : '변경을 리뷰하고 판정표를 확인합니다'
-            }. 끝나면 같은 대화를 결과와 함께 다시 엽니다. 그동안 물을 것은 곁 세션에 말하세요.`}
+            }. 끝나면 같은 대화를 결과와 함께 다시 엽니다. 그동안 세션이 닫혀 터미널에 말할 수 없으니, 에이전트에게 할 말은 아래에 남기세요. 물을 것은 곁 세션에 말하세요.`}
+        {task.review?.state === 'running' ? (
+          <ReviewNote workKey={workKey} taskId={task.id} saved={task.reviewNote ?? null} />
+        ) : null}
       </div>
     )
   }
@@ -438,6 +441,60 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
  * Work 완료 화면의 독립 리뷰 줄 (D495, D497): 코드 리뷰를 껐거나, 리뷰가 실패했거나, 리뷰를 받지 않았으면 경고로 보인다.
  * 코드 리뷰와 확인을 모두 했으면 한 줄로만 알린다
  */
+/**
+ * 리뷰 뒤 전할 말 (D529): 독립 리뷰 동안 세션이 닫혀 있으므로, 사람이 떠올린 말을 남겨 두면 결과로 세션을 다시 열 때 첫
+ * 입력에 붙여 전한다
+ */
+function ReviewNote({
+  workKey,
+  taskId,
+  saved,
+}: {
+  workKey: string
+  taskId: string
+  saved: string | null
+}) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const send = async (value: string) => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.reviewNote(workKey, taskId, value))
+    setBusy(false)
+    if (r.ok) setText('')
+    else setError(r.error)
+  }
+  return (
+    <div className="review-note">
+      {saved ? (
+        <div className="review-note-saved">
+          <strong>리뷰 뒤 전할 말</strong>: {saved}
+          <div className="notice-actions">
+            <button disabled={busy} onClick={() => void send('')}>
+              지우기
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <textarea
+        aria-label="리뷰 뒤 전할 말"
+        rows={2}
+        placeholder="예: 빈 칸도 따옴표로 감싸 주세요"
+        value={text}
+        disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="notice-actions">
+        <button disabled={busy || !text.trim()} onClick={() => void send(text)}>
+          {saved ? '바꿔 남기기' : '리뷰 뒤 전하기'}
+        </button>
+      </div>
+      {error ? <div className="error">{error}</div> : null}
+    </div>
+  )
+}
+
 function ReviewLine({
   review,
 }: {

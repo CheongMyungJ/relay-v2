@@ -2040,6 +2040,21 @@ details summary:hover {
   margin-top: 8px;
 }
 
+/* 독립 리뷰 중의 리뷰 뒤 전할 말 (D529) */
+.review-note {
+  margin-top: 10px;
+}
+
+.review-note textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.review-note-saved {
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
 /* Work 완료 화면 (시나리오 7-3~7-6) */
 .completion-actions {
   display: flex;

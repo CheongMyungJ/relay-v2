@@ -43,6 +43,18 @@ export type QuestionMode = 'draft_first' | 'confirm_each'
 export type AutoApproveNode =
   'fix' | 'design' | 'implement' | 'refactor' | 'spec' | 'execute' | 'respond'
 
+/**
+ * 기본 유형의 마지막 단계라 새 Work(D501)에서는 자동 승인 설정을 쓰지 않는 노드 (D498, D528). 마지막 단계의 승인 화면은 Work
+ * 완료 화면이라 늘 수동이고, 이 값은 끝에 verify가 있는 옛 Work에만 쓴다. core/pipeline의 PIPELINES와 맞는지 [단위]가 본다
+ */
+export const FINAL_STEP_NODES: readonly AutoApproveNode[] = [
+  'fix',
+  'implement',
+  'refactor',
+  'spec',
+  'execute',
+]
+
 /** 화면 테마 (D335). system은 OS 설정을 따른다 */
 export type ThemeChoice = 'system' | 'dark' | 'light'
 

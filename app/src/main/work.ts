@@ -161,6 +161,7 @@ import {
 import {
   NODE_INFO,
   RESPOND,
+  autoApproveStages,
   completesWork,
   customSections,
   customStep,
@@ -193,6 +194,7 @@ import {
   reviewPart,
   reviewLogFile,
   reviewLogLine,
+  REVIEW_NOTE_MAX,
   reviewResumePrompt,
   reviewSteps,
   sortFindings,
@@ -620,6 +622,14 @@ const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) �
 const startMark = (task: TaskRecord) =>
   `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 새 세션을 띄우는 중 ──\x1b[0m\r\n`
 
+/**
+ * 독립 리뷰로 세션을 닫을 때와 결과로 다시 열 때 넣는 줄 (D529). 세션이 닫혔다 다시 열리는 까닭을 터미널에서 보인다
+ */
+const REVIEW_CLOSE_MARK =
+  '\r\n\x1b[0m\x1b[2m── relay: 독립 리뷰 중 · 세션을 잠시 닫았습니다. 끝나면 같은 대화를 결과와 함께 다시 엽니다 ──\x1b[0m\r\n'
+const REVIEW_RESUME_MARK =
+  '\r\n\x1b[0m\x1b[2m── relay: 독립 리뷰가 끝나 같은 대화를 다시 엽니다 (--resume) ──\x1b[0m\r\n'
+
 /** 앱이 꺼지며 끝난 세션의 pty.log 끝에 넣는 줄 (D219). 다시 그린 옛 화면이 어디서 끝났는지 보인다 */
 const APP_END_MARK = '\r\n\x1b[0m\x1b[2m── relay: 앱이 꺼져 세션이 여기서 끝났습니다 ──\x1b[0m\r\n'
 
@@ -755,6 +765,8 @@ export class WorkRunner {
   private readonly resumeInput = new Map<string, ResumeInput>()
   /** relay MCP 호출자가 고칠 점으로 보낸 글 (D524). 다시 여는 세션의 첫 입력으로 한 번 쓴다 */
   private readonly resumeMessage = new Map<string, string>()
+  /** 독립 리뷰 중에 사람이 남긴 리뷰 뒤 전할 말 (D529). 결과로 세션을 다시 열 때 첫 입력에 붙인다. 앱을 끄면 사라진다 */
+  private readonly reviewNotes = new Map<string, string>()
   /** 도는 독립 리뷰 (task id → 끊기, D496). [Work 포기]가 끊는다 */
   private readonly reviews = new Map<string, AbortController>()
   /** 도는 독립 리뷰가 끝나는 때 (호출 프로세스가 끝남). 앱 종료가 worktree를 놓기 전에 기다린다 */
@@ -1346,7 +1358,9 @@ export class WorkRunner {
       ? sleep(REVIEW_END_DELAY_MS)
           .then(() =>
             this.enqueue(async () => {
-              if (this.live.get(taskId) === session) await this.endSession(taskId)
+              if (this.live.get(taskId) !== session) return
+              await this.endSession(taskId)
+              await this.markTerminal(taskId, REVIEW_CLOSE_MARK)
             }),
           )
           .catch((e: unknown) => this.problem(`리뷰 전에 세션을 끝내지 못함: ${message(e)}`))
@@ -1380,6 +1394,15 @@ export class WorkRunner {
         if (this.reviewRuns.get(taskId) === run) this.reviewRuns.delete(taskId)
       })
     this.reviewRuns.set(taskId, run)
+  }
+
+  /** 끝난 세션의 터미널과 pty.log 끝에 표시 줄을 붙인다 (D529) */
+  private async markTerminal(taskId: string, mark: string): Promise<void> {
+    const task = this.task(taskId)
+    if (!task) return
+    const buffer = this.terminals.get(taskId)
+    if (buffer) this.ctx.ui.terminal(this.terminalKey(taskId), buffer.push(mark))
+    await this.files.appendPtyMark(task, mark)
   }
 
   /**
@@ -1974,12 +1997,16 @@ export class WorkRunner {
       const prompt =
         message ??
         (input === 'review'
-          ? reviewResumePrompt(path.join(this.files.taskDir(task), REVIEW_RESULT_FILE))
+          ? reviewResumePrompt(
+              path.join(this.files.taskDir(task), REVIEW_RESULT_FILE),
+              this.reviewNotes.get(task.id),
+            )
           : input === 'continue'
             ? continuePrompt(task.session?.app_ended !== undefined)
             : undefined)
       this.resumeInput.delete(task.id)
       this.resumeMessage.delete(task.id)
+      if (input === 'review') this.reviewNotes.delete(task.id)
       const instructionsPath =
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       // 시작할 때 relay MCP로 묻게 띄운 task는 재개도 같은 길이다 (D521)
@@ -2000,7 +2027,7 @@ export class WorkRunner {
         token,
         args,
         await this.turnState(task, files),
-        RESUME_MARK,
+        input === 'review' ? REVIEW_RESUME_MARK : RESUME_MARK,
         { ask: claudeAsk },
       )
       const processStartedAt = await processStartTime(session.pty.pid)
@@ -3031,6 +3058,24 @@ export class WorkRunner {
   /** 승인 화면의 [취소] (4.3): 카운트다운을 멈추고 사람의 승인을 기다린다 */
   cancelCountdown(taskId: string): Promise<CommandResult> {
     return this.enqueue(() => this.command({ type: 'countdown.cancel', taskId, at: this.ctx.at() }))
+  }
+
+  /**
+   * 리뷰 뒤 전할 말 (D529): 독립 리뷰 중(끝났지만 아직 다시 열지 않은 때 포함)에만 받는다. 세션이 닫혀 터미널에 말할 수 없는
+   * 동안 사람이 떠올린 것을, 결과로 세션을 다시 열 때 첫 입력에 붙여 전한다. 빈 글이면 지운다
+   */
+  reviewNote(taskId: string, text: string): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const task = this.task(taskId)
+      if (!task || !reviewState(task)) return { ok: false, error: '독립 리뷰 중인 단계가 아닙니다' }
+      const note = text.trim()
+      if (note.length > REVIEW_NOTE_MAX)
+        return { ok: false, error: `${REVIEW_NOTE_MAX}자까지 남길 수 있습니다` }
+      if (note) this.reviewNotes.set(taskId, note)
+      else this.reviewNotes.delete(taskId)
+      this.changed()
+      return { ok: true }
+    })
   }
 
   /**
@@ -6986,6 +7031,7 @@ export class WorkRunner {
             })),
           }
         : null,
+      autoApprove: autoApproveStages(w),
       title: this.title,
       driver: workDriver(w),
       status: w.status,
@@ -7112,6 +7158,7 @@ export class WorkRunner {
         : null,
       activity: this.activityOf(t),
       review: reviewState(t),
+      reviewNote: this.reviewNotes.get(t.id) ?? null,
     }
   }
 

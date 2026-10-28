@@ -84,7 +84,10 @@ describe('훅 (I13, 시나리오 2-3)', () => {
       previousTaskDirs: [],
     })
     expect(JSON.stringify(settings)).not.toContain(token)
-    expect(launchEnv(token)).toEqual({ RELAY_HOOK_TOKEN: token })
+    expect(launchEnv(token)).toEqual({
+      RELAY_HOOK_TOKEN: token,
+      CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1',
+    })
   })
 })
 
