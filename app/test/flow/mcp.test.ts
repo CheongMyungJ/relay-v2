@@ -5,7 +5,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { harness, makeRepo, register, type Harness } from '../support/harness'
 import { handoff, intentDraft, REPO_FILES, REQUEST } from '../support/scenarios'
-import { CALLER_DRIVES, HUMAN_DRIVES, RECOMMEND_ANSWER } from '../../src/core/driver'
+import { CALLER_DRIVES, HUMAN_DRIVES, RECOMMEND_ANSWER, revisePrompt } from '../../src/core/driver'
 import { IN_APP_REFUSED, type McpWork } from '../../src/core/mcp'
 import type { McpResult } from '../../src/main/mcp'
 import type { WorkState } from '../../src/shared/work'
@@ -109,10 +109,10 @@ describe('[흐름] relay MCP 호출자가 Work를 맡긴다 (D516~D526)', () => 
     expect(args).toEqual(expect.arrayContaining(['--disallowedTools', 'AskUserQuestion']))
     const config = args[args.indexOf('--mcp-config') + 1] ?? ''
     expect(JSON.parse(fs.readFileSync(config, 'utf8'))).toMatchObject({
-      mcpServers: { relay: { args: [expect.stringMatching(/codex-bridge\.mjs$/), 'mcp'] } },
+      mcpServers: { relay_task: { args: [expect.stringMatching(/codex-bridge\.mjs$/), 'mcp'] } },
     })
     const instructions = s.starts()[0]?.['instructions'] as string
-    expect(instructions).toContain('`mcp__relay__ask_human`')
+    expect(instructions).toContain('`mcp__relay_task__ask_human`')
     expect(instructions).not.toContain('`AskUserQuestion`')
     expect(instructions).toContain('cannot see this terminal')
     expect(s.read(work).tasks[0]?.ask).toBe('mcp')
@@ -224,7 +224,9 @@ describe('[흐름] relay MCP 호출자가 Work를 맡긴다 (D516~D526)', () => 
     })
     await waitFor(s.ok, work, 'awaiting_approval')
     expect(await s.call('revise', { work, message: '   ' })).toMatchObject({ ok: false })
-    expect(await s.call('revise', { work, message: '비목표에 성능 개선을 넣으세요' })).toEqual({
+    // '-'로 시작하는 목록도 옵션으로 읽히지 않게 출처를 앞에 붙여 준다
+    const message = '- 비목표에 성능 개선을 넣으세요\n- 이름을 바꾸세요'
+    expect(await s.call('revise', { work, message })).toEqual({
       ok: true,
       result: { ok: true },
     })
@@ -234,7 +236,8 @@ describe('[흐름] relay MCP 호출자가 Work를 맡긴다 (D516~D526)', () => 
     )
     const args = resumed['args'] as string[]
     expect(args).toEqual(expect.arrayContaining(['--resume', '--mcp-config']))
-    expect(args.at(-1)).toBe('비목표에 성능 개선을 넣으세요')
+    expect(args.at(-1)).toBe(revisePrompt(message))
+    expect(resumed['prompt']).toBe(revisePrompt(message))
     await waitFor(s.ok, work, 'awaiting_approval')
     // 일하는 중에는 받지 않는다
     expect(s.read(work).tasks).toHaveLength(1)

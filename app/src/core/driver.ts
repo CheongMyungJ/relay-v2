@@ -48,6 +48,14 @@ export function recommendAnswers(questions: readonly { id: string }[]): Record<s
 }
 
 /**
+ * 고칠 점(D524)을 다시 연 세션의 첫 입력으로. 앞에 출처를 붙인다: 에이전트가 누구의 글인지 알고, '-'로 시작하는 글(목록)이
+ * CLI 인자에서 옵션으로 읽히지 않는다
+ */
+export function revisePrompt(text: string): string {
+  return `relay: MCP 호출자가 보낸 고칠 점입니다.\n\n${text}`
+}
+
+/**
  * 고칠 점(D524)을 받는 task 상태: 턴이 끝났다(승인 대기, 대기, 막힘, 세션 종료, 중단됨). 살아 있는 세션은 끝내고 다시 연다
  */
 export const REVISABLE: readonly TaskStatus[] = [

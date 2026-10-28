@@ -396,7 +396,7 @@ let mcpServer = null
 function relayMcp() {
   if (mcpServer) return mcpServer
   if (!opts.mcpConfig) throw new Error('relay MCP가 설정에 없습니다 (--mcp-config)')
-  const server = JSON.parse(fs.readFileSync(opts.mcpConfig, 'utf8')).mcpServers.relay
+  const server = JSON.parse(fs.readFileSync(opts.mcpConfig, 'utf8')).mcpServers.relay_task
   const child = spawn(server.command, server.args, {
     env: { ...env, ...server.env },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -545,7 +545,7 @@ async function steps(list, ctx, vars) {
         ],
       }
       const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
-      const fields = { tool_name: 'mcp__relay__ask_human', tool_input: args, tool_use_id: id }
+      const fields = { tool_name: 'mcp__relay_task__ask_human', tool_input: args, tool_use_id: id }
       await hook('PreToolUse', fields, fields.tool_name)
       const message = await relayMcp().call('tools/call', { name: 'ask_human', arguments: args })
       record({ type: 'answer', result: message.result })
@@ -645,6 +645,8 @@ async function run() {
     type: 'start',
     args: argv,
     resume: opts.resume,
+    // 인자에서 읽은 첫 프롬프트: 값을 여럿 받는 옵션이 먹었거나 옵션으로 읽혔으면 null이다
+    prompt: opts.prompt,
     cleanup: !side && !opts.resume && opts.prompt === null,
     ...(side
       ? { [session ? 'session' : 'side']: true, guide: fs.readFileSync(opts.guide, 'utf8') }

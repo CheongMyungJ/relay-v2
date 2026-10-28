@@ -15,6 +15,7 @@ import { createWork, currentTask, transition, type MachineEvent } from '../../sr
 import { decisionsBlock } from '../../src/core/records'
 import {
   CALLER_ASK_NOTE,
+  CLAUDE_ASK_TOOL,
   RELAY_ASK_TOOL,
   askViaRelay,
   launchArgs,
@@ -234,7 +235,7 @@ describe('[단위] relay MCP로 묻는 Claude task의 인자 (D521)', () => {
 
   it('relay 서버는 앱 실행 파일로 브리지를 띄우고 포트와 task id만 파일에 둔다(토큰은 환경 변수)', () => {
     const c = relayMcpConfig({ command: '/relay', bridge: '/b.mjs', port: 4321, taskId: 't-02' })
-    expect(c.mcpServers.relay).toEqual({
+    expect(c.mcpServers['relay_task']).toEqual({
       type: 'stdio',
       command: '/relay',
       args: ['/b.mjs', 'mcp'],
@@ -247,6 +248,9 @@ describe('[단위] relay MCP로 묻는 Claude task의 인자 (D521)', () => {
     expect(askViaRelay('Use only the `AskUserQuestion` tool.')).toBe(
       `Use only the \`${RELAY_ASK_TOOL}\` tool.`,
     )
+    // Claude task의 서버는 사용자가 등록하는 relay MCP(이름 relay)와 겹치지 않는다
+    expect(CLAUDE_ASK_TOOL).toBe('mcp__relay_task__ask_human')
+    expect(askViaRelay('`AskUserQuestion`', CLAUDE_ASK_TOOL)).toBe(`\`${CLAUDE_ASK_TOOL}\``)
     expect(CALLER_ASK_NOTE).toMatch(/cannot see this terminal/)
   })
 })

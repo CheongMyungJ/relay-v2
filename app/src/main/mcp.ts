@@ -1,7 +1,8 @@
 // relay MCP의 도구 호출을 Relay로 잇는다 (D516~D526). 브리지(scripts/relay-mcp.mjs)가 훅 서버의 /control로 보낸 호출을
 // 받는다. 도구의 정의와 결과의 모양은 core/mcp이고, 여기는 값의 모양을 확인하고 Relay를 부른다. Electron을 import하지
 // 않아 흐름 시험이 그대로 부른다. 앱 안의 세션이 부른 진행 도구는 거절한다 (D520)
-import { driverBlock } from '../core/driver'
+import { HUMAN_DRIVES } from '../core/driver'
+import { REVIEWABLE } from '../core/approval'
 import {
   IN_APP_REFUSED,
   MCP_TOOLS,
@@ -83,7 +84,8 @@ function outcome(r: CommandResult): McpResult {
 }
 
 export class McpService {
-  private readonly waiters = new Set<(view: WorkView) => void>()
+  /** 기다리는 wait. view가 null이면 그 Work를 지웠다 */
+  private readonly waiters = new Set<(key: string, view: WorkView | null) => void>()
 
   constructor(
     private readonly relay: Relay,
@@ -92,7 +94,12 @@ export class McpService {
 
   /** Relay가 Work 스냅샷을 보낼 때마다 부른다. wait가 기다린다 */
   workChanged(view: WorkView): void {
-    for (const w of [...this.waiters]) w(view)
+    for (const w of [...this.waiters]) w(view.key, view)
+  }
+
+  /** Relay가 Work 기록을 지웠다 (D407, D408). 그 Work를 기다리던 wait를 끝낸다 */
+  workRemoved(workKey: string): void {
+    for (const w of [...this.waiters]) w(workKey, null)
   }
 
   tools(): readonly McpTool[] {
@@ -214,8 +221,7 @@ export class McpService {
   /** 호출자가 진행하는 Work (D519). 사람이 진행하면 던진다 */
   private callerView(args: Args): WorkView {
     const view = this.view(args)
-    const block = driverBlock({ driver: view.driver === 'caller' ? 'caller' : undefined }, 'caller')
-    if (block) throw new ArgError(block)
+    if (view.driver !== 'caller') throw new ArgError(HUMAN_DRIVES)
     return view
   }
 
@@ -229,7 +235,9 @@ export class McpService {
     const task = currentTaskView(view)
     const runner = this.relay.work(view.key)
     const record = task ? runner?.work.tasks.find((t) => t.id === task.id) : undefined
-    const review = task ? await this.relay.review(view.key, task.id) : null
+    // 승인 화면은 파일과 git을 읽어 무겁다: 보일 상태의 task만 읽는다 (workSummary도 그때만 쓴다)
+    const review =
+      task && REVIEWABLE.includes(task.status) ? await this.relay.review(view.key, task.id) : null
     return workSummary({
       view,
       review,
@@ -268,11 +276,11 @@ export class McpService {
     const project = text(args, 'project') ?? ''
     if (!this.relay.snapshot().projects.some((p) => p.id === project))
       return { ok: false, error: `프로젝트가 없습니다: ${project}` }
-    const [list, custom] = await Promise.all([
-      this.relay.customTypeList(),
+    const [builtin, custom] = await Promise.all([
+      this.relay.builtinTypes(),
       this.relay.customTypes(project),
     ])
-    return { ok: true, result: [...list.builtin, ...custom].map(typeLine) }
+    return { ok: true, result: [...builtin, ...custom].map(typeLine) }
   }
 
   private async works(args: Args): Promise<McpResult> {
@@ -348,8 +356,10 @@ export class McpService {
         signal?.removeEventListener('abort', aborted)
         resolve(v)
       }
-      const listener = (v: WorkView) => {
-        if (v.key === start.key && stateKey(v) !== seen) done(v)
+      const listener = (key: string, v: WorkView | null) => {
+        if (key !== start.key) return
+        if (!v) done(null)
+        else if (stateKey(v) !== seen) done(v)
       }
       const aborted = () => done(null)
       const timer = setTimeout(() => done(null), seconds * 1000)
@@ -357,7 +367,8 @@ export class McpService {
       signal?.addEventListener('abort', aborted, { once: true })
       if (signal?.aborted) done(null)
     })
-    const view = this.relay.work(start.key)?.view() ?? changed ?? start
+    const view = this.relay.work(start.key)?.view()
+    if (!view) return { ok: false, error: `Work가 지워졌습니다: ${start.key}` }
     return {
       ok: true,
       result: { ...(await this.summary(view)), timed_out: changed === null },

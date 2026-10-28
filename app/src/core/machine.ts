@@ -2366,7 +2366,6 @@ function repoAdded(work: WorkState, e: RepoAdded): Transition {
   }
 }
 
-/** [이 단계 끝나면 멈춤] (시나리오 3-4). 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 */
 /**
  * [직접 맡기] (D523): driver와 질문 처리를 지워 사람이 진행하는 Work로 둔다. 살아 있는 세션은 그대로다: 그 세션의 질문은
  * 앱 질문창으로 온다(ask_human, D521)
@@ -2377,6 +2376,7 @@ function takeOver(work: WorkState, e: TakeOver): Transition {
   return { work: next, effects: [log(next, e.at, 'work.taken_over', {})] }
 }
 
+/** [이 단계 끝나면 멈춤] (시나리오 3-4). 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 */
 function stopAfter(work: WorkState, e: StopAfterStep): Transition {
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if ((work.stop_after_step === true) === e.on) return unchanged(work)

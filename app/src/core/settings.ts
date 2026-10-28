@@ -190,9 +190,18 @@ export const CLI_ASK_TOOL = 'AskUserQuestion'
 /** relay MCP의 질문 도구 (engines.md, D521). 단계 절차의 질문 도구 이름을 이것으로 바꾼다 */
 export const RELAY_ASK_TOOL = 'mcp__relay__ask_human'
 
-/** 단계 절차의 질문 도구를 relay MCP의 것으로 바꾼다 (engines.md, D521) */
-export function askViaRelay(text: string): string {
-  return text.replaceAll(`\`${CLI_ASK_TOOL}\``, `\`${RELAY_ASK_TOOL}\``)
+/**
+ * Claude task의 relay MCP 서버 이름 (D521). 사람이 사용자 범위로 등록하는 바깥 호출자용 relay MCP(이름 relay, README)와
+ * 겹치지 않게 따로 둔다: 앱은 --strict-mcp-config를 주지 않아 둘 다 보인다
+ */
+export const CLAUDE_ASK_SERVER = 'relay_task'
+
+/** Claude task의 질문 도구 (D521) */
+export const CLAUDE_ASK_TOOL = `mcp__${CLAUDE_ASK_SERVER}__ask_human`
+
+/** 단계 절차의 질문 도구를 relay MCP의 것으로 바꾼다 (engines.md, D521). Claude task는 CLAUDE_ASK_TOOL이다 */
+export function askViaRelay(text: string, tool: string = RELAY_ASK_TOOL): string {
+  return text.replaceAll(`\`${CLI_ASK_TOOL}\``, `\`${tool}\``)
 }
 
 /**
@@ -214,9 +223,10 @@ function askArgs(input: { mcpConfigPath?: string }): string[] {
 
 /** relay MCP 서버 (D521). 브리지는 Codex task와 같은 것이고 훅 서버의 /question으로 묻는다 */
 export interface RelayMcpConfig {
-  mcpServers: {
-    relay: { type: 'stdio'; command: string; args: string[]; env: Record<string, string> }
-  }
+  mcpServers: Record<
+    string,
+    { type: 'stdio'; command: string; args: string[]; env: Record<string, string> }
+  >
 }
 
 /**
@@ -232,7 +242,7 @@ export function relayMcpConfig(o: {
 }): RelayMcpConfig {
   return {
     mcpServers: {
-      relay: {
+      [CLAUDE_ASK_SERVER]: {
         type: 'stdio',
         command: o.command,
         args: [o.bridge, 'mcp'],

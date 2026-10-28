@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { CALLER_ASK_NOTE, INSTRUCTIONS_FILE, askViaRelay } from '../core/settings'
+import { CALLER_ASK_NOTE, CLAUDE_ASK_TOOL, INSTRUCTIONS_FILE, askViaRelay } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { ASSEMBLY_FLAGS, assemblyFlags } from '../core/builtin-types'
 import { NODE_INFO, STEP_NODES } from '../core/pipeline'
@@ -342,7 +342,7 @@ export async function deploySkill(o: {
   callerAnswers?: boolean
 }): Promise<DeployedSkill> {
   const original = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
-  const asked = o.askViaMcp ? askViaRelay(original) : original
+  const asked = o.askViaMcp ? askViaRelay(original, CLAUDE_ASK_TOOL) : original
   const text = o.callerAnswers ? asked + CALLER_ASK_NOTE : asked
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)

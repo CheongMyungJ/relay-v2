@@ -25,7 +25,8 @@ import { codexBridgePath } from '../../src/adapters/codex'
 import {
   CLI_ASK_TOOL,
   HOOK_TOKEN_ENV,
-  RELAY_ASK_TOOL,
+  CLAUDE_ASK_SERVER,
+  CLAUDE_ASK_TOOL,
   hookSettings,
   launchArgs,
   relayMcpConfig,
@@ -292,10 +293,12 @@ describe.runIf(LIVE)('[계약] 실제 claude', () => {
     const tools = (init?.['tools'] as string[] | undefined) ?? []
     const servers = (init?.['mcp_servers'] as { name: string; status: string }[] | undefined) ?? []
     lines.push(
-      `- relay MCP로 묻는 task: relay 서버 ${servers.find((x) => x.name === 'relay')?.status ?? '없음'}, ask_human ${tools.includes(RELAY_ASK_TOOL) ? '있음' : '없음'}, AskUserQuestion ${tools.includes(CLI_ASK_TOOL) ? '남음' : '빠짐'}`,
+      `- relay MCP로 묻는 task: relay 서버 ${servers.find((x) => x.name === CLAUDE_ASK_SERVER)?.status ?? '없음'}, ask_human ${tools.includes(CLAUDE_ASK_TOOL) ? '있음' : '없음'}, AskUserQuestion ${tools.includes(CLI_ASK_TOOL) ? '남음' : '빠짐'}`,
     )
-    expect(servers).toContainEqual(expect.objectContaining({ name: 'relay', status: 'connected' }))
-    expect(tools).toContain(RELAY_ASK_TOOL)
+    expect(servers).toContainEqual(
+      expect.objectContaining({ name: CLAUDE_ASK_SERVER, status: 'connected' }),
+    )
+    expect(tools).toContain(CLAUDE_ASK_TOOL)
     expect(tools).not.toContain(CLI_ASK_TOOL)
   })
 

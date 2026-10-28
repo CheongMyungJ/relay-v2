@@ -330,6 +330,7 @@ import { continuePrompt, INSTRUCTIONS_FILE, relayMcpConfig } from '../core/setti
 import {
   REVISABLE,
   asksViaMcp,
+  revisePrompt,
   driverBlock,
   recommendAnswers,
   workDriver,
@@ -1866,6 +1867,8 @@ export class WorkRunner {
    */
   private async startSession(task: TaskRecord): Promise<boolean> {
     const { env } = this.ctx
+    // 새 세션은 고칠 점(D524)을 받지 않는다: 다시 열 대화에 줄 글이 남았으면 뒤의 [세션 재개]에 끼지 않게 지운다
+    this.resumeMessage.delete(task.id)
     try {
       const dir = this.files.taskDir(task)
       await fsp.mkdir(dir, { recursive: true })
@@ -2034,7 +2037,7 @@ export class WorkRunner {
       ...this.typeSource(task),
       finishing: finishesWork(this.work, task),
       askViaMcp: task.ask === 'mcp',
-      callerAnswers: task.ask === 'mcp',
+      callerAnswers: workDriver(this.work) === 'caller',
     })
     return deployed.file
   }
@@ -3109,13 +3112,16 @@ export class WorkRunner {
           ok: false,
           error: `${taskId}는 턴이 끝난 상태가 아님(${TASK_STATUS_LABEL[task.status]}). 턴이 끝난 뒤 보내세요`,
         }
-      if (!task.session) return { ok: false, error: `${taskId}에 다시 열 대화가 없음` }
+      // 세션을 끝내기 전에 같은 대화를 다시 열 수 있는지 본다: 대화 ID를 받지 못한 Codex(D423)와 모르는 엔진은 새 세션이
+      // 되거나 열리지 않아 고칠 점이 닿지 않는다
+      if (!task.session?.id || knownTaskEngine(task) === null)
+        return { ok: false, error: `${taskId}에 다시 열 대화가 없음` }
       if (this.live.has(taskId)) await this.endSession(taskId)
       return { ok: true }
     }).then((r) =>
       r.ok
         ? this.enqueue(async () => {
-            this.resumeMessage.set(taskId, body)
+            this.resumeMessage.set(taskId, revisePrompt(body))
             const resumed = await this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() })
             if (!resumed.ok) this.resumeMessage.delete(taskId)
             return resumed

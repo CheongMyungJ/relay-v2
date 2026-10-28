@@ -256,7 +256,10 @@ export class Relay {
         ui.work(view)
         this.mcp.workChanged(view)
       },
-      workRemoved: (workKey) => ui.workRemoved(workKey),
+      workRemoved: (workKey) => {
+        ui.workRemoved(workKey)
+        this.mcp.workRemoved(workKey)
+      },
       activity: (update) => ui.activity(update),
       projects: (views) => ui.projects(views),
       sessions: (views) => ui.sessions(views),
@@ -281,15 +284,6 @@ export class Relay {
     this.o.onConfig?.(config)
     if (warning) this.warnings.push(warning)
     await this.hooks.listen()
-    // relay MCP (D516, D517): 도구 호출을 받고 연결 정보를 쓴다. 쓰지 못하면 MCP 없이 연다
-    this.hooks.setControl(this.mcpToken, (req, signal) => this.mcp.handle(req, signal))
-    await writeMcpConnection(this.o.home, {
-      port: this.hooks.port,
-      token: this.mcpToken,
-      pid: process.pid,
-    }).catch((e: unknown) =>
-      this.warnings.push(`relay MCP의 연결 정보(mcp.json)를 쓰지 못함 (${String(e)})`),
-    )
     const loaded: WorkRunner[] = []
     for (const project of await loadProjects(this.o.home, this.warnings)) {
       this.projects.set(project.project_id, project)
@@ -353,6 +347,16 @@ export class Relay {
             this.warnings.push(`${r.key}: PR 진행을 시작하지 못함 (${String(e)})`)
           }),
         ),
+    )
+    // relay MCP (D516, D517): 프로젝트와 Work를 읽고 재시작 조정을 마친 뒤에 도구 호출을 받고 연결 정보를 쓴다. 브리지는
+    // 연결 정보가 생겨야 부른다. 쓰지 못하면 MCP 없이 연다
+    this.hooks.setControl(this.mcpToken, (req, signal) => this.mcp.handle(req, signal))
+    await writeMcpConnection(this.o.home, {
+      port: this.hooks.port,
+      token: this.mcpToken,
+      pid: process.pid,
+    }).catch((e: unknown) =>
+      this.warnings.push(`relay MCP의 연결 정보(mcp.json)를 쓰지 못함 (${String(e)})`),
     )
   }
 
@@ -720,7 +724,7 @@ export class Relay {
         await Promise.all(runners.map((r) => r.remove({ files: false })))
         for (const r of runners) {
           this.works.delete(r.key)
-          this.o.ui.workRemoved(r.key)
+          this.ui.workRemoved(r.key)
         }
         this.projects.delete(projectId)
         this.o.ui.projects(this.projectViews())
@@ -991,6 +995,13 @@ export class Relay {
     return (await this.typesOf(this.projects.get(projectId))).types.map((t) => customTypeView(t))
   }
 
+  /** 앱에 든 기본 유형 (D506) */
+  async builtinTypes(): Promise<CustomTypeView[]> {
+    return (await listBuiltinTypes(path.join(this.o.skills, TYPES_DIR))).map((t) =>
+      customTypeView(t),
+    )
+  }
+
   /** 업무 유형 화면의 목록 (D459). 레포 유형에 가려진 전역 유형은 그 프로젝트의 목록에 가려졌다고 보인다 */
   async customTypeList(): Promise<CustomTypeList> {
     const global = await listGlobalTypes(this.o.home).catch(() => [])
@@ -1008,9 +1019,8 @@ export class Relay {
         }
       }),
     )
-    const builtin = await listBuiltinTypes(path.join(this.o.skills, TYPES_DIR))
     return {
-      builtin: builtin.map((t) => customTypeView(t)),
+      builtin: await this.builtinTypes(),
       global: global.map((t) => customTypeView(t)),
       projects,
     }
@@ -1678,7 +1688,7 @@ export class Relay {
     const r = await runner.remove()
     if (!r.ok) return r
     this.works.delete(runner.key)
-    this.o.ui.workRemoved(runner.key)
+    this.ui.workRemoved(runner.key)
     return { ok: true }
   }
 
