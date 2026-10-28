@@ -9,7 +9,8 @@ import { codeOutcome, judgeTree, makeRepo, withoutKnowledge } from '../lib/repo.
 import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
 import { measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { pickTypeLines } from '../lib/human.mjs'
-import { armType } from '../lib/kind.mjs'
+import { PRESETS, armBuild, armOff, armPreset, armType, presetConfig } from '../lib/kind.mjs'
+import { normalizeConfig } from '../../src/core/config.ts'
 import { compare } from '../primary.mjs'
 import { kindOf, knowledgeInDiff } from '../knowledge-quality.mjs'
 
@@ -235,6 +236,30 @@ describe('Work 여럿을 잇는 시나리오', () => {
     expect(pickTypeLines('relay', { type: 'general' })).toEqual([])
     // 커스텀은 유형마다 버튼 이름이 달라 쪽 이름(relay@custom)으로 고르지 않는다
     expect(armType('relay@custom')).toBeNull()
+  })
+
+  it('쪽 이름의 +<설정 묶음>은 빌드, 지식 끔, 유형과 따로 읽는다', () => {
+    expect(armPreset('relay')).toBeNull()
+    expect(armPreset('relay+noreview')).toBe('noreview')
+    expect(armPreset('relay-off+manual@general')).toBe('manual')
+    expect(armType('relay-off+manual@general')).toBe('general')
+    expect(armBuild('relay-off+manual@general')).toBe('relay')
+    expect(armOff('relay-off+manual@general')).toBe(true)
+    expect(armOff('relay+noreview')).toBe(false)
+    expect(armBuild('m40+noreview')).toBe('m40')
+    expect(pickTypeLines('relay+noreview@general', { type: 'bugfix' }).join()).toContain(
+      "'일반'을(를) 고른다",
+    )
+  })
+
+  it('설정 묶음은 모두 앱이 경고 없이 읽는 앱 설정이다', () => {
+    const names = fs.readdirSync(PRESETS).filter((f) => f.endsWith('.json'))
+    expect(names.length).toBeGreaterThan(0)
+    for (const f of names) {
+      const v = presetConfig(f.replace(/\.json$/, ''))
+      expect(normalizeConfig({ schema_version: 1, ...v }).warnings, f).toEqual([])
+    }
+    expect(() => presetConfig('없는-묶음')).toThrow(/설정 묶음이 없습니다/)
   })
 
   it('재는 Work는 기본이 첫 Work를 뺀 모두이고 measure로 바꾼다', () => {

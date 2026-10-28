@@ -178,11 +178,13 @@ bash eval/ref-app.sh base 0247049                                 # 견줄 빌�
 node eval/run.mjs --scenarios 21,24 --runs 3 --arms relay,base --app base=/tmp/relay-ref/base/app --pairs relay:base
 node eval/primary.mjs eval/results/<폴더> --pair relay:relay-off # 주지표와 구간
 node eval/run.mjs --scenarios 1,10,15,16,18,19 --runs 3 --arms relay,relay@general --pairs relay:relay@general --parallel 2  # 교차 비교(relay I93)
+node eval/run.mjs --scenarios 1,3 --runs 2 --arms relay,relay+noreview --pairs relay:relay+noreview --parallel 2  # 설정 묶음 견주기
 node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만들기
 ```
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`. 옵션 전체(`--human-effort`, `--no-vision`, `--max-minutes`, `--max-turns`, `--no-judge` 포함)는 `node eval/run.mjs --help`로 본다.
 - **교차 비교(relay I93):** `--arms`의 relay 쪽 뒤에 `@<유형>`을 붙이면(`relay@general`) 사람 역할이 시나리오의 유형 대신 그 유형으로 새 Work를 만든다(설명서에 "이번 평가 조건"으로 알린다). 같은 빌드에서 `relay`와 `relay@general`을 함께 돌리고 짝 `relay:relay@general`을 판정해, 전용 유형과 일반 유형의 수고와 결과 확신을 견준다. 맨 CLI는 유형이 없어 다시 돌리지 않는다. 결과 폴더는 `<시나리오>/relay@general-<회차>/`이고 보고서의 쪽 이름은 "relay (일반 유형)"이다.
+- **설정 묶음:** 평가는 앱 설정의 기본값으로 돈다. relay 쪽 뒤에 `+<이름>`을 붙이면(`relay+noreview`, `relay-off+manual@general`처럼 `-off` 뒤, `@<유형>` 앞) `app/eval/presets/<이름>.json`(앱 설정의 일부, 없는 키는 앱의 기본값)을 앱 저장소의 `config.json`으로 두고 띄운다. 사람 역할이 [설정]에서 바꾼 값을 덮지 않게 처음 띄울 때만 쓴다. 같은 빌드의 `relay`와 짝으로 판정해 설정 하나의 효과를 본다. 보고서의 쪽 이름은 "relay (설정 noreview)"이다. 지금 묶음: `noreview`(독립 리뷰의 코드 리뷰 끔), `manual`(자동 승인 모두 끔), `design-auto`(설계와 계획 자동 승인), `confirm-each`(질문 방식 모두 결정마다 확인), `short-countdown`(카운트다운 3초). 모든 묶음이 앱이 경고 없이 읽는 설정인지 `eval/test/`가 본다.
 - 결과: `app/eval/results/<시각>/`(git에 넣지 않음). `report.md`, `report.json`, `config.json`, `<시나리오>/<쪽>-<회차>/`에 `run.json`(relay의 단계별 토큰 `agentSteps` 포함), `turns.jsonl`(차례 기록), `shots/`(relay 스크린샷), `final/*.diff`, `works/`(relay 산출물과 `pty.log`), `<시나리오>/judge-<회차>.json`.
 - 작업 폴더: `/tmp/relay-eval/<결과 폴더 이름>/`(레포, relay 저장소, 설정 폴더). 컨테이너가 끝나면 없어진다. 같은 `--out`으로 다시 돌리면 같은 회차의 작업 폴더와 결과 폴더를 비우고 새로 한다.
 - 시간: 실행 하나에 3~20분쯤이다. `--parallel 2`까지 권한다(Electron과 claude 둘이 함께 돈다).

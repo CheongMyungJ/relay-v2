@@ -1,0 +1,12 @@
+{
+  "question_mode": {
+    "work-start": "confirm_each",
+    "fix": "confirm_each",
+    "design": "confirm_each",
+    "implement": "confirm_each",
+    "refactor": "confirm_each",
+    "execute": "confirm_each",
+    "verify": "confirm_each",
+    "pr-respond": "confirm_each"
+  }
+}

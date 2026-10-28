@@ -4,7 +4,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ask } from './ai.mjs'
-import { armBase, armType, typeLabel, words } from './kind.mjs'
+import { armBase, armBuild, armType, typeLabel, words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
@@ -13,7 +13,7 @@ export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
 
 /** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
 function guideName(arm, kind) {
-  const own = armBase(arm).replace(/-off$/, '')
+  const own = armBuild(arm)
   if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
   return kind
 }

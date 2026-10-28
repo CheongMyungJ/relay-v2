@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
-import { armBase, armType, typeLabel } from './lib/kind.mjs'
+import { armBase, armPlain, armPreset, armType, typeLabel } from './lib/kind.mjs'
 import { codeOutcome } from './lib/repo.mjs'
 import { clip, isMain, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
 import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
@@ -22,6 +22,9 @@ const label = (k) => {
   // relay@<유형>은 그 유형으로 만든 Work다 (교차 비교, I93)
   const type = armType(k)
   if (type) return `${label(armBase(k))} (${typeLabel(type)} 유형)`
+  // relay+<설정 묶음>은 그 설정으로 띄운 앱이다
+  const preset = armPreset(k)
+  if (preset) return `${label(armPlain(k))} (설정 ${preset})`
   return LABEL[k] ?? (k.endsWith('-off') ? `${k.slice(0, -4)} (지식 끔)` : k)
 }
 

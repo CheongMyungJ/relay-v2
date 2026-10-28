@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 // 시나리오의 업무 유형(relay D236, D261, D303, D353, D447)에 따른 낱말. scenario.json의 type이 없으면 버그 수정이다 (relay I62, I67, I92, I112)
 const WORDS = {
   bugfix: {
@@ -87,6 +90,39 @@ export function armType(arm) {
 
 /** 쪽 이름에서 `@<유형>`을 뗀 것. 앱 빌드와 지식 끔(-off)은 이 이름으로 가린다 */
 export const armBase = (arm) => String(arm ?? '').replace(/@[a-z]+$/, '')
+
+/**
+ * 쪽 이름의 설정 묶음: `relay+noreview`처럼 `+<이름>`이 붙은 relay 쪽은 eval/presets/<이름>.json(앱 설정의 일부)을 앱
+ * 저장소의 config.json으로 두고 띄운다. 없으면 null. `relay-off+noreview@general`처럼 -off 뒤, @<유형> 앞에 둔다
+ */
+export function armPreset(arm) {
+  return /\+([a-z0-9-]+)$/.exec(armBase(arm))?.[1] ?? null
+}
+
+/** 설정 묶음 폴더 */
+export const PRESETS = path.resolve(import.meta.dirname, '../presets')
+
+/**
+ * 설정 묶음의 앱 설정. 파일이 없거나 JSON 객체가 아니면 던진다. 앱은 없는 키를 기본값으로 채운다(relay core/config.ts)
+ * @returns {Record<string, unknown>}
+ */
+export function presetConfig(name) {
+  const file = path.join(PRESETS, `${name}.json`)
+  if (!fs.existsSync(file)) throw new Error(`설정 묶음이 없습니다: ${file}`)
+  const v = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (!v || typeof v !== 'object' || Array.isArray(v))
+    throw new Error(`설정 묶음은 JSON 객체여야 합니다: ${file}`)
+  return v
+}
+
+/** 쪽 이름에서 `@<유형>`과 `+<설정 묶음>`을 뗀 것 */
+export const armPlain = (arm) => armBase(arm).replace(/\+[a-z0-9-]+$/, '')
+
+/** 쪽이 지식 관리를 끈 앱인가(-off) */
+export const armOff = (arm) => armPlain(arm).endsWith('-off')
+
+/** 쪽의 앱 빌드 이름: `@<유형>`, `+<설정 묶음>`, `-off`를 뗀 것. relay는 이 체크아웃의 앱이다 */
+export const armBuild = (arm) => armPlain(arm).replace(/-off$/, '')
 
 /** 유형의 화면 이름 (relay 새 Work 대화상자의 버튼) */
 export const typeLabel = (type) => WORDS[type]?.label ?? type

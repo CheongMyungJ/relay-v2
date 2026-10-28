@@ -179,6 +179,7 @@ export class RelayArm {
    * @param {object} o.agentEnv 모델과 effort
    * @param {string} o.agentConfigDir 에이전트의 CLAUDE_CONFIG_DIR
    * @param {boolean} [o.knowledge] false면 앱에 RELAY_KNOWLEDGE=off를 준다(지식 관리를 끈 앱). 평가의 -off 쪽
+   * @param {Record<string, unknown>} [o.config] 앱 설정(config.json)으로 둘 값. 평가의 +<설정 묶음> 쪽. 없으면 앱의 기본값
    * @param {string} [o.appDir] 띄울 앱 폴더(out/와 node_modules가 있는 app/). 없으면 이 체크아웃의 앱이다
    * @param {(e: object) => void} o.log
    */
@@ -210,6 +211,10 @@ export class RelayArm {
 
   async launch() {
     fs.mkdirSync(this.home, { recursive: true })
+    // 설정 묶음은 처음 띄울 때만 둔다. 사람 역할이 [설정]에서 바꾼 값을 다시 띄울 때 덮어쓰지 않는다
+    const config = path.join(this.home, 'config.json')
+    if (this.o.config && !fs.existsSync(config))
+      fs.writeFileSync(config, JSON.stringify({ schema_version: 1, ...this.o.config }, null, 2))
     // 다른 빌드는 그 폴더의 Electron으로 띄운다(네이티브 모듈이 그 Electron에 맞춰 빌드돼 있다)
     const exe = path.join(this.appDir, 'node_modules/electron/dist/electron')
     this.app = await electron.launch({

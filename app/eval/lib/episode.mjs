@@ -6,7 +6,7 @@ import path from 'node:path'
 import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
-import { armBase } from './kind.mjs'
+import { armBuild, armOff, armPreset, presetConfig } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
@@ -145,14 +145,16 @@ export async function runEpisode(o) {
   fs.mkdirSync(shots, { recursive: true })
   const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
   const screenType = screenKind(kind)
-  // 쪽의 앱 빌드: @<유형>(I93)과 -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
-  const build = armBase(kind).replace(/-off$/, '')
+  // 쪽의 앱 빌드: @<유형>(I93), +<설정 묶음>, -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
+  const build = armBuild(kind)
+  const preset = armPreset(kind)
   const arm =
     screenType === 'relay'
       ? new RelayArm({
           ...armOpts,
           appDir: opts.apps?.[build],
-          knowledge: !armBase(kind).endsWith('-off'),
+          knowledge: !armOff(kind),
+          config: preset ? presetConfig(preset) : undefined,
         })
       : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
   const handoffs = []
