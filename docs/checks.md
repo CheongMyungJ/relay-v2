@@ -384,5 +384,5 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 
 | 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
 |---|---|---|---|---|---|---|
-| 2026-10-28 | (이 PR) | 2.1.312 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=stream`(로그인은 `RELAY_CONTRACT_PASS_ENV`로 넘김)으로 녹화본의 옵션(`--mcp-config`, `--disallowedTools`)과 출력 이벤트를 2.1.312로 새로 쓰고, 다시 돌려 6개 통과. 처음 돌렸을 때 relay MCP 시험(5)이 실패했다: 두 옵션이 값을 여럿 받아 바로 뒤의 첫 프롬프트를 먹었다. `--settings` 앞으로 옮긴 뒤 relay 서버 connected, `mcp__relay__ask_human` 있음, `AskUserQuestion` 빠짐. claude가 MCP 서버에 자기 환경(`RELAY_HOOK_TOKEN`)을 물려주는 것도 손으로 확인했다 |
-| 2026-10-28 | (이 PR) | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너, xvfb, 예비 확인 | [스모크] | 통과 | `npm run build && xvfb-run -a npx playwright test` 15개 통과(새 `mcp.spec.ts` 포함). 실제 claude로 caller Work를 끝까지 돌리는 [실제]는 하지 않았다 |
+| 2026-10-28 | d40d475 | 2.1.312 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=stream`(로그인은 `RELAY_CONTRACT_PASS_ENV`로 넘김)으로 녹화본의 옵션(`--mcp-config`, `--disallowedTools`)과 출력 이벤트를 2.1.312로 새로 쓰고, 다시 돌려 6개 통과. 처음 돌렸을 때 relay MCP 시험(5)이 실패했다: 두 옵션이 값을 여럿 받아 바로 뒤의 첫 프롬프트를 먹었다. `--settings` 앞으로 옮긴 뒤 relay 서버 connected, `mcp__relay__ask_human` 있음, `AskUserQuestion` 빠짐. claude가 MCP 서버에 자기 환경(`RELAY_HOOK_TOKEN`)을 물려주는 것도 손으로 확인했다 |
+| 2026-10-28 | d40d475 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너, xvfb, 예비 확인 | [스모크] | 통과 | `npm run build && xvfb-run -a npx playwright test` 15개 통과(새 `mcp.spec.ts` 포함). 실제 claude로 caller Work를 끝까지 돌리는 [실제]는 하지 않았다 |
