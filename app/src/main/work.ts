@@ -330,6 +330,7 @@ import { continuePrompt, INSTRUCTIONS_FILE, relayMcpConfig } from '../core/setti
 import {
   REVISABLE,
   asksViaMcp,
+  reviseFile,
   revisePrompt,
   driverBlock,
   recommendAnswers,
@@ -3121,7 +3122,15 @@ export class WorkRunner {
     }).then((r) =>
       r.ok
         ? this.enqueue(async () => {
-            this.resumeMessage.set(taskId, revisePrompt(body))
+            const task = this.task(taskId)
+            if (!task) return { ok: false, error: `${taskId} 없음` }
+            const dir = this.files.taskDir(task)
+            const taken = new Set(await fsp.readdir(dir).catch(() => [] as string[]))
+            let n = 1
+            while (taken.has(reviseFile(n))) n++
+            const file = path.join(dir, reviseFile(n))
+            await writeFileAtomic(file, `${body}\n`)
+            this.resumeMessage.set(taskId, revisePrompt(file))
             const resumed = await this.unlessCleanup({ type: 'resume', taskId, at: this.ctx.at() })
             if (!resumed.ok) this.resumeMessage.delete(taskId)
             return resumed

@@ -48,11 +48,16 @@ export function recommendAnswers(questions: readonly { id: string }[]): Record<s
 }
 
 /**
- * 고칠 점(D524)을 다시 연 세션의 첫 입력으로. 앞에 출처를 붙인다: 에이전트가 누구의 글인지 알고, '-'로 시작하는 글(목록)이
- * CLI 인자에서 옵션으로 읽히지 않는다
+ * 고칠 점(D524)을 담은 파일을 가리키는 다시 연 세션의 첫 입력. 글은 task 디렉터리의 파일에 두고 한 줄만 인자로 준다:
+ * 여러 줄 인자는 Windows의 .cmd 래퍼(npm으로 설치한 claude)에서 첫 줄 뒤가 잘리고, '-'로 시작하는 글(목록)은 옵션으로 읽힌다
  */
-export function revisePrompt(text: string): string {
-  return `relay: MCP 호출자가 보낸 고칠 점입니다.\n\n${text}`
+export function revisePrompt(file: string): string {
+  return `relay: MCP 호출자가 이 단계에 고칠 점을 보냈습니다. ${file}를 읽고 이 단계 안에서 반영하세요.`
+}
+
+/** 고칠 점의 파일 이름 (task 디렉터리 안). .md가 아니라 산출물로 보이지 않는다 */
+export function reviseFile(n: number): string {
+  return `revise-${n}.txt`
 }
 
 /**

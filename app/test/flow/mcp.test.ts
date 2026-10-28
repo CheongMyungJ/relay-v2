@@ -224,7 +224,7 @@ describe('[흐름] relay MCP 호출자가 Work를 맡긴다 (D516~D526)', () => 
     })
     await waitFor(s.ok, work, 'awaiting_approval')
     expect(await s.call('revise', { work, message: '   ' })).toMatchObject({ ok: false })
-    // '-'로 시작하는 목록도 옵션으로 읽히지 않게 출처를 앞에 붙여 준다
+    // 여러 줄이고 '-'로 시작하는 목록이다: 글은 파일로, 인자는 한 줄로 준다
     const message = '- 비목표에 성능 개선을 넣으세요\n- 이름을 바꾸세요'
     expect(await s.call('revise', { work, message })).toEqual({
       ok: true,
@@ -236,8 +236,10 @@ describe('[흐름] relay MCP 호출자가 Work를 맡긴다 (D516~D526)', () => 
     )
     const args = resumed['args'] as string[]
     expect(args).toEqual(expect.arrayContaining(['--resume', '--mcp-config']))
-    expect(args.at(-1)).toBe(revisePrompt(message))
-    expect(resumed['prompt']).toBe(revisePrompt(message))
+    const file = path.join(String(resumed['taskDir']), 'revise-1.txt')
+    expect(args.at(-1)).toBe(revisePrompt(file))
+    expect(resumed['prompt']).toBe(revisePrompt(file))
+    expect(fs.readFileSync(file, 'utf8')).toBe(`${message}\n`)
     await waitFor(s.ok, work, 'awaiting_approval')
     // 일하는 중에는 받지 않는다
     expect(s.read(work).tasks).toHaveLength(1)
