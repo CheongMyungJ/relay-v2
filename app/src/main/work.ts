@@ -436,7 +436,7 @@ import {
   type AuxSession,
   type ChatSession,
 } from './chat'
-import { TerminalBuffer } from './terminals'
+import { noBacklog, TerminalBuffer } from './terminals'
 import {
   changedKnowledge,
   knowledgePathsAt,
@@ -2395,7 +2395,7 @@ export class WorkRunner {
     // 출력 구독은 같은 틱에 건다. PTY를 띄우지 못하면 로그를 열지 않는다
     const log = this.files.openPtyLog(task)
     const buffer = this.terminals.get(task.id) ?? new TerminalBuffer()
-    buffer.live = true
+    buffer.start({ cols, rows })
     this.terminals.set(task.id, buffer)
     const key = this.terminalKey(task.id)
     let exited!: () => void
@@ -3668,7 +3668,7 @@ export class WorkRunner {
         answerQueries: true,
       })
       const buffer = this.terminals.get(c.id) ?? new TerminalBuffer()
-      buffer.live = true
+      buffer.start({ cols, rows })
       this.terminals.set(c.id, buffer)
       const key = this.terminalKey(c.id)
       let exited!: () => void
@@ -6529,10 +6529,10 @@ export class WorkRunner {
   /** 탭이 붙을 때 지금까지의 출력. 끝난 task는 pty.log를 읽어 읽기 전용으로 보인다 */
   async attach(taskId: string): Promise<TerminalBacklog> {
     if (this.auxOf(taskId)) {
-      return this.terminals.get(taskId)?.backlog() ?? { data: '', next: 0, live: false }
+      return this.terminals.get(taskId)?.backlog() ?? noBacklog()
     }
     const task = this.task(taskId)
-    if (!task) return { data: '', next: 0, live: false }
+    if (!task) return noBacklog()
     return (await this.terminalBuffer(task)).backlog()
   }
 
@@ -6553,7 +6553,10 @@ export class WorkRunner {
   }
 
   resize(taskId: string, cols: number, rows: number): void {
-    this.ptyOf(taskId)?.resize(cols, rows)
+    const pty = this.ptyOf(taskId)
+    if (!pty) return
+    pty.resize(cols, rows)
+    this.terminals.get(taskId)?.resized({ cols, rows })
   }
 
   /** 터미널의 폴더. task와 보조 세션 모두 worktree에서 돈다. 정리한 Work는 worktree가 없어 메인 체크아웃이다 */

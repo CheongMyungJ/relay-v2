@@ -1249,10 +1249,18 @@ export interface ApproveOptions {
 
 // ---------- 터미널 ----------
 
+/** PTY의 열과 줄 */
+export interface TerminalSize {
+  cols: number
+  rows: number
+}
+
 export interface TerminalChunk {
   /** task마다 0부터 오른다 */
   seq: number
   data: string
+  /** PTY 크기. 앞 조각과 크기가 다를 때만 있다 (I189) */
+  size?: TerminalSize
 }
 
 export interface TerminalBacklog {
@@ -1261,4 +1269,9 @@ export interface TerminalBacklog {
   /** 다음 조각의 seq. 이보다 작은 조각은 data에 들어 있다 */
   next: number
   live: boolean
+  /**
+   * data를 그린 PTY 크기. at(data의 글자 위치)부터 그 크기다. 마지막 것이 지금 PTY의 크기다. 이 앱에서 PTY를 띄우지
+   * 않은 터미널(pty.log로 채운 것, 대기열)은 비어 있다 (I189)
+   */
+  sizes: { at: number; size: TerminalSize }[]
 }
