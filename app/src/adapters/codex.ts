@@ -4,8 +4,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { CODEX_HOOK_EVENTS, codexFirstPrompt, tomlValue } from '../core/codex'
 import {
+  CALLER_ASK_NOTE,
   HOOK_TOKEN_ENV,
   STOP_HOOK_TIMEOUT_SEC,
+  askViaRelay,
   extraDirArgs,
   relaySkillName,
   type LaunchInput,
@@ -98,10 +100,15 @@ export async function deployCodexSkill(o: {
   type: WorkType
   typeSource?: TypeSource
   finishing?: boolean
+  /** Codex는 늘 relay MCP로 묻는다. Claude와 같은 입력을 받으려고 둔다 */
+  askViaMcp?: boolean
+  /** relay MCP 호출자가 답한다 (D521): 호출자가 터미널을 보지 못한다는 안내를 붙인다 */
+  callerAnswers?: boolean
 }): Promise<DeployedSkill> {
   const original = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
   // skillText는 머리글을 뗀 절차다 (D444). 질문 도구 이름만 바꾼다
-  const body = original.replaceAll('`AskUserQuestion`', '`mcp__relay__ask_human`')
+  const asked = askViaRelay(original)
+  const body = o.callerAnswers ? asked + CALLER_ASK_NOTE : asked
   const writing =
     'Write or update current task artifacts and handoff.md with apply_patch. Shell redirects or heredocs containing previous task paths can be rejected by the conservative file guard, even when those paths are only references in the document. Never edit app-owned files or previous task files, and never bypass a tool denial.\n\n'
   const content = `---\nname: ${relaySkillName(o.skill)}\ndescription: The active relay ${o.skill} task. Follow only this step and wait for human answers through relay MCP.\n---\n${writing}${body}`

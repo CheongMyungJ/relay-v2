@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { INSTRUCTIONS_FILE } from '../core/settings'
+import { CALLER_ASK_NOTE, CLAUDE_ASK_TOOL, INSTRUCTIONS_FILE, askViaRelay } from '../core/settings'
 import type { SkillName } from '../shared/config'
 import { ASSEMBLY_FLAGS, assemblyFlags } from '../core/builtin-types'
 import { NODE_INFO, STEP_NODES } from '../core/pipeline'
@@ -336,8 +336,14 @@ export async function deploySkill(o: {
   typeSource?: TypeSource
   /** 마무리 단계 task다: 마무리 절차를 붙인다 (5.6.14, D493) */
   finishing?: boolean
+  /** 질문을 relay MCP로 묻는다 (D521): 절차의 질문 도구 이름을 바꾼다. Codex는 늘 그렇다 */
+  askViaMcp?: boolean
+  /** relay MCP 호출자가 답한다 (D521): 호출자가 터미널을 보지 못한다는 안내를 붙인다 */
+  callerAnswers?: boolean
 }): Promise<DeployedSkill> {
-  const text = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
+  const original = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
+  const asked = o.askViaMcp ? askViaRelay(original, CLAUDE_ASK_TOOL) : original
+  const text = o.callerAnswers ? asked + CALLER_ASK_NOTE : asked
   await removeRelaySkills(o.workDir)
   const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
   await writeFileAtomic(file, text + taskFooter(o.contextPath, o.taskDir))

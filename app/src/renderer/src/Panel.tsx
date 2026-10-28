@@ -84,6 +84,7 @@ export function Panel({
 }: Props) {
   const recovery = (
     <>
+      <CallerBand work={work} />
       <Recovery key={work.key} work={work} onDone={onApproved} onShowCleanup={onShowCleanup} />
       {/* 다시 하기로 task나 곁 세션이 쓴 Work 초안 (D421). 없으면 보이지 않는다 */}
       {work.drafts.length ? (
@@ -175,6 +176,40 @@ export function Panel({
         <Progress review={review} task={task} />
       )}
     </div>
+  )
+}
+
+/**
+ * relay MCP 호출자가 진행하는 Work의 띠와 [직접 맡기] (D523). 맡기면 질문 답, 승인, 전달을 사람이 한다. 되돌리는 길은 없다
+ */
+function CallerBand({ work }: { work: WorkView }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (work.driver !== 'caller') return null
+  const open = work.status === 'active' || work.status === 'stopped' || work.status === 'pr'
+  const take = async () => {
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.takeOver(work.key))
+    setBusy(false)
+    if (!r.ok) setError(r.error)
+  }
+  return (
+    <section className="notice caller-band" aria-label="MCP 호출자">
+      <strong>MCP 호출자가 진행하는 Work</strong>
+      <div className="dim">
+        질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운
+        [취소], [Work 포기]는 여기서도 할 수 있습니다.
+      </div>
+      {open ? (
+        <div className="notice-actions">
+          <button disabled={busy} onClick={() => void take()}>
+            직접 맡기
+          </button>
+        </div>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
+    </section>
   )
 }
 
@@ -681,7 +716,10 @@ function Review({
         {!readOnly && review.autoApprove.hold ? (
           <div className="notice auto-hold">{review.autoApprove.hold}</div>
         ) : null}
-        {readOnly ? null : review.completion && work ? (
+        {readOnly ? null : work?.driver === 'caller' ? (
+          // 승인과 전달은 호출자가 한다 (D523). 사람은 패널 맨 위의 [직접 맡기]로 맡는다
+          <div className="notice caller-drives">MCP 호출자가 승인을 기다립니다</div>
+        ) : review.completion && work ? (
           <CompletionActions
             review={review}
             work={work}

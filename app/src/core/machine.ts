@@ -18,6 +18,7 @@ import type { WorkActions } from '../shared/views'
 import type {
   ApprovalBy,
   AutoHoldReason,
+  CallerQuestions,
   CheckSummary,
   CleanOperation,
   CleanStage,
@@ -44,6 +45,7 @@ import type {
   RepoCleanStep,
   RepoDeliverStep,
   WorkRepo,
+  WorkDriver,
   WorkState,
   WorkType,
 } from '../shared/work'
@@ -85,6 +87,7 @@ import {
 } from './respond'
 import { issueEntries, issueKey, issueUrlOf, newIssueRecord, type InheritedIssue } from './issue'
 import { FORMAT_VERSION, bounceMessage, isValid, summarize, type TaskCheck } from './validate'
+import { approvalBy, driverBlock, workDriver, type Actor } from './driver'
 
 // ---------- 이벤트와 할 일 ----------
 
@@ -110,6 +113,8 @@ export interface SessionStarted extends TaskEvent {
   engineVersion?: string
   /** 이전 호출자와의 호환. 새 실행 경로는 engineVersion을 쓴다. */
   claudeVersion?: string
+  /** 질문을 relay MCP의 ask_human으로 묻게 띄운 Claude task (D521). task 기록에 남겨 재개도 같은 길로 연다 */
+  ask?: 'mcp'
 }
 
 /**
@@ -277,6 +282,8 @@ export interface Approve extends TaskEvent {
   check: TaskCheck
   /** [오류 무시하고 승인] (4.1, D90, D112). 확인 창을 거친 뒤에 보낸다 */
   force?: boolean
+  /** 승인한 쪽 (D522, D523). 없으면 앱 화면의 사람이다. Work를 진행하는 쪽이 아니면 받지 않는다 */
+  by?: Actor
 }
 
 /** 세션을 끝내는 이유. events.jsonl의 task.interrupted에 남긴다 */
@@ -319,6 +326,11 @@ export interface StopAfterStep extends WorkEvent {
 export interface SetTarget extends WorkEvent {
   type: 'target.set'
   branch: string
+}
+
+/** [직접 맡기] (D523): relay MCP 호출자가 진행하던 Work를 사람이 맡는다. 되돌리는 길은 없다 */
+export interface TakeOver extends WorkEvent {
+  type: 'driver.take'
 }
 
 /**
@@ -747,6 +759,7 @@ export type MachineEvent =
   | Resume
   | StopAfterStep
   | SetTarget
+  | TakeOver
   | RepoAdded
   | ShelveWork
   | ResumeWork
@@ -1354,6 +1367,10 @@ export interface NewWork {
   issue?: { linked: number | null; mark: string; from?: InheritedIssue }
   /** 다시 한 Work면 원래 Work의 id (D421) */
   fromWork?: string
+  /** relay MCP 호출자가 진행한다 (D519). 없으면 사람이다 */
+  driver?: WorkDriver
+  /** caller Work의 질문 처리 (D521). 없으면 호출자에게 돌려준다 */
+  callerQuestions?: CallerQuestions
   at: string
 }
 
@@ -1385,6 +1402,10 @@ export function createWork(input: NewWork): Transition {
     ...(input.fromWork ? { from_work: input.fromWork } : {}),
     // 마지막 작업 단계가 마무리하는 파이프라인 (D493, D501)
     pipeline: PIPELINE_VERSION,
+    ...(input.driver === 'caller' ? { driver: 'caller' as const } : {}),
+    ...(input.driver === 'caller' && input.callerQuestions === 'recommend'
+      ? { caller_questions: 'recommend' as const }
+      : {}),
     tasks: [],
   }
   const intake = {
@@ -1537,6 +1558,8 @@ function dispatch(work: WorkState, event: MachineEvent, config: AppConfig): Tran
       return stopAfter(work, event)
     case 'target.set':
       return setTarget(work, event)
+    case 'driver.take':
+      return takeOver(work, event)
     case 'repo.added':
       return repoAdded(work, event)
     case 'shelve':
@@ -1642,6 +1665,7 @@ type TaskMachineEvent = Exclude<
   MachineEvent,
   | StopAfterStep
   | SetTarget
+  | TakeOver
   | RepoAdded
   | ShelveWork
   | ResumeWork
@@ -1793,6 +1817,7 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
       : {}),
     skill_hash: e.skillHash,
     ...versionRecord(task, e),
+    ...(e.ask ? { ask: e.ask } : {}),
     session: {
       id: e.sessionId,
       pid: e.pid,
@@ -2086,6 +2111,8 @@ function sessionEnded(
  * 어느 쪽이든 멈춤 표시는 지운다.
  */
 function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
+  const block = driverBlock(work, e.by ?? 'human')
+  if (block) return unchanged(work, block)
   if (task.node === RESPOND) return respondApprove(work, task, e)
   if (work.status !== 'active') return unchanged(work, '진행 중인 Work가 아님')
   if (!REVIEWABLE.includes(task.status)) {
@@ -2104,7 +2131,7 @@ function approve(work: WorkState, task: TaskRecord, e: Approve): Transition {
   return approveNow(work, task, {
     at: e.at,
     check: e.check,
-    by: 'human',
+    by: e.by ?? 'human',
     ...(forced ? { ignored: gate.errors } : {}),
   })
 }
@@ -2337,6 +2364,16 @@ function repoAdded(work: WorkState, e: RepoAdded): Transition {
       }),
     ],
   }
+}
+
+/**
+ * [직접 맡기] (D523): driver와 질문 처리를 지워 사람이 진행하는 Work로 둔다. 살아 있는 세션은 그대로다: 그 세션의 질문은
+ * 앱 질문창으로 온다(ask_human, D521)
+ */
+function takeOver(work: WorkState, e: TakeOver): Transition {
+  if (workDriver(work) !== 'caller') return unchanged(work, '이미 사람이 진행하는 Work임')
+  const next = omit(work, 'driver', 'caller_questions')
+  return { work: next, effects: [log(next, e.at, 'work.taken_over', {})] }
 }
 
 /** [이 단계 끝나면 멈춤] (시나리오 3-4). 지금 단계가 승인되면 다음 단계를 시작하지 않고 멈춘다 */
@@ -2665,18 +2702,20 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
   let tasks = work.tasks
   if (task.status !== 'approved') {
     const check = e.check ? summarize(e.check) : task.check
+    // 전달은 Work를 진행하는 쪽만 시작한다 (D522, D523)
+    const by = approvalBy(work)
     const approved: TaskRecord = {
       ...task,
       status: 'approved',
       approved_at: e.at,
-      approved_by: 'human',
+      approved_by: by,
       check,
       ...(task.session?.alive
         ? { session: { ...task.session, alive: false, ended_at: e.at } }
         : {}),
     }
     tasks = work.tasks.map((t) => (t.id === task.id ? approved : t))
-    effects.push(log(work, e.at, 'task.approved', { by: 'human' }, task))
+    effects.push(log(work, e.at, 'task.approved', { by }, task))
     if (task.session?.alive) effects.push({ type: 'endSession', taskId: task.id })
     effects.push({
       type: 'appendDecisions',
@@ -2684,7 +2723,7 @@ function deliverySucceeded(work: WorkState, e: DeliverySucceeded): Transition {
       node: task.node,
       ...(task.step !== undefined ? { step: task.step } : {}),
       at: e.at,
-      by: 'human',
+      by,
       decisions: e.check?.handoffHeader ? e.check.handoffHeader.decisions : null,
     })
   }
@@ -3473,7 +3512,7 @@ function respondApprove(work: WorkState, task: TaskRecord, e: Approve): Transiti
   return respondApproveNow(work, task, {
     at: e.at,
     check,
-    by: 'human',
+    by: e.by ?? 'human',
     ...(forced ? { ignored: gate.errors } : {}),
   })
 }
@@ -3510,7 +3549,7 @@ function respondApproveNow(
     rounds: [...deferredRounds(work).map((t) => t.id), task.id],
     from: pr.head,
     ...(a.ignored ? { ignored: a.ignored } : {}),
-    ...(a.by === 'auto' ? { by: 'auto' as const } : {}),
+    ...(a.by !== 'human' ? { by: a.by } : {}),
     ...(task.respond.repo ? { repo: task.respond.repo } : {}),
   }
   effects.push({ type: 'respond', taskId: task.id, rounds: [...operation.rounds] })

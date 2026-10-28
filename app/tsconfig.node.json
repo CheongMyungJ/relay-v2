@@ -17,6 +17,7 @@
     "src/preload",
     "src/shared",
     "src/shared/generated/*.json",
+    "src/shared/mcp-tools.json",
     "src/core",
     "src/adapters",
     "src/renderer/src/renderMarkdown.ts",

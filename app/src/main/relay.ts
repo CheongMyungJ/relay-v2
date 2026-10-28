@@ -57,6 +57,8 @@ import {
   saveConfig,
   saveProject,
   saveSession,
+  removeMcpConnection,
+  writeMcpConnection,
   sessionDir,
   sessionIds,
   unregisterProject,
@@ -123,6 +125,7 @@ import type {
 } from '../shared/views'
 import {
   WORK_TYPES,
+  type CallerQuestions,
   type TypeSource,
   type DeliveryChoice,
   type WorkCustomType,
@@ -144,6 +147,8 @@ import {
   type ProjectEnv,
 } from './projects'
 import { SessionRunner, type SessionContext } from './session'
+import { McpService } from './mcp'
+import type { Actor } from '../core/driver'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
 
 export interface RelayOptions {
@@ -234,8 +239,33 @@ export class Relay {
   /** 준비하는 중인 서브모듈 (prepareSubmodule). 키는 메인 프로젝트 id와 서브모듈 경로다 */
   private readonly preparing = new Map<string, Promise<CommandResult & { project?: ProjectView }>>()
 
+  /** relay MCP의 도구 호출 (D516). 훅 서버의 /control로 받는다 */
+  readonly mcp: McpService
+  /** Work 스냅샷을 창과 relay MCP(wait, D525)에 함께 보낸다 */
+  private readonly ui: UiPort
+  /** 이번 실행의 relay MCP 토큰 (D517). mcp.json에 쓴다 */
+  private readonly mcpToken = randomBytes(32).toString('hex')
+
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
+    this.mcp = new McpService(this)
+    // 받은 UiPort는 클래스일 수 있어(시험의 FakeUi) 펼치지 않고 메서드마다 넘긴다
+    const ui = o.ui
+    this.ui = {
+      work: (view) => {
+        ui.work(view)
+        this.mcp.workChanged(view)
+      },
+      workRemoved: (workKey) => {
+        ui.workRemoved(workKey)
+        this.mcp.workRemoved(workKey)
+      },
+      activity: (update) => ui.activity(update),
+      projects: (views) => ui.projects(views),
+      sessions: (views) => ui.sessions(views),
+      terminal: (key, chunk) => ui.terminal(key, chunk),
+      notify: (n) => ui.notify(n),
+    }
   }
 
   /**
@@ -318,6 +348,16 @@ export class Relay {
           }),
         ),
     )
+    // relay MCP (D516, D517): 프로젝트와 Work를 읽고 재시작 조정을 마친 뒤에 도구 호출을 받고 연결 정보를 쓴다. 브리지는
+    // 연결 정보가 생겨야 부른다. 쓰지 못하면 MCP 없이 연다
+    this.hooks.setControl(this.mcpToken, (req, signal) => this.mcp.handle(req, signal))
+    await writeMcpConnection(this.o.home, {
+      port: this.hooks.port,
+      token: this.mcpToken,
+      pid: process.pid,
+    }).catch((e: unknown) =>
+      this.warnings.push(`relay MCP의 연결 정보(mcp.json)를 쓰지 못함 (${String(e)})`),
+    )
   }
 
   /**
@@ -360,6 +400,7 @@ export class Relay {
       // 기본 세션도 끝낸다 (D406)
       ...[...this.sessions.values()].map((s) => s.shutdown()),
     ])
+    await removeMcpConnection(this.o.home, process.pid).catch(() => {})
     await this.hooks.close()
   }
 
@@ -381,7 +422,7 @@ export class Relay {
       env: this.env,
       skills: this.o.skills,
       hooks: this.hooks,
-      ui: this.o.ui,
+      ui: this.ui,
       pool: this.pool,
       config: () => this.config,
       at: () => this.at(),
@@ -683,7 +724,7 @@ export class Relay {
         await Promise.all(runners.map((r) => r.remove({ files: false })))
         for (const r of runners) {
           this.works.delete(r.key)
-          this.o.ui.workRemoved(r.key)
+          this.ui.workRemoved(r.key)
         }
         this.projects.delete(projectId)
         this.o.ui.projects(this.projectViews())
@@ -954,6 +995,13 @@ export class Relay {
     return (await this.typesOf(this.projects.get(projectId))).types.map((t) => customTypeView(t))
   }
 
+  /** 앱에 든 기본 유형 (D506) */
+  async builtinTypes(): Promise<CustomTypeView[]> {
+    return (await listBuiltinTypes(path.join(this.o.skills, TYPES_DIR))).map((t) =>
+      customTypeView(t),
+    )
+  }
+
   /** 업무 유형 화면의 목록 (D459). 레포 유형에 가려진 전역 유형은 그 프로젝트의 목록에 가려졌다고 보인다 */
   async customTypeList(): Promise<CustomTypeList> {
     const global = await listGlobalTypes(this.o.home).catch(() => [])
@@ -971,9 +1019,8 @@ export class Relay {
         }
       }),
     )
-    const builtin = await listBuiltinTypes(path.join(this.o.skills, TYPES_DIR))
     return {
-      builtin: builtin.map((t) => customTypeView(t)),
+      builtin: await this.builtinTypes(),
       global: global.map((t) => customTypeView(t)),
       projects,
     }
@@ -1108,7 +1155,15 @@ export class Relay {
    * fetch가 실패하면 Work를 만들지 않는다. 세션 상한을 넘으면 intake는 대기열에서 기다린다 (D18).
    * Work별 자동 승인과 질문 방식을 받으면 work.json에 둔다 (D72). 고른 업무 유형을 work.json에 적는다 (D236).
    */
-  async createWork(projectId: string, input: NewWorkInput): Promise<CreateWorkResult> {
+  /**
+   * 새 Work (시나리오 1). caller는 relay MCP 호출자가 맡긴 Work의 진행하는 쪽과 질문 처리다 (D519, D521). 앱 화면의
+   * [만들기]는 주지 않는다
+   */
+  async createWork(
+    projectId: string,
+    input: NewWorkInput,
+    caller: { driver?: 'caller'; callerQuestions?: CallerQuestions } = {},
+  ): Promise<CreateWorkResult> {
     const project = this.projects.get(projectId)
     if (!project) return { ok: false, error: '프로젝트가 없습니다' }
     if (this.removing.has(projectId))
@@ -1184,6 +1239,7 @@ export class Relay {
         settings.value,
         original?.work,
         inherited,
+        caller,
       )
     } finally {
       this.creating = false
@@ -1207,6 +1263,7 @@ export class Relay {
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
+    caller: { driver?: 'caller'; callerQuestions?: CallerQuestions } = {},
   ): Promise<CreateWorkResult> {
     // 커스텀 유형은 이 프로젝트에서 고를 수 있는 것(레포 먼저, D451)에서 찾고, 깨졌으면 만들지 않는다 (D460).
     // 한 번에 하나씩 만드는 보호(creating) 안에서 찾는다: 기다리는 사이에 다른 생성이 끼어들지 않는다
@@ -1373,6 +1430,8 @@ export class Relay {
           }
         : {}),
       ...(original ? { fromWork: original.work_id } : {}),
+      ...(caller.driver ? { driver: caller.driver } : {}),
+      ...(caller.callerQuestions ? { callerQuestions: caller.callerQuestions } : {}),
       at,
     })
     const runner = this.runner(project, files, created.work, workTitle(input.request))
@@ -1541,8 +1600,19 @@ export class Relay {
     taskId: string,
     questionId: string,
     answers: unknown,
+    actor: Actor = 'human',
   ): Promise<CommandResult> {
-    return this.withWork(workKey, (w) => w.answerQuestion(taskId, questionId, answers))
+    return this.withWork(workKey, (w) => w.answerQuestion(taskId, questionId, answers, actor))
+  }
+
+  /** [직접 맡기] (D523): relay MCP 호출자가 진행하던 Work를 사람이 맡는다 */
+  takeOver(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.takeOver())
+  }
+
+  /** relay MCP 호출자의 고칠 점 (D524) */
+  revise(workKey: string, taskId: string, text: string, actor: Actor): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.revise(taskId, text, actor))
   }
 
   // ---------- 사람 조작 (시나리오 3-4, 3-5, 4.4) ----------
@@ -1618,16 +1688,20 @@ export class Relay {
     const r = await runner.remove()
     if (!r.ok) return r
     this.works.delete(runner.key)
-    this.o.ui.workRemoved(runner.key)
+    this.ui.workRemoved(runner.key)
     return { ok: true }
   }
 
   // ---------- 전달 (시나리오 7) ----------
 
   /** [push]·[PR 생성] (7-4~7-6). 커밋 안 된 변경이 있으면 목록을 돌려준다 (7-5) */
-  async deliver(workKey: string, input: DeliverInput): Promise<DeliverResult> {
+  async deliver(
+    workKey: string,
+    input: DeliverInput,
+    actor: Actor = 'human',
+  ): Promise<DeliverResult> {
     const runner = this.works.get(workKey)
-    return runner ? runner.deliver(input) : { ok: false, error: 'Work가 없습니다' }
+    return runner ? runner.deliver(input, actor) : { ok: false, error: 'Work가 없습니다' }
   }
 
   /** [AI 세션 열기] (7-5) */

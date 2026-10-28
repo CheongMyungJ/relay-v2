@@ -22,6 +22,11 @@ extraResources:
     to: codex-hook.ps1
   - from: scripts/codex-bridge.mjs
     to: codex-bridge.mjs
+  # relay MCP 브리지와 도구 정의 (D516, D518). 앱이 꺼져 있어도 브리지가 도구 목록에 답한다
+  - from: scripts/relay-mcp.mjs
+    to: relay-mcp.mjs
+  - from: src/shared/mcp-tools.json
+    to: relay-mcp-tools.json
   # 기본 세션의 안내가 가리키는 사용자 문서 (I134)
   - from: ../README.md
     to: README.md

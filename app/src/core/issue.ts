@@ -285,7 +285,8 @@ export function taskComment(o: {
   /** intake에서 펼칠 intent. 빼면 없다 */
   intent?: { version: number; text: string } | null
 }): string {
-  const by = o.task.approved_by === 'auto' ? '자동' : '사람'
+  const by =
+    o.task.approved_by === 'auto' ? '자동' : o.task.approved_by === 'caller' ? '호출자' : '사람'
   const head = [`### ${o.task.id} ${nodeTitle(o.task)} · 승인(${by})`]
   if (o.intent) head.push(`**intent v${o.intent.version}**\n\n${intentBody(o.intent.text)}`)
   const fm = o.handoff === null ? null : parseFrontMatter(o.handoff)

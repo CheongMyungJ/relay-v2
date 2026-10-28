@@ -9,6 +9,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
+import { AGENT_LABELS } from '../../shared/agent'
 import type { AppInfo } from '../../shared/api'
 import { WORK_TYPE_LABEL, WORK_TYPE_SHORT } from '../../shared/work'
 import type {
@@ -257,8 +258,15 @@ export function App() {
   // 도구 훅으로 따로 온 진행 표시가 있으면 그것을 보인다 (D216)
   const task = found && work ? withActivity(found, activities[`${work.key}|${found.id}`]) : found
   const questionTask = work ? currentTask(work) : undefined
-  const question = work?.cleanup?.question ?? questionTask?.question
+  // relay MCP 호출자가 진행하는 Work의 task 질문은 호출자가 답한다 (D523). 정리 세션은 사람의 것이다
+  const question =
+    work?.cleanup?.question ?? (work?.driver === 'caller' ? undefined : questionTask?.question)
   const questionTaskId = work?.cleanup?.question ? 'cleanup' : questionTask?.id
+  // Claude task도 relay MCP로 묻는다(D521, [직접 맡기] 뒤). 창 이름은 엔진을 따른다
+  const questionTitle =
+    !work?.cleanup?.question && questionTask?.engineLabel === AGENT_LABELS.claude
+      ? '에이전트 질문'
+      : 'Codex 질문'
 
   // 승인 화면은 상태가 바뀔 때마다 파일을 다시 읽어 만든다
   const reviewKey = work && task ? `${work.key}|${task.id}|${work.revision}` : null
@@ -364,6 +372,14 @@ export function App() {
           <span className="type-tag" title={w.customType?.name ?? WORK_TYPE_LABEL[w.type]}>
             {WORK_TYPE_SHORT[w.type]}
           </span>{' '}
+          {/* relay MCP 호출자가 진행하는 Work (D519) */}
+          {w.driver === 'caller' ? (
+            <>
+              <span className="type-tag caller-tag" title="MCP 호출자가 진행하는 Work">
+                MCP
+              </span>{' '}
+            </>
+          ) : null}
           {w.title || w.workId}
         </span>
         {/* 아카이브는 여러 프로젝트의 Work를 모으므로 프로젝트 이름을 보인다 */}
@@ -726,7 +742,7 @@ export function App() {
           ) : null}
           {question ? (
             <button className="question-reopen" onClick={() => setHiddenQuestionId(null)}>
-              Codex 질문 답변
+              {questionTitle} 답변
             </button>
           ) : null}
         </div>
@@ -911,6 +927,7 @@ export function App() {
           workKey={work.key}
           taskId={questionTaskId}
           pending={question}
+          title={questionTitle}
           onHide={() => setHiddenQuestionId(question.id)}
         />
       ) : null}

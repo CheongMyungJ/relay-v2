@@ -16,6 +16,7 @@ import type {
   TypeSource,
   TypeTarget,
   UncommittedAction,
+  WorkDriver,
   WorkStatus,
   WorkType,
 } from './work'
@@ -703,6 +704,8 @@ export interface WorkView {
   } | null
   /** 요청의 첫 줄 */
   title: string
+  /** Work를 진행하는 쪽 (D519). caller면 패널에 띠와 [직접 맡기]를 보이고 승인·답·전달 버튼을 끈다 (D523) */
+  driver: WorkDriver
   status: WorkStatus
   statusLabel: string
   /** Work를 완료한 때. 보관된 Work가 완료였는지도 이것으로 안다 */
@@ -1245,6 +1248,8 @@ export interface TidyView {
 export interface ApproveOptions {
   /** [오류 무시하고 승인] (D112) */
   force?: boolean
+  /** 승인한 쪽 (D522). relay MCP 호출자면 caller다. 앱 화면(IPC)은 넣지 않는다 */
+  by?: WorkDriver
 }
 
 // ---------- 터미널 ----------

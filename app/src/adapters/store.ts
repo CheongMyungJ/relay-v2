@@ -57,11 +57,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // Windows에서는 다른 프로세스(백신, 색인)가 대상 파일을 잠깐 열고 있으면 이름 바꾸기가 실패한다.
 const RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY'])
 
-/** 임시 파일에 쓰고 이름을 바꾼다 (I11, 5.1) */
-export async function writeFileAtomic(file: string, text: string): Promise<void> {
+/** 임시 파일에 쓰고 이름을 바꾼다 (I11, 5.1). mode를 주면 그 권한으로 만든다(Windows는 읽기 전용 여부만 따른다) */
+export async function writeFileAtomic(file: string, text: string, mode?: number): Promise<void> {
   await fsp.mkdir(path.dirname(file), { recursive: true })
   const tmp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
-  const fh = await fsp.open(tmp, 'w')
+  const fh = await fsp.open(tmp, 'w', mode)
   try {
     await fh.writeFile(text, 'utf8')
     await fh.sync()
@@ -81,6 +81,35 @@ export async function writeFileAtomic(file: string, text: string): Promise<void>
       await sleep(20 * (attempt + 1))
     }
   }
+}
+
+/** relay MCP의 연결 정보 (D517): 훅 서버의 포트, 이번 실행의 토큰, 앱의 프로세스 ID */
+export interface McpConnection {
+  port: number
+  token: string
+  pid: number
+}
+
+/** <RELAY_HOME>/mcp.json (D517) */
+export const mcpConnectionFile = (home: string) => path.join(home, 'mcp.json')
+
+/** 연결 정보를 본인만 읽게 쓴다 (D517) */
+export async function writeMcpConnection(home: string, c: McpConnection): Promise<void> {
+  await writeFileAtomic(mcpConnectionFile(home), jsonText(c), 0o600)
+}
+
+/** 이 앱이 쓴 연결 정보면 지운다 (D517). 그사이 다른 앱이 썼으면 두고, 읽지 못해도 두지 않는다 */
+export async function removeMcpConnection(home: string, pid: number): Promise<void> {
+  const file = mcpConnectionFile(home)
+  const text = await fsp.readFile(file, 'utf8').catch(() => null)
+  if (text === null) return
+  let owner: unknown
+  try {
+    owner = (JSON.parse(text) as { pid?: unknown }).pid
+  } catch {
+    owner = pid
+  }
+  if (owner === pid) await fsp.rm(file, { force: true })
 }
 
 /** JSON 파일의 내용: 두 칸 들여쓰기와 끝의 줄바꿈 */

@@ -379,3 +379,10 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 |---|---|---|---|---|---|---|
 | 2026-10-23 | 04889f8 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너(Claude Code 웹 세션, xvfb), 예비 확인 | [단위]·[어댑터]·[흐름]·[계약]·[스모크]·[실제] dry | 통과 | `typecheck`, `lint`, `format:check` 통과. `npm test` 83개 파일 1235개 통과·2개 건너뜀. `test:contract` 9개 통과·5개 건너뜀. `RELAY_REAL_CLAUDE=dry npm run test:claude` 12개 통과·4개 건너뜀. `npm run build` 뒤 `xvfb-run -a`로 [스모크] 12개 통과(새 `custom.spec.ts`: 설정의 [업무 유형…]에서 유형을 만들고 새 Work에서 골라 의도 승인 뒤 `02 조사` 탭). 처음에 [업무 유형] 버튼을 사이드바 아래 [설정]과 업데이트 버튼 사이에 두어 `update-button.spec.ts` 2개가 실패했고, 설정 화면 안으로 옮겨 통과했다. 스킬 정적 검사, `npm run test:eval`(시나리오 38 포함) 통과 |
 | 2026-10-23 | 04889f8의 작업본(승인 화면의 단계 핵심과 설정 화면 이동 전) | 2.1.309 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [실제] custom | 통과 | `RELAY_REAL_CASES=custom`, 모델·effort 기본. 레포 유형 `doc-survey`(조사 → 작성, 두 단계 모두 자동 승인)로 Work 완료 133초: 의도 정리 23초, 조사 32초(자동), 작성 41초(자동), 리뷰와 검증 37초. 형식 오류 되돌림, 재촉, [오류 무시하고 승인] 모두 0. intent는 일반과 같은 기본 완료조건 둘과 줄마다 확인 방법을 썼다(D455). 조사 단계는 사람이 쓴 절차("코드를 바꾸지 않는다")대로 커밋하지 않고 `survey.md`를 정의한 절(`적을 것`, `완료조건별 자체 확인`)로 썼다. 작성 단계가 README와 lint 스크립트를 한 커밋으로 더했고, verify는 일반 `pr.md`(주요 결정)를 썼다. 처음 돌린 것은 이 컨테이너의 설정 폴더가 온보딩 전이라 테마 선택 창에서 멈춰 끊었고(M28과 같음), 온보딩만 적은 새 `CLAUDE_CONFIG_DIR`와 `CLAUDECODE`를 비운 환경으로 다시 돌려 통과했다 |
+
+## M40. relay MCP (D516~D526)
+
+| 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
+|---|---|---|---|---|---|---|
+| 2026-10-28 | d40d475 | 2.1.312 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=stream`(로그인은 `RELAY_CONTRACT_PASS_ENV`로 넘김)으로 녹화본의 옵션(`--mcp-config`, `--disallowedTools`)과 출력 이벤트를 2.1.312로 새로 쓰고, 다시 돌려 6개 통과. 처음 돌렸을 때 relay MCP 시험(5)이 실패했다: 두 옵션이 값을 여럿 받아 바로 뒤의 첫 프롬프트를 먹었다. `--settings` 앞으로 옮긴 뒤 relay 서버 connected, `mcp__relay__ask_human` 있음, `AskUserQuestion` 빠짐. claude가 MCP 서버에 자기 환경(`RELAY_HOOK_TOKEN`)을 물려주는 것도 손으로 확인했다 |
+| 2026-10-28 | d40d475 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너, xvfb, 예비 확인 | [스모크] | 통과 | `npm run build && xvfb-run -a npx playwright test` 15개 통과(새 `mcp.spec.ts` 포함). 실제 claude로 caller Work를 끝까지 돌리는 [실제]는 하지 않았다 |

@@ -1,3 +1,4 @@
+// Codex의 훅과 relay MCP(ask_human), relay MCP로 묻는 Claude task(D521)의 ask_human 브리지.
 // 설치본은 Electron의 Node 실행 모드를 사용한다. 별도의 Node 설치나 외부 패키지가 필요하지 않다.
 import http from 'node:http'
 import fs from 'node:fs'
@@ -107,10 +108,13 @@ async function rpc(message) {
   try {
     switch (message.method) {
       case 'initialize': {
+        // Codex task는 스킬 본문을, 정리 세션은 안내를 준다. Claude task(D521)의 절차는 시스템 프롬프트에 있다
         const file = process.env.RELAY_CODEX_SKILL
         const instructions = file
           ? fs.readFileSync(file, 'utf8')
-          : '정리 세션입니다. push/PR 및 앱 소유 파일 수정은 앱이 합니다. 질문은 ask_human을 사용하세요.'
+          : process.env.RELAY_HOOK_TASK === 'cleanup'
+            ? '정리 세션입니다. push/PR 및 앱 소유 파일 수정은 앱이 합니다. 질문은 ask_human을 사용하세요.'
+            : 'relay task의 질문 도구입니다. 사람에게 물을 것은 ask_human으로 묻고 답을 기다리세요.'
         return respond({
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },

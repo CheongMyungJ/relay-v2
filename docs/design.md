@@ -1,7 +1,7 @@
 # relay-v2 설계 문서
 
-- 상태: 초안 (v0.34)
-- 범위: v1 (MVP)과 그 확장인 리뷰 단계와 PR 진행(D152~D211), 사용성 평가 반영(D212~D226), 단계 줄이기(D227~D231), 기능 추가 유형(D232~D257), 리팩터링 유형(D258~D278), 공용 스킬 조립(D279~D282), 지식 관리(D283~D301), 일반 유형(D302~D319), 2026-10 리뷰 반영(D327~D334), 이슈 기록(D336~D349), 설계 유형(D350~D374), Linux 배포(D376~D379), 곁 세션(D385~D392), 기본 세션과 Work 초안(D397~D406), 서브모듈 Work(D413~D417), 앞 단계로 돌아가는 길 없애기(D418~D424), 작업 브랜치 이름과 머지 대상(D425~D428), 기능 추가·변경과 구조·유지보수 관점(D429~D439), 단계 절차를 시스템 프롬프트로(D440~D445), 다시 연 곁·기본 세션의 안내(D446), 커스텀 유형(D447~D463), Work의 [파일] 탭(D464~D468), 오른쪽 패널 너비(D469), 여러 레포를 고치는 Work(D470~D483), verify의 코드 리뷰 방법(D484~D489), [파일] 탭의 바뀐 파일 표시와 탭, 터미널에서 열기(D490~D492), verify를 마무리 단계와 독립 리뷰로(D493~D501), 독립 리뷰의 진행 표시(D502), intent 기본 항목과 약화 판정 줄이기(D503~D505), 유형 정의 통일(D506~D515)
+- 상태: 초안 (v0.35)
+- 범위: v1 (MVP)과 그 확장인 리뷰 단계와 PR 진행(D152~D211), 사용성 평가 반영(D212~D226), 단계 줄이기(D227~D231), 기능 추가 유형(D232~D257), 리팩터링 유형(D258~D278), 공용 스킬 조립(D279~D282), 지식 관리(D283~D301), 일반 유형(D302~D319), 2026-10 리뷰 반영(D327~D334), 이슈 기록(D336~D349), 설계 유형(D350~D374), Linux 배포(D376~D379), 곁 세션(D385~D392), 기본 세션과 Work 초안(D397~D406), 서브모듈 Work(D413~D417), 앞 단계로 돌아가는 길 없애기(D418~D424), 작업 브랜치 이름과 머지 대상(D425~D428), 기능 추가·변경과 구조·유지보수 관점(D429~D439), 단계 절차를 시스템 프롬프트로(D440~D445), 다시 연 곁·기본 세션의 안내(D446), 커스텀 유형(D447~D463), Work의 [파일] 탭(D464~D468), 오른쪽 패널 너비(D469), 여러 레포를 고치는 Work(D470~D483), verify의 코드 리뷰 방법(D484~D489), [파일] 탭의 바뀐 파일 표시와 탭, 터미널에서 열기(D490~D492), verify를 마무리 단계와 독립 리뷰로(D493~D501), 독립 리뷰의 진행 표시(D502), intent 기본 항목과 약화 판정 줄이기(D503~D505), 유형 정의 통일(D506~D515), relay MCP(D516~D526)
 
 Claude/Codex 선택 실행 확장의 명세와 검증 범위는 [engines.md](engines.md)에 기록한다. 이 문서의 설정·task 기록·이벤트 계약에도 확장 필드를 반영한다. CLI 터미널 유지와 새 task부터 엔진 변경 적용은 사용자와 확정했다.
 
@@ -551,6 +551,17 @@ relay-v2는 Claude Code CLI를 **앱 안의 터미널(node-pty + xterm.js)에 �
 | D513 | **저장할 때 산출물 참조를 경고한다.** 단계 절차와 유형 단위 칸의 글이 `` `<이름>.md` ``(영어 소문자로 시작하고 경로가 없는 이름)로 가리키는 파일이 이 유형의 단계 산출물도, 앱이 쓰는 파일(`request.md`, `intent.md`, `context.md`, `verification.md`, `pr.md`, `independent-review.md` 등)도 아니면, 저장한 뒤 업무 유형 화면에 경고를 보인다. 막지는 않는다 | 기반 단계를 다른 유형에 더하거나 단계 id를 바꾸면 절차와 유형 칸의 글이 없는 산출물(예: `design.md`)을 가리킨다. 앱이 글을 고쳐 쓰지 않는다: 사람이 쓴 글이라 고칠 곳을 보이는 데서 그친다 |  |
 | D514 | **예약 단계 id를 바꾼다.** 기본 유형의 단계 노드 이름(fix, design, implement, refactor, spec, execute)은 풀고(기본 유형이 그 id를 쓴다) `custom`, `respond`는 그대로 막으며(task 디렉터리 `<nn>-<노드>`와 헷갈림), 마무리 단계의 task 디렉터리에 앱과 마무리가 쓰는 파일 이름(`verification`, `pr`, `independent-review`)과 유형 폴더의 칸 파일 이름(`intake`, `verify`, `finish`, `pr-template`)을 더한다. 지금 이름(`handoff`, `context`, `instructions`, `knowledge-injected`, `type`)은 그대로다 | 지금은 마지막 단계의 id가 `pr`이나 `verification`이면 그 산출물이 PR 초안이나 판정 파일과 같은 파일이 된다 | |
 | D515 | **Work 기록.** 커스텀 유형의 Work는 지금처럼 만들 때 정의를 `type/`에 복사하고(D458) 끝까지 그 복사본으로 돈다. 복사본의 `custom_type`에 유형 설정이 없으면(이 변경 전에 만든 Work) 1판으로 읽는다(D509). 기본 유형의 Work는 복사하지 않고 지금처럼 task를 시작할 때 앱에 든 정의(`skills/types/<유형>/`)로 조립한다: 노드(fix 등)와 `work.json`의 기록 형식은 그대로다. 옛 Work(D501)의 verify는 유형 구간 그대로다 | 기본 유형의 절차는 지금도 앱을 업데이트하면 진행 중인 Work에 새 절차가 쓰인다. 같은 동작을 지키면 기록 형식과 노드를 바꾸지 않아 진행 중인 Work와 그 화면이 그대로 돈다. 복사본으로 고정하는 일은 기본 유형의 절차를 자주 바꾸는 불편이 확인되면 정한다(0절 2) |  |
+| D516 | **바깥 에이전트가 relay를 MCP 도구로 부른다(relay MCP).** MCP 서버는 앱에 붙는 stdio 브리지(`relay-mcp.mjs`)다. 앱이 떠 있어야 하고, 브리지는 도구 호출을 앱의 로컬 HTTP(훅 서버의 `/control`)로 넘긴다. 앱이 없으면 브리지가 앱을 띄우고 연결 정보(D517)가 생길 때까지 60초 **(기본값)** 기다린다. 창 없이 도는 실행은 두지 않는다. 명세는 시나리오 13이다 | 사람이 "relay 앱을 MCP로 실행시킬 수 있게" 하자고 했다. 다른 에이전트(Claude Code 등)가 relay의 단계와 확인 지점을 그대로 쓰며 일을 맡긴다. 상태의 주인은 떠 있는 앱 하나여야 한다: 앱은 하나만 켜고(D133) 켤 때 남은 세션을 고아로 끝내며(시나리오 9-1), 훅도 앱이 받는다. 따로 core를 돌리는 서버는 앱과 같은 `work.json`을 함께 쓰고, 앱을 켜면 그 서버가 띄운 세션이 끝난다. 브리지는 Codex의 relay MCP(engines.md)와 같은 모양이다. 화면이 없는 곳(SSH, CI)은 수요가 확인되면 같은 앱을 창 없이 띄우는 길로 본다 | ✅ |
+| D517 | **연결 정보 `<RELAY_HOME>/mcp.json`.** 앱이 켤 때 `{ port, token, pid }`를 본인만 읽게(0600) 쓰고 끌 때 지운다. 토큰은 켤 때마다 새로 만든다. 브리지는 이 파일을 읽어 `Authorization: Bearer <token>`으로 부른다. 파일이 없거나 연결되지 않으면 앱이 없다고 본다 | 훅 토큰(I13)처럼 같은 컴퓨터의 다른 프로그램이 앱을 조작하지 못하게 한다. task 세션에는 토큰을 환경 변수로 주지만 바깥 호출자에게는 그 길이 없어 파일로 준다 |  |
+| D518 | **도구.** 조회: `list_projects`, `list_types`(그 프로젝트에서 고를 수 있는 유형과 형식 오류, D460), `list_works`, `get_work`. 등록: `register_project`(시나리오 0의 점검, 경고는 결과에). 진행: `start_work`, `wait`, `answer`, `approve`, `revise`, `resume`, `deliver`, `abandon`, `pr_respond`. 넣지 않는 것: 프로젝트 등록 해제와 Work 기록 지우기·정리(기록을 지움, D407, D408), 머지와 [머지 없이 끝내기](사람이 정함, D152), 커스텀 유형 만들기(호출자가 유형 폴더를 직접 쓰고 `list_types`로 형식 오류를 본다, D449), 곁 세션과 기본 세션(호출자가 대화 상대다), 앱 설정 | 호출자가 Work를 맡기는 데 필요한 것만 둔다(0절 1). 지우는 일과 머지는 되돌릴 수 없어 사람에게 둔다. 유형은 파일이라 에이전트가 쓰기 쉽고, 레포 유형은 PR로 함께 고친다(D450) | ✅ |
+| D519 | **Work를 누가 진행하는가(`driver`).** `start_work`의 `driver`가 `caller`(기본)면 질문 답, 승인, 전달을 호출자가 도구로 한다. `human`이면 사람이 [새 Work]로 만든 Work와 같다: 질문과 승인은 앱 화면에서 사람이 하고 호출자는 조회만 한다. `work.json`의 `driver`(없으면 `human`)에 남고 사이드바와 패널에 보인다 | 사람이 "사람이 옆에 있으면 직접 실행한 것처럼 도는 게 좋겠다, 옵션으로 구분하자"고 했다. 사람이 자기 터미널의 에이전트에게 맡기면서 확인은 앱에서 하려는 때가 `human`이다 | ✅ |
+| D520 | **앱 안의 세션이 부르면 조회만 받는다.** 브리지는 자기를 띄운 세션의 훅 토큰(환경 변수 `RELAY_HOOK_TOKEN`)을 함께 보낸다. 앱이 그 토큰으로 자기가 띄운 세션(task, 정리, 곁, 기본 세션)임을 알면 Work를 만들거나 진행하는 도구를 거절하고 Work 초안(D404, D421)을 쓰라고 알린다 | 사람이 relay MCP를 사용자 범위로 등록하면 앱이 띄운 claude도 그 서버를 받는다(앱은 `--strict-mcp-config`를 주지 않음). 앱 안의 에이전트가 `caller`로 Work를 만들면 스스로 승인할 수 있다. 앱 안의 세션에는 사람이 옆에 있으니 Work는 사람이 만든다: 초안 카드의 [새 Work로 만들기]가 대화상자를 채워 연다. 사람과 고른 "기본 세션에서는 대화상자를 채워 연다"를 D404의 길로 한다 | ✅ |
+| D521 | **`caller` Work의 질문.** `caller` Work의 Claude task는 Codex task처럼 relay MCP의 `ask_human`으로 묻는다: `--mcp-config`의 relay 서버(이름 `relay_task`. 사람이 사용자 범위로 등록하는 relay MCP와 겹치지 않음), `--disallowedTools AskUserQuestion`, 단계 절차의 질문 도구 이름 바꿈. task를 시작할 때의 `driver`로 정하고 task 기록(`ask: 'mcp'`)에 남겨 재개도 같은 길로 연다. 질문은 `get_work`와 `wait`로 나가고 `answer`로 답한다(취소는 답이 아님). `start_work`의 `questions`가 `recommend`면 앱이 받자마자 질문마다 "알아서 해"(5.6.1)로 답한다: 에이전트는 추천안으로 정하고 `by: ai`로 적는다. 앱은 선택지를 골라 주지 않는다 | 터미널의 질문 창은 호출자가 읽고 답할 수 없다. Codex task가 같은 도구와 앱 질문창을 실제 모델로 확인했다. 추천안으로 진행하는 것은 질문 규칙의 "알아서 해" 줄을 그대로 쓴다: 무엇이 추천인지는 에이전트가 안다 | ✅ |
+| D522 | **`caller` Work의 승인과 전달.** 호출자의 `approve`는 [승인], [의도 승인], [완료만]과 같고 승인 방식은 "호출자 승인"(`by: caller`)으로 남는다(5.4, 5.5). 자동 승인 설정(4.2)과 조건(4.3)은 그대로다: `start_work`의 `settings`(D72)로 Work 설정을 줄 수 있고, 의도 승인과 마무리는 늘 호출자가 부른다. push와 PR 생성은 `deliver`로만 한다. PR 대응 task의 `approve`는 push와 답글 게시를 한다(시나리오 10) | 누가 확인했는지 기록에 남긴다. 되돌릴 수 없는 일(push, PR, 답글)은 호출자가 그 도구를 불러야만 일어난다 | ✅ |
+| D523 | **[직접 맡기].** `caller` Work의 패널 맨 위에 "MCP 호출자가 진행하는 Work" 띠와 [직접 맡기]를 보인다. 누르면 `driver`가 `human`이 되고, 그 뒤 질문 답, 승인, 전달은 사람이 한다(호출자의 `wait`와 `get_work`는 `driver: human`). 맡기기 전에는 승인 화면의 승인 버튼, 질문창의 [답변], 전달 버튼이 꺼진다. [즉시 중단], 카운트다운 [취소], [Work 포기], 터미널 입력은 늘 받는다. 사람에게서 호출자로 넘기는 길은 없다. `caller` Work는 OS 알림을 보내지 않는다 | 사람과 호출자가 같은 승인을 따로 누르는 경합을 없앤다. 사람은 언제든 멈출 수 있어야 한다. OS 알림은 사람이 움직일 때를 알린다(D81) | ✅ |
+| D524 | **`revise`(고칠 점 전달).** 사람이 터미널에서 고칠 점을 말하는 것(시나리오 4-3, 6.1)을 호출자가 하는 길이다. 턴이 끝난 task(승인 대기, 대기, 막힘, 세션 종료, 중단됨)에만 받는다. 같은 대화를 다시 열 수 있을 때만 받아(대화 ID를 받지 못한 Codex는 아님) 세션이 살아 있으면 끝내고, 같은 대화를 `--resume`으로 다시 연다. 글은 task 디렉터리의 `revise-<n>.txt`에 쓰고, 첫 입력은 호출자가 보낸 고칠 점이 그 파일에 있다는 한 줄이다 | 실행 중인 세션에 글을 넣지 않는다(1.2). 독립 리뷰 결과(D496)처럼 파일 경로를 다시 여는 첫 입력으로 준다: 여러 줄 인자는 Windows의 `.cmd` 래퍼에서 잘리고, `-`로 시작하는 글은 옵션으로 읽힌다. 일하는 중에는 받지 않아 턴을 끊지 않는다 |  |
+| D525 | **`wait`.** 호출자가 움직일 일(질문, 승인 대기, 막힘, 중단, 끝남, 맡겨짐)이 생기거나 바뀔 때까지, 또는 제한 시간(기본 120초, 최대 600초 **(기본값)**)까지 기다렸다 `get_work`와 같은 모양을 돌려준다. 바뀌지 않았으면 `timed_out: true`다 | Work는 몇십 분 걸려 도구 하나로 붙잡고 있을 수 없다. MCP 클라이언트의 도구 제한 시간 안에서 되풀이해 부른다 |  |
+| D526 | **`get_work`의 모양.** `state`(Work 상태와 지금 task 상태를 합친 것), 지금 task(단계 이름, 상태), 질문, 승인 대기면 handoff 요약·결정·가정·위험·형식 오류·강조와 바뀐 파일 수, 마무리면 판정표와 전달 버튼 상태, PR 진행이면 PR 주소·상태·항목, 그리고 `next`(지금 부를 수 있는 도구)다. 세션을 띄운 지 60초 **(기본값)** 가 지나도 첫 턴이 시작하지 않으면 "터미널에 Claude Code 확인 창(D69)이 떠 있을 수 있음"을 `hint`로 알린다 | 호출자가 앱 화면 대신 읽을 것이다. Claude Code의 첫 실행 창(D68, D69)은 사람이 터미널에서 수락하고 MCP로 대신하지 않는다: 첫 턴까지의 시간(D217)으로 짐작해 알린다 |  |
 
 ---
 
@@ -1063,6 +1074,22 @@ Work 끝          → 한 줄 코멘트 → 닫기(PR이면 머지로) (D346, D3
 7. **정리:** 사이드바에서 세션을 우클릭해 **[이름 바꾸기]**(20자), **[지우기]**(끝난 세션만. 세션 디렉터리와 초안을 지운다, D402).
 8. **종료와 재시작:** 앱 종료 확인은 살아 있는 기본 세션도 센다(D406). 앱이 충돌한 뒤 살아남은 기본 세션은 재시작 때 끝내고(시나리오 9-1), 대화는 남아 [열기]가 잇는다.
 
+### 시나리오 13. relay MCP로 부르기 (D516~D526)
+
+**언제:** 다른 에이전트(Claude Code 등, 이하 호출자)가 relay의 단계와 확인 지점을 그대로 쓰며 일을 맡기고 싶을 때. 사람은 호출자와 대화하고, 앱에서 진행을 볼 수 있다.
+
+1. **연결:** 사람이 MCP 클라이언트에 relay 브리지를 stdio 서버로 등록한다(설치본의 실행 파일을 Node 실행 모드로 `relay-mcp.mjs`, README). 앱은 켤 때 훅 서버의 포트와 이번 실행의 토큰을 `<RELAY_HOME>/mcp.json`(0600)에 쓰고 끌 때 지운다(D517). 브리지는 도구 목록에 앱 없이 답하고, 도구를 부르면 그 파일로 앱의 `/control`에 넘긴다. 앱이 없으면 띄우고 연결 정보가 생길 때까지 기다린다(D516).
+2. **고르기:** `list_projects`(없으면 `register_project`, 시나리오 0의 점검), `list_types`(기본 유형과 커스텀 유형, 형식 오류)로 프로젝트와 유형을 고른다. 커스텀 유형은 호출자가 유형 폴더를 직접 쓴다(D518).
+3. **맡기기:** `start_work`(프로젝트, 유형, 요청, 기준 브랜치, `driver`, `questions`, Work 설정). 앱은 시나리오 1대로 Work를 만들고 의도 정리를 시작한다. `driver: caller`(기본)면 `work.json`에 `driver: caller`를 쓰고 사이드바에 MCP 표시가 붙는다. `human`이면 사람이 만든 Work와 같고 호출자는 조회만 한다(D519).
+4. **기다리기:** 호출자는 `wait`(D525)를 되풀이하고 `get_work`(D526)의 `state`와 `next`로 할 일을 안다.
+5. **질문:** caller Work의 task는 relay MCP의 `ask_human`으로 묻는다(Claude도, D521). `state: question`이면 호출자가 `answer`로 답한다. 사람이 정할 결정이면 호출자가 자기 사람에게 묻는다. `questions: recommend`면 앱이 "알아서 해"로 바로 답한다.
+6. **승인:** `state: awaiting_approval`이면 `review`(요약, 결정, 가정, 위험, 강조, 산출물 경로, 바뀐 파일)를 보고 `approve`하거나, 고칠 점을 `revise`로 보낸다(D524: 세션을 같은 대화로 다시 열며 그 글이 첫 입력). 승인 방식은 "호출자 승인"이다(D522). 자동 승인 설정과 조건은 그대로다.
+7. **마무리:** 마지막 단계의 승인 대기는 Work 완료 화면과 같다(`completion`: 판정표, 전달 버튼). `approve`는 [완료만], `deliver`는 [push]·[PR 생성]이다. 커밋 안 된 변경이 있으면 목록을 돌려주고, 호출자가 그 목록과 처리(commit, discard)를 주어 다시 부른다(7-5). 묶음 Work의 전달은 앱에서 한다.
+8. **PR 진행:** `get_work`의 `pr`(상태, CI, 리뷰, 충돌, 항목)을 보고 `pr_respond`로 대응 task를 시작한다. 그 task의 `approve`는 push와 답글 게시다. 머지와 [머지 없이 끝내기]는 사람이 한다.
+9. **사람:** 앱의 패널 맨 위에 "MCP 호출자가 진행하는 Work" 띠가 보이고 승인 버튼, 질문창, 전달 버튼이 꺼진다. [직접 맡기]를 누르면 사람이 진행한다(D523). [즉시 중단], 카운트다운 [취소], [Work 포기], 터미널 입력은 늘 된다. caller Work는 OS 알림을 보내지 않는다.
+10. **앱 안의 세션:** 앱이 띄운 세션(task, 곁·기본 세션)이 relay MCP를 부르면 조회만 받는다. 새 Work는 Work 초안으로 쓰고 사람이 [새 Work로 만들기]로 만든다(D520).
+11. **꺼짐과 재시작:** 시나리오 9와 같다. 앱이 꺼지면 task는 중단됨이고 호출자는 `resume`으로 잇는다. 다시 켜면 자동 승인하지 않고 승인 대기로 둔다(D75). 브리지가 앱을 다시 띄워도 세션을 저절로 다시 열지 않는다.
+
 ### 화면 구성
 
 **레이아웃(D79)**
@@ -1147,6 +1174,7 @@ Work 끝          → 한 줄 코멘트 → 닫기(PR이면 머지로) (D346, D3
 ```
 <RELAY_HOME>/                          # 기본 %USERPROFILE%\.relay, macOS/Linux ~/.relay
   config.json                          # 앱 설정 (5.1.1)
+  mcp.json                             # relay MCP의 연결 정보: 포트, 토큰, 앱의 pid (앱이 켤 때 쓰고 끌 때 지움, 0600, D517)
   types/<id>/                          # 전역 커스텀 유형 (type.json, <단계 id>.md, 선택 intake.md·verify.md, 5.6.13, D449)
   home/                                # 기본 세션의 기본 폴더 (session_dir가 빈 글일 때, D398)
   sessions/<session-id>/               # 기본 세션 하나 (s-<날짜>-<nnn>, D402)
@@ -1168,6 +1196,8 @@ Work 끝          → 한 줄 코멘트 → 닫기(PR이면 머지로) (D346, D3
       events.jsonl                     # 수명주기 이벤트
       tasks/<nn>-<node>/
         context.md  task.settings.json  pty.log
+        task.mcp.json                  # relay MCP로 묻는 Claude task의 MCP 설정 (--mcp-config, D521)
+        revise-<n>.txt                 # relay MCP 호출자가 보낸 고칠 점 (D524)
         instructions.md                # Claude Code task의 단계 절차. task를 시작할 때 앱이 조립 (5.6.3, D440)
         <산출물>.md  handoff.md
         knowledge-injected.md          # 이 task에 넣은 지식 (D289. 지식을 끄면 없음)
@@ -1193,11 +1223,14 @@ Work 끝          → 한 줄 코멘트 → 닫기(PR이면 머지로) (D346, D3
 
 이 필드는 기존 `schema_version: 1`에 추가한다. 새 앱은 기존 Claude 기록을 읽지만 엔진 선택이 없는 이전 앱에서 Codex 기록을 재개하는 것은 지원하지 않는다.
 
-`work.json`의 마무리 기록(D493~D501):
+`work.json`의 마무리 기록(D493~D501)과 relay MCP 기록(D519, D521):
 
 | 필드 | 뜻 |
 |---|---|
 | `pipeline` | 새 Work는 `2`다. 없으면 verify가 있는 옛 파이프라인이다(D501) |
+| `driver` | `caller`면 relay MCP 호출자가 진행한다(D519). 없으면 사람이다. [직접 맡기]가 지운다(D523) |
+| `caller_questions` | `recommend`면 caller Work의 질문에 앱이 "알아서 해"로 답한다(D521). 없으면 호출자에게 돌려준다 |
+| task의 `ask` | `mcp`면 질문을 relay MCP의 `ask_human`으로 묻게 띄운 Claude task다(D521). 재개도 같은 길이다 |
 | task의 `review` | 마무리 단계 task의 독립 리뷰: `requested_at`(리뷰 요청을 받은 때), `code_review`(그때의 설정, D497), `finished_at`(끝난 때), `error`(실패했으면 까닭), `resumed_at`(결과를 첫 입력으로 세션을 다시 연 때). 리뷰 중 앱을 다시 켜 기다리는 것이면 `restarted: true`(D496) |
 
 ### 5.1.1 앱 설정 (`config.json`)
@@ -1400,7 +1433,7 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 - [사람] refresh 경로도 이번 수정 범위에 포함 — 같은 비교 함수를 씀
 ```
 
-- 머리 줄: task id, 노드, 승인 시각, 승인 방식(사람 승인 / 자동 승인)
+- 머리 줄: task id, 노드, 승인 시각, 승인 방식(사람 승인 / 자동 승인 / 호출자 승인, D522)
 - 항목: `[사람]`/`[AI]`는 handoff의 `by`, 그 뒤에 `what — why`
 - 결정이 없으면 항목 대신 "없음"을, [오류 무시하고 승인]에서 handoff 머리글을 읽지 못했으면 "handoff 머리글 오류로 결정을 읽지 못함"을 적는다(D112).
 
@@ -1412,11 +1445,11 @@ KST 서버에서 액세스 토큰이 발급 직후 만료로 판정되는 문제
 {"ts":"2026-09-25T14:32:10+09:00","work_id":"w-20260925-001","task_id":"t-04","type":"task.approved","payload":{"by":"human"}}
 ```
 
-- `task_id`는 task 이벤트에만 있다. `payload`는 유형별 추가 정보이며 없으면 `{}`. `task.approved`의 `payload.by`는 승인 방식이다: `human`(사람 승인), `auto`(자동 승인, 4.3). [오류 무시하고 승인]이면 `task.approved`의 `payload`에 무시한 오류 수(`ignored_errors`)를 더한다(D112).
+- `task_id`는 task 이벤트에만 있다. `payload`는 유형별 추가 정보이며 없으면 `{}`. `task.approved`의 `payload.by`는 승인 방식이다: `human`(사람 승인), `auto`(자동 승인, 4.3), `caller`(relay MCP 호출자의 승인, D522). [오류 무시하고 승인]이면 `task.approved`의 `payload`에 무시한 오류 수(`ignored_errors`)를 더한다(D112).
 - 유형:
 
 ```
-work.created | work.completed | work.abandoned | work.cleaned
+work.created | work.completed | work.abandoned | work.cleaned | work.taken_over
 task.started | task.session_identified | task.first_output | task.first_hook | task.bounced | task.awaiting_approval | task.approved | task.interrupted | task.resumed
 review.requested | review.finished
 delivery.succeeded | delivery.failed
@@ -1432,12 +1465,13 @@ issue.created | issue.posted | issue.post_failed | issue.closed
 | `work.completed` | `delivery`: `none`(전달 없이 완료), `push`, `pr`. PR 진행에서 끝나면 `merged`(`true`는 머지됨, `false`는 머지 없이 끝냄, D152) |
 | `work.abandoned` | 없음 |
 | `work.cleaned` | `forced`(`--force`로 지웠는가), `deleted_branches` |
+| `work.taken_over` | 없음. relay MCP 호출자가 진행하던 Work를 사람이 [직접 맡기]로 맡았다(D523) |
 | `task.started` | `reason`(task를 시작한 까닭: `default`, `resume`, `respond`([대응 시작], D187), `auto_respond`(자동 대응, D154)), `session_id` |
 | `task.session_identified` | 훅으로 확인한 실제 대화 ID `session_id`. 최초 식별과 CLI 내부 대화 전환을 기록한다 |
 | `task.first_output`, `task.first_hook` | 세션을 띄운 뒤 처음 받은 PTY 출력(보이는 글자가 있는 것)과 훅(D217): `pid`, 띄운 뒤 걸린 `ms`. `task.first_hook`에는 그 훅의 `event`(보통 `UserPromptSubmit`). 새 세션과 다시 연 세션마다 한 번씩이다 |
 | `task.bounced` | 형식 되돌림(D21, D220): `attempt`(이 턴에서 몇 번째), `max`(설정한 상한), `errors`(오류마다 `file`과 `message`) |
 | `task.awaiting_approval` | 없음. 재시작 조정이 바꿨으면 `reason: app_restart`와 끝낸 고아의 `killed_pid`(D76). Stop 없이 세션이 끝나며 바뀌었으면 `reason: session_ended`(D146) |
-| `task.approved` | `by`: `human`, `auto`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
+| `task.approved` | `by`: `human`, `auto`, `caller`. [오류 무시하고 승인]이면 `ignored_errors`(수) |
 | `task.interrupted` | `reason`: `human`([즉시 중단]), `app_quit`(앱 종료 확인), `abandoned`([Work 포기]), `session_ended`(handoff 없이 세션 종료), `start_failed`(세션을 띄우지 못함. `error`에 까닭, D135의 앞선 처리 실패도 여기다), `app_restart`(재시작 조정. 끝낸 고아가 있으면 `killed_pid`), `pr_merged`(PR이 밖에서 머지돼 대응 task를 끝냄, D179). 대기열에 있던 task면 `queued: true` |
 | `task.resumed` | `session_id`, `engine`, `engine_version`. Claude일 때는 이전 기록 호환을 위해 `claude_version`도 남긴다. 독립 리뷰 결과로 다시 열었으면 `input: review`(D496) |
 | `review.requested` | 마무리 단계의 리뷰 요청(D494): `code_review`(그때의 설정, D497) |

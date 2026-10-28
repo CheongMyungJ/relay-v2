@@ -26,13 +26,16 @@
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
 //   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
+// - --mcp-config로 relay MCP를 받은 task(D521)의 mcpAsk 단계는 그 서버의 ask_human으로 묻고 답을 기록에 남긴다(Codex의
+//   ask와 같은 브리지). --mcp-config와 --disallowedTools의 값은 첫 프롬프트로 읽지 않는다.
 // - SIGHUP을 받으면 실제 claude처럼 SessionEnd(reason: other)를 보내고 응답을 받은 뒤 끝난다(D231).
 // - 시나리오가 없으면 M0처럼 출력만 내고 끝날 때까지 살아 있는다.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import readline from 'node:readline'
 
 const argv = process.argv.slice(2)
 const env = process.env
@@ -192,6 +195,8 @@ const opts = {
   prompt: null,
   guide: null,
   effort: null,
+  mcpConfig: null,
+  disallowed: null,
 }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -204,7 +209,14 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--settings') opts.settings = argv[++i]
   else if (a === '--append-system-prompt-file') opts.guide = argv[++i]
   else if (a === '--effort') opts.effort = argv[++i]
-  else if (a === '--model') i++
+  // relay MCP로 묻는 task (D521): 설정 파일과 뺀 도구. 실제 claude처럼 값을 여럿 받아 다음 옵션 앞까지 먹는다: 뒤에 첫
+  // 프롬프트가 바로 오면 프롬프트가 없어진다
+  else if (a === '--mcp-config' || a === '--disallowedTools') {
+    const values = []
+    while (i + 1 < argv.length && !argv[i + 1].startsWith('-')) values.push(argv[++i])
+    if (a === '--mcp-config') opts.mcpConfig = values[0] ?? null
+    else opts.disallowed = values
+  } else if (a === '--model') i++
   // 곁·기본 세션의 --system-prompt-snapshot off (D446). 값을 첫 프롬프트로 읽지 않는다
   else if (a === '--system-prompt-snapshot') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
@@ -379,6 +391,39 @@ function waitEnter() {
   return new Promise((r) => enterWaiters.push(r))
 }
 
+/** --mcp-config의 relay 서버 (D521). 처음 부를 때 띄우고 initialize한다 */
+let mcpServer = null
+function relayMcp() {
+  if (mcpServer) return mcpServer
+  if (!opts.mcpConfig) throw new Error('relay MCP가 설정에 없습니다 (--mcp-config)')
+  const server = JSON.parse(fs.readFileSync(opts.mcpConfig, 'utf8')).mcpServers.relay_task
+  const child = spawn(server.command, server.args, {
+    env: { ...env, ...server.env },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  const pending = new Map()
+  let rpcId = 0
+  readline.createInterface({ input: child.stdout }).on('line', (line) => {
+    const msg = JSON.parse(line)
+    pending.get(msg.id)?.(msg)
+    pending.delete(msg.id)
+  })
+  child.stderr.on('data', (d) => process.stderr.write(d))
+  const call = (method, params) => {
+    const id = ++rpcId
+    const promise = new Promise((resolve) => pending.set(id, resolve))
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+    return promise
+  }
+  const ready = call('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'fake-claude', version: '1' },
+  })
+  mcpServer = { call: async (method, params) => (await ready, call(method, params)), child }
+  return mcpServer
+}
+
 async function steps(list, ctx, vars) {
   for (const step of list) {
     const s = step.do
@@ -483,6 +528,32 @@ async function steps(list, ctx, vars) {
           { ...fields, tool_response: { answers: {} }, duration_ms: 0 },
           'AskUserQuestion',
         )
+    } else if (s === 'mcpAsk') {
+      // relay MCP의 ask_human으로 묻는다 (D521): --mcp-config의 relay 서버를 실제 claude처럼 자기 환경을 물려 띄우고,
+      // 도구 호출의 앞뒤로 PreToolUse·PostToolUse를 보낸다. 받은 답은 기록에 남긴다
+      const args = {
+        questions: step.questions ?? [
+          {
+            id: 'scope',
+            header: '범위',
+            question: step.question ?? '어느 범위를 고칠까요?',
+            options: [
+              { label: '작은 범위 (추천)', description: '변경을 줄입니다.' },
+              { label: '전체', description: '전체를 바꿉니다.' },
+            ],
+          },
+        ],
+      }
+      const id = `toolu_${randomUUID().replaceAll('-', '').slice(0, 24)}`
+      const fields = { tool_name: 'mcp__relay_task__ask_human', tool_input: args, tool_use_id: id }
+      await hook('PreToolUse', fields, fields.tool_name)
+      const message = await relayMcp().call('tools/call', { name: 'ask_human', arguments: args })
+      record({ type: 'answer', result: message.result })
+      await hook(
+        'PostToolUse',
+        { ...fields, tool_response: message.result?.content ?? [], duration_ms: 0 },
+        fields.tool_name,
+      )
     } else if (s === 'tool') {
       // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다.
       // fail이면 PostToolUse 대신 PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에
@@ -574,6 +645,8 @@ async function run() {
     type: 'start',
     args: argv,
     resume: opts.resume,
+    // 인자에서 읽은 첫 프롬프트: 값을 여럿 받는 옵션이 먹었거나 옵션으로 읽혔으면 null이다
+    prompt: opts.prompt,
     cleanup: !side && !opts.resume && opts.prompt === null,
     ...(side
       ? { [session ? 'session' : 'side']: true, guide: fs.readFileSync(opts.guide, 'utf8') }

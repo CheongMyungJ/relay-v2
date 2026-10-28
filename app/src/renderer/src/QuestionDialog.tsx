@@ -7,11 +7,13 @@ export function QuestionDialog({
   workKey,
   taskId,
   pending,
+  title = 'Codex 질문',
   onHide,
 }: {
   workKey: string
   taskId: string
   pending: PendingQuestionView
+  title?: string
   onHide: () => void
 }) {
   const [chosen, setChosen] = useState<HumanAnswers>({})
@@ -34,7 +36,7 @@ export function QuestionDialog({
     if (!r.ok) setError(r.error)
   }
   return (
-    <Modal title="Codex 질문" onClose={onHide}>
+    <Modal title={title} onClose={onHide}>
       <p className="dim">답변을 보낼 때까지 작업이 기다립니다. 추천 선택지도 직접 골라야 합니다.</p>
       <form
         onSubmit={(e) => {
