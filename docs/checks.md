@@ -386,3 +386,11 @@ Windows 10/11 PC에서 설치한 앱과 실제 `claude`로 본다. 결과는 위
 |---|---|---|---|---|---|---|
 | 2026-10-28 | d40d475 | 2.1.312 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [계약] 실제 쪽 | 통과 | `RELAY_CONTRACT_LIVE=1 RELAY_CONTRACT_UPDATE=stream`(로그인은 `RELAY_CONTRACT_PASS_ENV`로 넘김)으로 녹화본의 옵션(`--mcp-config`, `--disallowedTools`)과 출력 이벤트를 2.1.312로 새로 쓰고, 다시 돌려 6개 통과. 처음 돌렸을 때 relay MCP 시험(5)이 실패했다: 두 옵션이 값을 여럿 받아 바로 뒤의 첫 프롬프트를 먹었다. `--settings` 앞으로 옮긴 뒤 relay 서버 connected, `mcp__relay__ask_human` 있음, `AskUserQuestion` 빠짐. claude가 MCP 서버에 자기 환경(`RELAY_HOOK_TOKEN`)을 물려주는 것도 손으로 확인했다 |
 | 2026-10-28 | d40d475 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너, xvfb, 예비 확인 | [스모크] | 통과 | `npm run build && xvfb-run -a npx playwright test` 15개 통과(새 `mcp.spec.ts` 포함). 실제 claude로 caller Work를 끝까지 돌리는 [실제]는 하지 않았다 |
+
+## M41. 2026-10-28 평가 반영 (D527~D529)
+
+| 날짜 | 앱 커밋 | Claude Code 버전 | OS | 종류 | 결과 | 메모 |
+|---|---|---|---|---|---|---|
+| 2026-10-28 | 60fb560 | 2.1.312 | Linux 클라우드 컨테이너(Claude Code 웹 세션), 예비 확인 | [실기] 대체 화면(D527) | 통과 | node-pty와 `@xterm/headless`로 `claude --dangerously-skip-permissions "<프롬프트>"`를 띄워 응답 뒤 `/exit`. 새 설정 폴더의 첫 실행은 대체 화면(`\x1b[?1049h`)과 마우스 잡기(`\x1b[?1000h`)가 없고, 같은 설정 폴더의 두 번째 실행은 둘 다 있으며 끝난 뒤 화면에 "Resume this session with: claude --resume …"만 남았다. 두 번째 실행에 `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`을 주면 둘 다 없고 끝난 뒤에도 대화가 화면과 스크롤에 남았다. 평가(`app/eval/reports/2026-10-28-baseline.md`)의 relay task pty.log도 intake(첫 실행)는 대체 화면이 없고 다음 task부터 있었다 |
+| 2026-10-28 | 001f193 | 해당 없음(가짜 `claude`) | Linux 클라우드 컨테이너, xvfb, 예비 확인 | [스모크] | 통과 | `npm run build && xvfb-run -a npm run test:smoke` 15개 통과 |
+| 2026-10-28 | e8340f5 | 2.1.312 | Linux 클라우드 컨테이너, xvfb | 평가 | 통과 | `app/eval/reports/2026-10-28-after.md`. 새 빌드의 relay task pty.log에 대체 화면이 없고(`\x1b[?1049h` 0번), 완료 화면의 스크린샷에 마무리 단계의 대화와 "독립 리뷰가 끝나 같은 대화를 다시 엽니다" 줄 뒤의 대화가 보였다. 05에서 "리뷰 뒤 전할 말"로 남긴 글이 다시 연 세션의 첫 입력 끝에 붙어 들어갔다 |
