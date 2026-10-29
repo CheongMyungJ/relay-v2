@@ -20,6 +20,6 @@
 
 ## 화면 확인
 
-화면을 고쳤으면 사람에게 확인을 맡기기 전에 직접 띄워 본다. `app/`에서 `npm run shot -- <파일.png> [--project] [--steps <파일.mjs>]`로 찍고(가짜 `claude`와 임시 `RELAY_HOME`, DISPLAY가 없으면 xvfb) 그 그림을 열어 본다. 사용자에게 파일을 보낼 수 있으면 그림도 함께 보낸다. 사람에게는 그래도 판단할 수 없는 것만 묻는다. 고친 화면에 [스모크] 시험이 있으면 `npm run build && npm run test:smoke`(Linux는 `xvfb-run -a`)도 돌린다.
+화면을 고쳤으면 사람에게 확인을 맡기기 전에 `CONTRIBUTING.md`의 "화면 찍기"로 직접 띄워 찍고 그 그림을 열어 본다. 사용자에게 파일을 보낼 수 있으면 그림도 함께 보낸다. 사람에게는 그래도 판단할 수 없는 것만 묻는다. 고친 화면에 [스모크] 시험이 있으면 그것도 돌린다.
 
 push 전 (`app/`): `npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:contract`

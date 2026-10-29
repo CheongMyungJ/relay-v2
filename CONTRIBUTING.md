@@ -41,13 +41,16 @@ cd ../skills && node check.mjs               # 스킬 정적 검사 (스킬을 �
 화면을 고친 뒤 눈으로 확인할 때 씁니다. 에이전트도 사람에게 묻기 전에 이것으로 스스로 봅니다(`CLAUDE.md`).
 
 ```bash
-npm run shot                                            # 첫 화면 → test-results/shot.png
-npm run shot -- out.png --project                       # sample 레포를 등록한 뒤
-npm run shot -- out.png --project --steps steps.mjs     # 찍기 전에 steps.mjs의 default export (win, ctx)를 부른다
-npm run shot -- out.png --scenario scenario.json        # 가짜 claude의 시나리오(test/support/scenarios.ts의 모양)
+npm run shot                                                                   # 첫 화면 → test-results/shot.png
+npm run shot -- test-results/a.png --project                                   # sample 레포를 등록한 뒤
+npm run shot -- test-results/a.png --project --steps test-results/steps.mjs    # 찍기 전에 steps.mjs의 default export (win, ctx)를 부른다
+npm run shot -- test-results/a.png --scenario test-results/scenario.json       # 가짜 claude의 시나리오(test/support/scenarios.ts의 모양)
 ```
 
-빌드한 뒤 [스모크]처럼 가짜 `claude`와 임시 `RELAY_HOME`으로 띄우므로 실제 `claude`나 쓰던 relay 기록을 건드리지 않습니다. Linux에서 DISPLAY가 없으면(클라우드 세션 등) `xvfb-run`으로 돕니다. `steps.mjs`의 `win`은 Playwright `Page`이고, 여러 장이 필요하면 그 안에서 `win.screenshot({ path })`을 부릅니다.
+- [스모크]처럼 가짜 `claude`, 임시 `RELAY_HOME`과 userData, 같은 sample 레포로 띄웁니다. 실제 `claude`나 쓰던 relay를 건드리지 않고, relay를 켜 둔 채(relay 안의 세션에서도) 돕니다.
+- 찍을 그림과 `steps.mjs` 같은 일회용 파일은 `test-results/`에 둡니다. git과 lint가 보지 않습니다. 상대 경로는 명령을 부른 폴더 기준입니다.
+- `npm run shot`은 늘 빌드부터 합니다. 고친 것 없이 여러 장을 찍을 때는 `node scripts/shot.mjs ...`로 빌드를 건너뛰거나, `steps.mjs` 안에서 `win.screenshot({ path })`을 여러 번 부릅니다. `win`은 Playwright `Page`입니다.
+- Linux에서 DISPLAY가 없으면(클라우드 세션 등) `xvfb-run`으로 돕니다. 시험 도구의 `.ts`를 바로 읽으므로 Node 22.18 이상이 필요합니다.
 
 ```js
 // steps.mjs

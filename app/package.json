@@ -17,7 +17,7 @@
     "format:check": "prettier --check .",
     "test": "npm run contracts && vitest run --project unit --project adapters --project flow",
     "test:smoke": "playwright test",
-    "shot": "npm run build && node scripts/shot.mjs",
+    "shot": "npm run build && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/shot.mjs",
     "test:unit": "npm run contracts && vitest run --project unit",
     "test:adapters": "npm run contracts && vitest run --project adapters",
     "test:flow": "npm run contracts && vitest run --project flow",
