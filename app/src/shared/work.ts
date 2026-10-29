@@ -293,6 +293,8 @@ export interface TaskSession {
    * 조정했다. 승인 안내와 [재개]의 첫 입력에 쓴다. 다른 까닭으로 끝났거나 다시 열면 없다
    */
   app_ended?: 'quit' | 'restart'
+  /** 이어받은 의도 정리 세션의 id (D531). 이 세션은 그 대화를 --fork-session으로 이어받았다. 다시 열 때도 절차를 새로 준다 */
+  forked_from?: string
 }
 
 export interface TaskRecord {

@@ -96,11 +96,19 @@ export function approvalMode(
  * approvalMode다. 커스텀 단계는 그 단계의 정의를 함께 본다 (D457)
  */
 export function taskApprovalMode(
-  config: Pick<AppConfig, 'auto_approve'>,
-  work: Pick<WorkState, 'settings' | 'type' | 'custom_type' | 'pipeline'>,
+  config: Pick<AppConfig, 'auto_approve' | 'auto_approve_intent'>,
+  work: Pick<WorkState, 'settings' | 'type' | 'custom_type' | 'pipeline' | 'driver'>,
   task: Pick<TaskRecord, 'node' | 'step' | 'engine'>,
 ): ApprovalMode {
   if (completesWork(work, task)) return 'manual'
+  // 의도 승인은 실험 설정(D530)을 켰을 때만 자동이다. 호출자가 진행하는 Work는 호출자가 승인한다 (D522)
+  if (task.node === 'intake') {
+    return config.auto_approve_intent === true &&
+      knownTaskEngine(task) === 'claude' &&
+      work.driver !== 'caller'
+      ? 'auto'
+      : 'manual'
+  }
   return approvalMode(
     config,
     work.settings,

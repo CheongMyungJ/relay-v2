@@ -197,15 +197,23 @@ const opts = {
   effort: null,
   mcpConfig: null,
   disallowed: null,
+  // --fork-session으로 이어받을 세션 (D531)
+  fork: false,
+  resumeId: null,
+  givenId: false,
 }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--dangerously-skip-permissions') opts.skip = true
-  else if (a === '--session-id') opts.sessionId = argv[++i]
-  else if (a === '--resume') {
+  else if (a === '--session-id') {
     opts.sessionId = argv[++i]
+    opts.givenId = true
+  } else if (a === '--resume') {
+    opts.resumeId = argv[++i]
+    if (!opts.givenId) opts.sessionId = opts.resumeId
     opts.resume = true
-  } else if (a === '--add-dir') opts.addDirs.push(argv[++i])
+  } else if (a === '--fork-session') opts.fork = true
+  else if (a === '--add-dir') opts.addDirs.push(argv[++i])
   else if (a === '--settings') opts.settings = argv[++i]
   else if (a === '--append-system-prompt-file') opts.guide = argv[++i]
   else if (a === '--effort') opts.effort = argv[++i]
@@ -221,6 +229,11 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--system-prompt-snapshot') i++
   else if (!a.startsWith('--') && opts.prompt === null) opts.prompt = a
 }
+
+// 실제 claude와 같다: --resume <id> --fork-session --session-id <새 id>는 앞 대화를 이어받은 새 세션이다 (D531). 가짜는
+// 새 세션처럼 첫 프롬프트의 context.md로 task를 읽고, 이어받을 대화가 없으면 끝난다
+const forkFrom = opts.fork && opts.resume ? opts.resumeId : null
+if (forkFrom) opts.resume = false
 
 const recordDir = env.FAKE_CLAUDE_RECORD
 function record(entry) {
@@ -326,9 +339,11 @@ process.on('SIGHUP', () => {
 // ---------- 시나리오 ----------
 
 function readContext() {
-  const m = /^relay ([\w-]+) 단계를 시작합니다\. 이 task의 컨텍스트:\s*(.+)$/.exec(
-    opts.prompt ?? '',
-  )
+  // 이어받은 세션의 첫 입력(D531)은 경로 뒤에 안내가 붙는다
+  const m =
+    /^relay ([\w-]+) 단계를 시작합니다\. 이 task의 컨텍스트:\s*(.+?)(?= 위의 대화는 |$)/.exec(
+      opts.prompt ?? '',
+    )
   if (!m) return { skill: null, taskDir: process.cwd(), taskId: null, node: null }
   const [, skill, contextPath] = m
   const text = fs.readFileSync(contextPath.trim(), 'utf8')
@@ -624,7 +639,8 @@ async function steps(list, ctx, vars) {
 
 async function run() {
   const scenario = JSON.parse(fs.readFileSync(scenarioFile, 'utf8'))
-  const ctx = opts.resume ? loadSession() : readContext()
+  const forkMissing = forkFrom !== null && !fs.existsSync(sessionFile(forkFrom) ?? '')
+  const ctx = forkMissing ? null : opts.resume ? loadSession() : readContext()
   if (!ctx) {
     // 실제 claude와 같다: 저장된 대화가 없는 id로 --resume하면 끝난다 (스파이크 S6)
     record({ type: 'start', args: argv, resume: true, found: false })
@@ -645,6 +661,7 @@ async function run() {
     type: 'start',
     args: argv,
     resume: opts.resume,
+    ...(forkFrom ? { forkFrom } : {}),
     // 인자에서 읽은 첫 프롬프트: 값을 여럿 받는 옵션이 먹었거나 옵션으로 읽혔으면 null이다
     prompt: opts.prompt,
     cleanup: !side && !opts.resume && opts.prompt === null,

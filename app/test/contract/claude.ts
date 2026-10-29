@@ -196,6 +196,17 @@ export function appFlags(): string[] {
       model: 'm',
       effort: 'low',
     }),
+    // 의도 정리의 대화를 이어받는 task와 그 재개 (D531)
+    ...launchArgs({
+      sessionId: 'id',
+      workDir: p,
+      settingsPath: p,
+      instructionsPath: p,
+      skill: 'fix',
+      contextPath: p,
+      forkFrom: 'id0',
+    }),
+    ...resumeArgs({ sessionId: 'id', workDir: p, settingsPath: p, snapshotOff: true }),
     // relay MCP로 묻는 caller Work의 task (D521)
     ...launchArgs({
       sessionId: 'id',

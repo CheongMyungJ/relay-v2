@@ -618,6 +618,10 @@ const REVIEW_GUIDE_FILE = '_review.md'
 /** 다시 연 세션의 출력 앞에 넣는 줄. 이전 화면 뒤에 이어 보인다 (시나리오 3-4) */
 const RESUME_MARK = '\r\n\x1b[0m\x1b[2m── relay: 세션 재개 (--resume) ──\x1b[0m\r\n'
 
+/** 의도 정리의 대화를 이어받은 세션의 출력 앞에 넣는 줄 (D531) */
+const forkMark = (task: TaskRecord) =>
+  `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 의도 정리의 대화를 이어받아 새 세션을 띄우는 중 ──\x1b[0m\r\n`
+
 /** 새 세션의 출력 앞에 넣는 줄. CLI가 첫 화면을 그리기 전의 빈 화면을 채운다 (시나리오 2-5, D215) */
 const startMark = (task: TaskRecord) =>
   `\x1b[0m\x1b[2m── relay: ${taskLabel(task)} · 새 세션을 띄우는 중 ──\x1b[0m\r\n`
@@ -1934,6 +1938,8 @@ export class WorkRunner {
       const sessionId = driver.engine === 'claude' ? randomUUID() : ''
       const token = randomBytes(32).toString('hex')
       const claudeAsk = ask && driver.engine === 'claude'
+      // 실험(D531): 의도 정리 바로 다음 단계는 의도 정리의 대화를 이어받는다
+      const forkFrom = driver.engine === 'claude' ? this.intakeFork(task) : undefined
       const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1945,10 +1951,17 @@ export class WorkRunner {
         contextPath,
         ...pinnedAgent(task),
         ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(forkFrom ? { forkFrom } : {}),
       })
-      const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task), {
-        ask: claudeAsk,
-      })
+      const session = this.launch(
+        task,
+        bin,
+        token,
+        args,
+        turnSnapshot(task, {}),
+        forkFrom ? forkMark(task) : startMark(task),
+        { ask: claudeAsk },
+      )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
         type: 'session.started',
@@ -1962,6 +1975,7 @@ export class WorkRunner {
         skillHash: deployed.hash,
         engineVersion: version,
         ...(claudeAsk ? { ask: 'mcp' as const } : {}),
+        ...(forkFrom ? { forkedFrom: forkFrom } : {}),
       })
       if (driver.engine === 'codex')
         await this.feed({ type: 'input.required', taskId: task.id, at: this.ctx.at() })
@@ -1969,6 +1983,22 @@ export class WorkRunner {
     } catch (err) {
       return this.launchFailed(task.id, err)
     }
+  }
+
+  /**
+   * 이어받을 의도 정리 세션 (D531). 실험 설정을 켰고, 이 task가 처음 시작하는 의도 정리 바로 다음 단계이며, 승인된 의도
+   * 정리가 Claude 세션을 남겼을 때만이다. 처음부터 다시 시작하는 task(D423)는 이어받지 않는다
+   */
+  private intakeFork(task: TaskRecord): string | undefined {
+    if (!this.ctx.config().continue_from_intake || task.start_commit) return undefined
+    const i = this.work.tasks.findIndex((t) => t.id === task.id)
+    const before = this.work.tasks
+      .slice(0, i)
+      .filter((t) => t.status !== 'discarded')
+      .at(-1)
+    if (before?.node !== 'intake' || before.status !== 'approved') return undefined
+    if (knownTaskEngine(before) !== 'claude') return undefined
+    return before.session?.id || undefined
   }
 
   /**
@@ -2026,6 +2056,7 @@ export class WorkRunner {
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
         ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(task.session?.forked_from ? { snapshotOff: true } : {}),
       })
       const session = this.launch(
         task,

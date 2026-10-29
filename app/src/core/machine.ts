@@ -115,6 +115,8 @@ export interface SessionStarted extends TaskEvent {
   claudeVersion?: string
   /** 질문을 relay MCP의 ask_human으로 묻게 띄운 Claude task (D521). task 기록에 남겨 재개도 같은 길로 연다 */
   ask?: 'mcp'
+  /** 이어받은 의도 정리 세션의 id (D531) */
+  forkedFrom?: string
 }
 
 /**
@@ -1824,12 +1826,23 @@ function sessionStarted(work: WorkState, task: TaskRecord, e: SessionStarted): T
       ...(e.processStartedAt === undefined ? {} : { process_started_at: e.processStartedAt }),
       started_at: e.at,
       alive: true,
+      ...(e.forkedFrom ? { forked_from: e.forkedFrom } : {}),
     },
   }
   return {
     work: withTask(work, started),
     effects: [
-      log(work, e.at, 'task.started', { reason: task.reason, session_id: e.sessionId }, task),
+      log(
+        work,
+        e.at,
+        'task.started',
+        {
+          reason: task.reason,
+          session_id: e.sessionId,
+          ...(e.forkedFrom ? { forked_from: e.forkedFrom } : {}),
+        },
+        task,
+      ),
     ],
   }
 }

@@ -13,6 +13,7 @@ import {
   holdNeedsNotice,
   holdText,
   pendingBackground,
+  taskApprovalMode,
 } from '../../src/core/approval'
 import { createWork } from '../../src/core/machine'
 import { checkTask } from '../../src/core/validate'
@@ -198,6 +199,21 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
     // 설계의 설계 문답도 켤 수 있고 기본은 켬이다 (D367)
     expect(autoApprovable('spec')).toBe(true)
     expect(approvalMode(DEFAULT_CONFIG, {}, 'spec')).toBe('auto')
+  })
+})
+
+describe('의도 자동 승인 실험 (D530)', () => {
+  const v2 = { settings: {}, type: 'bugfix' as const, pipeline: 2 as const }
+  const intake = { node: 'intake' as const, engine: 'claude' as const }
+  it('기본은 수동이고, 켜면 Claude의 의도 정리만 자동이다', () => {
+    expect(taskApprovalMode(DEFAULT_CONFIG, v2, intake)).toBe('manual')
+    const on = { ...DEFAULT_CONFIG, auto_approve_intent: true }
+    expect(taskApprovalMode(on, v2, intake)).toBe('auto')
+    expect(taskApprovalMode(on, v2, { ...intake, engine: 'codex' })).toBe('manual')
+    // 호출자가 진행하는 Work는 호출자가 승인한다 (D522)
+    expect(taskApprovalMode(on, { ...v2, driver: 'caller' }, intake)).toBe('manual')
+    // Work를 마무리하는 단계는 그대로 늘 수동이다 (D498)
+    expect(taskApprovalMode(on, v2, { node: 'fix', engine: 'claude' })).toBe('manual')
   })
 })
 

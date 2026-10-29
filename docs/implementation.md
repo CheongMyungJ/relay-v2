@@ -212,6 +212,8 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I196 | D527의 자리: `core/settings`의 `launchEnv`가 훅 토큰과 함께 `INLINE_SCREEN_ENV`(`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`)를 준다. Claude 엔진의 task, 정리 세션, 곁 세션, 기본 세션이 모두 이 함수를 거친다. Codex의 `launchEnv`는 그대로다. 가짜 claude의 `start` 기록에 `inlineScreen`을 더해 [흐름]이 본다 | 환경 변수는 `--help`에 없어 [계약]의 옵션 검사로 볼 수 없다. 실제 동작은 손으로 확인해 `docs/checks.md`에 적었다 | |
 | I197 | D528의 자리: 쓰이는 자리는 `core/pipeline.autoApproveStages`(Work 완료 task가 아닌 `STEP_NODES`, 커스텀 단계, `respond`)가 정하고 `WorkView.autoApprove`로 보낸다. 앱 설정 화면은 `shared/config.FINAL_STEP_NODES`로 표시하고, [새 Work]는 새 Work가 늘 새 파이프라인이라 `FINAL_STEP_NODES`를 빼고 커스텀 단계의 마지막을 뺀다. `FINAL_STEP_NODES`가 `PIPELINES`의 마지막 노드와 같은지 [단위]가 본다 | 렌더러는 core를 부르지 않는다(I9). 옛 Work인지는 Work마다 달라 main이 정해 보낸다 | |
 | I198 | D529의 자리: `WorkRunner.reviewNotes`(task id → 글, 메모리). `reviewNote`는 `reviewState`가 있을 때만 받고 `REVIEW_NOTE_MAX`(2000)를 넘으면 거절한다. `resumeSession`이 `review` 입력이면 `reviewResumePrompt(결과 경로, 남긴 말)`로 만들고 `sentNotes`로 옮긴다(`TaskView.reviewNote`의 `sent`). 닫는 줄은 `startReview`가 세션을 끝낸 뒤 `markTerminal`(터미널 버퍼와 `appendPtyMark`)로, 다시 여는 줄은 `launch`의 첫 줄로 넣는다. IPC `work:review-note`, `TaskView.reviewNote`, 패널의 `ReviewNote` | 남긴 말을 `work.json`에 두려면 상태 기계 이벤트가 하나 늘고, 리뷰는 10~20초라 그사이 앱을 끄는 일은 드물다 | |
+| I199 | D530의 자리: `AppConfig.auto_approve_intent`(`BOOLEAN_KEYS`, 설정 화면), `core/approval.taskApprovalMode`가 intake를 `auto_approve_intent`, 엔진, `driver`로 정한다. 카운트다운·조건·기록은 다른 단계의 자동 승인 그대로다(`approveNow`가 intake면 `confirmIntent`). `core/context`의 `approvalSection`과 `closingMessage`가 `intentAuto`를 받는다 | 자동 승인의 길을 하나로 둔다. 판정을 한 곳에 두어 승인 화면, 배지, context.md가 같은 답을 쓴다 | |
+| I200 | D531의 자리: `core/settings`의 `LaunchInput.forkFrom`(`--resume <id> --fork-session`, `--system-prompt-snapshot off`, `forkPrompt`)과 `ResumeInput.snapshotOff`. `WorkRunner.intakeFork`가 설정, 바로 앞의 버리지 않은 task가 승인된 Claude intake인지, 처음 시작인지(`start_commit` 없음)를 본다. `session.started`의 `forkedFrom`이 `session.forked_from`과 `task.started`의 `forked_from`으로 남는다. 가짜 claude는 `--fork-session`이면 이어받을 세션 기록이 있는지만 보고 새 세션처럼 첫 입력의 context.md로 돈다(기록 `forkFrom`). 계약의 `appFlags`에 이어받는 시작과 재개를 더했고, 녹화본의 `flags`에 `--fork-session`을 더했다(2.1.312 `--help`로 확인, 출력 이벤트 모양은 다시 쓰지 않음) | `--session-id`를 함께 주어 앱이 id를 정한다(대화 id를 훅에서 받지 않아도 됨). 재개는 기록한 시스템 프롬프트를 쓰는 기본이라, 이어받은 task는 다시 열 때도 끈다 | |
 
 ## 3. 확인한 사실
 
@@ -1602,6 +1604,20 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[흐름]** `test/flow/flow.test.ts` "리뷰 뒤 전할 말": 리뷰 중이 아니면 거절, 바꿔 남긴 말만 첫 입력에 붙음, 다시 열면 지움, 모든 세션의 `inlineScreen`, pty.log의 닫는 줄과 다시 여는 줄.
 - **[스모크]** `test/smoke/app.spec.ts`: 설정 화면의 "마지막 단계라 늘 수동, 옛 Work만", [새 Work]의 버그 수정에 원인 분석과 수정 줄이 없고 PR 대응 줄이 있음.
 - **[평가 도구]** `eval/test/measure.test.mjs`: 쪽 이름의 설정 묶음 읽기, 모든 설정 묶음이 앱 설정으로 경고 없이 읽힘.
+
+### M42. 작은 일의 빠른 경로 실험 (D530~D531)
+
+사람이 M41 평가에서 남은 불편(작은 일의 수고)을 줄이는 두 안을 모두 만들어 평가로 견주자고 했다. 두 안은 기본 꺼진 앱 설정이고, 평가는 같은 빌드에서 설정 묶음 쪽(`relay+intent-auto`, `relay+intake-fork`)을 기본 `relay`와 짝으로 판정한다(`app/eval/reports/2026-10-29-fast-path.md`). 설계 v0.37.
+
+- core: `approval.taskApprovalMode`의 intake(I199), `context`의 승인 방식과 마무리 문구, `config`의 두 키, `settings`의 `forkFrom`·`snapshotOff`·`forkPrompt`(I200), `machine`의 `session.started.forkedFrom`.
+- 앱과 화면: `WorkRunner.intakeFork`와 이어받는 시작, 재개의 `snapshotOff`, 터미널 첫 줄. 설정 화면의 "실험: 작은 일의 빠른 경로".
+- 평가 도구: 설정 묶음 `intent-auto`, `intake-fork`. 사람 역할 설명서에 자동 승인의 카운트다운과 [취소]를 한 줄 더했다.
+
+**시험**
+
+- **[단위]** `test/unit/approval.test.ts`: 의도 자동 승인의 방식(기본 수동, 켜면 Claude intake만, Codex와 호출자 Work는 수동, 마무리 단계는 수동). `test/unit/settings.test.ts`: 이어받는 시작과 재개의 인자.
+- **[흐름]** `test/flow/auto.test.ts` "작은 일의 빠른 경로 실험": 두 설정을 켠 버그 수정에서 의도의 자동 승인과 기록, intake context.md의 문구, 이어받은 수정의 인자와 `forked_from`, 독립 리뷰 뒤 다시 열 때의 `--system-prompt-snapshot off`. 끈 기본값에서는 둘 다 일어나지 않음.
+- **[계약]** `appFlags`에 이어받는 시작과 재개, 녹화본의 `--fork-session`.
 
 ## 8. 테스트 전략
 

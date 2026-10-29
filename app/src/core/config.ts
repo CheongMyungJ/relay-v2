@@ -72,6 +72,8 @@ const EDITABLE_KEYS = [
   'knowledge_review_engine',
   'knowledge_review_model',
   'code_review',
+  'auto_approve_intent',
+  'continue_from_intake',
   'theme',
   'session_dir',
 ] as const
@@ -106,7 +108,13 @@ const RANGES: Readonly<Record<IntegerKey, readonly [number, number]>> = {
   respond_auto_round_max: [1, 20],
 }
 
-type BooleanKey = 'pr_draft' | 'respond_auto_start' | 'side_notice' | 'code_review'
+type BooleanKey =
+  | 'pr_draft'
+  | 'respond_auto_start'
+  | 'side_notice'
+  | 'code_review'
+  | 'auto_approve_intent'
+  | 'continue_from_intake'
 
 const NAMES: Readonly<
   Record<IntegerKey | BooleanKey | 'question_mode' | 'auto_approve' | 'reply_signature', string>
@@ -122,6 +130,8 @@ const NAMES: Readonly<
   pr_draft: 'draft PR',
   respond_auto_start: '대응 자동 시작',
   code_review: '독립 리뷰의 코드 리뷰',
+  auto_approve_intent: '의도 자동 승인(실험)',
+  continue_from_intake: '의도 정리 대화 이어받기(실험)',
   side_notice: '곁 세션을 열 때 안내',
   auto_approve: '자동 승인',
   reply_signature: '답글 표시 문구',
@@ -284,12 +294,17 @@ function integer(key: IntegerKey, v: unknown): Checked<number> {
   return { ok: true, value: v }
 }
 
-/** 참·거짓 값: draft PR(D71), 대응 자동 시작(D154), 곁 세션 안내(D392), 독립 리뷰의 코드 리뷰(D497) */
+/**
+ * 참·거짓 값: draft PR(D71), 대응 자동 시작(D154), 곁 세션 안내(D392), 독립 리뷰의 코드 리뷰(D497), 의도 자동 승인(D530),
+ * 의도 정리 대화 이어받기(D531)
+ */
 const BOOLEAN_KEYS: readonly BooleanKey[] = [
   'pr_draft',
   'respond_auto_start',
   'side_notice',
   'code_review',
+  'auto_approve_intent',
+  'continue_from_intake',
 ]
 
 /** 답글 표시 문구의 길이 상한 (D173, 기본값) */

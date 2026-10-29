@@ -831,3 +831,75 @@ describe('[흐름] 자동 승인 (M7)', () => {
     expect(noticesOf(s, key).filter((n) => n.includes('자동 승인하지 않음'))).toEqual([])
   })
 })
+
+describe('[흐름] 작은 일의 빠른 경로 실험 (D530, D531)', () => {
+  it('의도 자동 승인을 켜면 열린 질문이 없는 의도도 카운트다운 뒤 자동 승인하고, 대화 이어받기를 켜면 다음 단계가 의도 정리의 대화를 이어받는다. 다시 열 때도 절차를 새로 준다', async () => {
+    const s = await setup(
+      scenario(),
+      { auto_approve_countdown_sec: 1, auto_approve_intent: true, continue_from_intake: true },
+      { type: 'bugfix' },
+    )
+    const key = await s.create()
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    // 의도는 자동 승인, Work를 마무리하는 수정은 늘 사람이 승인한다 (D498)
+    expect(result.tasks.map((t) => [t.label, t.auto])).toEqual([
+      ['01 의도 정리', true],
+      ['02 원인 분석과 수정', false],
+    ])
+    await settle(s.h, key)
+    const dir = s.dir(key)
+    const w = work(dir)
+    expect(w.tasks.map((t) => [t.id, t.approved_by])).toEqual([
+      ['t-01', 'auto'],
+      ['t-02', 'human'],
+    ])
+    expect(heads(dir)[0]).toBe('## t-01 intake — (자동 승인)')
+    expect(noticesOf(s, key)).toContain('01 의도 정리: 1초 뒤 자동 승인 (멈추려면 [취소])')
+    const intakeCtx = read(path.join(dir, 'tasks', '01-intake', 'context.md'))
+    expect(intakeCtx).toContain('자동 승인 (실험 설정 D530')
+    expect(intakeCtx).toContain('[의도 승인]을 누르세요. 자동 승인이 켜져 있으면')
+    // 수정은 의도 정리의 세션을 --fork-session으로 이어받은 새 세션이고, 그 id를 task에 남긴다
+    const intakeId = w.tasks[0]?.session?.id
+    expect(w.tasks[1]?.session?.forked_from).toBe(intakeId)
+    expect(w.tasks[1]?.session?.id).not.toBe(intakeId)
+    const starts = s.h.records().filter((r) => r['type'] === 'start') as {
+      args: string[]
+      forkFrom?: string
+      resume: boolean
+    }[]
+    const fix = starts[1]
+    expect(fix?.forkFrom).toBe(intakeId)
+    expect(fix?.args.slice(0, 6)).toEqual([
+      '--dangerously-skip-permissions',
+      '--resume',
+      intakeId,
+      '--fork-session',
+      '--session-id',
+      w.tasks[1]?.session?.id,
+    ])
+    expect(fix?.args).toEqual(expect.arrayContaining(['--system-prompt-snapshot', 'off']))
+    expect(fix?.args.at(-1)).toContain('위의 대화는 의도 정리 단계였고 의도는 승인됐습니다')
+    expect(
+      events(dir).find((e) => e.task_id === 't-02' && e.type === 'task.started')?.payload,
+    ).toMatchObject({ forked_from: intakeId })
+    // 독립 리뷰 결과로 다시 열 때도 이어받은 기록의 옛 절차를 쓰지 않게 기록하지 않는다
+    const reopened = starts[2]
+    expect(reopened?.resume).toBe(true)
+    expect(reopened?.args).toEqual(expect.arrayContaining(['--system-prompt-snapshot', 'off']))
+  })
+
+  it('두 실험은 기본으로 꺼져 있다: 의도는 사람이 승인하고 다음 단계는 새 대화다', async () => {
+    const s = await setup(scenario(), { auto_approve_countdown_sec: 1 }, { type: 'bugfix' })
+    const key = await s.create()
+    const result = await drive(s.h.relay, s.h.ui, key, { awaitAuto: true })
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    await settle(s.h, key)
+    const w = work(s.dir(key))
+    expect(w.tasks.map((t) => t.approved_by)).toEqual(['human', 'human'])
+    expect(w.tasks[1]?.session?.forked_from).toBeUndefined()
+    const starts = s.h.records().filter((r) => r['type'] === 'start') as { args: string[] }[]
+    expect(starts[1]?.args).not.toContain('--fork-session')
+    expect(starts.some((r) => r.args.includes('--system-prompt-snapshot'))).toBe(false)
+  })
+})

@@ -160,6 +160,21 @@ export function firstPrompt(skill: SkillName, contextPath: string): string {
   return `relay ${skill} 단계를 시작합니다. 이 task의 컨텍스트: ${contextPath}`
 }
 
+/**
+ * 의도 정리의 대화를 이어받은 세션의 첫 입력 (D531). 앞 대화의 절차(의도 정리)가 끝났고 이제 이 단계의 절차를 따른다고
+ * 알린다. 이미 읽은 코드는 다시 읽지 않아도 된다
+ */
+export function forkPrompt(skill: SkillName, contextPath: string): string {
+  return (
+    `${firstPrompt(skill, contextPath)} 위의 대화는 의도 정리 단계였고 의도는 승인됐습니다. 이제부터는 시스템 ` +
+    '프롬프트에 있는 이 단계의 절차를 따르세요. 앞에서 읽은 코드와 알게 된 것은 그대로 써도 되지만, 이 task의 ' +
+    'context.md와 승인된 intent.md는 먼저 읽으세요.'
+  )
+}
+
+/** 대화의 시스템 프롬프트를 기록하지 않고 요청마다 새로 만든다 (D446, D531). 이어받은 대화에 새 절차를 준다 */
+const SNAPSHOT_OFF: readonly string[] = ['--system-prompt-snapshot', 'off']
+
 export interface LaunchInput {
   /** --session-id로 줄 uuid */
   sessionId: string
@@ -182,6 +197,11 @@ export interface LaunchInput {
    * 뺀다. 없으면 넣지 않아 지금과 같은 인자다
    */
   mcpConfigPath?: string
+  /**
+   * 이어받을 의도 정리 세션 id (D531). 있으면 --resume <id> --fork-session으로 그 대화를 이어받은 새 세션(sessionId)을
+   * 띄우고, 시스템 프롬프트를 기록하지 않아 이 단계의 절차를 준다
+   */
+  forkFrom?: string
 }
 
 /** 앱 질문창 대신 터미널에서 묻는 Claude Code 도구 (D24). relay MCP로 묻는 task에서는 뺀다 (D521) */
@@ -276,8 +296,10 @@ function modelArgs(input: { model?: string; effort?: string }): string[] {
 
 /** claude 실행 인자 (시나리오 2-5, 6절) */
 export function launchArgs(input: LaunchInput): string[] {
+  const fork = input.forkFrom
   return [
     '--dangerously-skip-permissions',
+    ...(fork ? ['--resume', fork, '--fork-session'] : []),
     '--session-id',
     input.sessionId,
     '--add-dir',
@@ -286,9 +308,10 @@ export function launchArgs(input: LaunchInput): string[] {
     ...askArgs(input),
     '--settings',
     input.settingsPath,
+    ...(fork ? SNAPSHOT_OFF : []),
     ...instructionsArgs(input),
     ...modelArgs(input),
-    firstPrompt(input.skill, input.contextPath),
+    fork ? forkPrompt(input.skill, input.contextPath) : firstPrompt(input.skill, input.contextPath),
   ]
 }
 
@@ -300,6 +323,11 @@ export type ResumeInput = Omit<LaunchInput, 'skill' | 'contextPath' | 'instructi
   instructionsPath?: string
   /** 다시 연 세션에 줄 첫 입력 (D218). 없으면 다시 연 세션은 사람의 입력을 기다린다 (S6) */
   prompt?: string
+  /**
+   * 의도 정리의 대화를 이어받은 task (D531). 이어받은 기록에 의도 정리의 시스템 프롬프트가 남아 있어, 다시 열 때도 기록하지
+   * 않게 해 이 단계의 절차를 준다
+   */
+  snapshotOff?: boolean
 }
 
 /**
@@ -321,6 +349,7 @@ export function resumeArgs(input: ResumeInput): string[] {
     ...askArgs(input),
     '--settings',
     input.settingsPath,
+    ...(input.snapshotOff ? SNAPSHOT_OFF : []),
     ...instructionsArgs(input),
     ...modelArgs(input),
     ...(input.prompt ? [input.prompt] : []),

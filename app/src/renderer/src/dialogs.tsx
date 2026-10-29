@@ -1768,6 +1768,8 @@ export function SettingsDialog({
         respond_auto_start: value.respond_auto_start,
         respond_auto_round_max: value.respond_auto_round_max,
         code_review: value.code_review,
+        auto_approve_intent: value.auto_approve_intent,
+        continue_from_intake: value.continue_from_intake,
         reply_signature: value.reply_signature,
         knowledge_review_engine: value.knowledge_review_engine,
         knowledge_review_model: value.knowledge_review_model,
@@ -2101,6 +2103,38 @@ export function SettingsDialog({
                 aria-label="독립 리뷰의 코드 리뷰"
                 checked={value.code_review}
                 onChange={(e) => setDraft({ ...value, code_review: e.target.checked })}
+              />
+            </label>
+          </div>
+          <h3>실험: 작은 일의 빠른 경로</h3>
+          <div className="dim">
+            시험 중인 기능입니다(D530, D531). 의도 자동 승인을 켜면 열린 질문이 없을 때 의도도
+            카운트다운 뒤 승인합니다. 의도 정리 대화 이어받기를 켜면 다음 단계가 의도 정리의 대화를
+            이어받아 시작해 코드를 다시 읽지 않습니다. 새로 시작하는 단계부터 씁니다.
+          </div>
+          <div className="form-grid">
+            <label
+              className="form-row"
+              title="열린 질문이 없으면 의도도 카운트다운 뒤 자동 승인 (D530)"
+            >
+              <span>의도 자동 승인</span>
+              <input
+                type="checkbox"
+                aria-label="의도 자동 승인"
+                checked={value.auto_approve_intent}
+                onChange={(e) => setDraft({ ...value, auto_approve_intent: e.target.checked })}
+              />
+            </label>
+            <label
+              className="form-row"
+              title="의도 정리 바로 다음 단계를 의도 정리의 대화를 이어받아 띄움 (D531)"
+            >
+              <span>의도 정리 대화 이어받기</span>
+              <input
+                type="checkbox"
+                aria-label="의도 정리 대화 이어받기"
+                checked={value.continue_from_intake}
+                onChange={(e) => setDraft({ ...value, continue_from_intake: e.target.checked })}
               />
             </label>
           </div>

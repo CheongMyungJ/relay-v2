@@ -111,6 +111,16 @@ export interface AppConfig {
   knowledge_review_model: string
   /** 마무리 단계의 독립 리뷰에서 코드 리뷰(찾기)를 한다. 끄면 판정표 확인만 한다 (D495, D497) */
   code_review: boolean
+  /**
+   * 실험 (D530): 의도 승인도 자동 승인 조건(열린 질문 없음 등)을 만족하면 카운트다운 뒤 자동 승인한다. 기본 꺼짐.
+   * 호출자가 진행하는 Work(D522)와 Codex는 그대로 수동이다
+   */
+  auto_approve_intent: boolean
+  /**
+   * 실험 (D531): 의도 정리 바로 다음 단계를 새 대화가 아니라 의도 정리의 대화를 이어받은 새 세션(--fork-session)으로 띄운다.
+   * 기본 꺼짐. 두 task가 모두 Claude일 때만이다
+   */
+  continue_from_intake: boolean
   /** 화면 테마 (D335). 터미널은 테마와 관계없이 어둡다 */
   theme: ThemeChoice
   /** [새 세션] 창의 폴더 기본값 (D398). 빈 글이면 <RELAY_HOME>/home/이다. 바꾸면 다음에 만드는 세션부터 쓴다 */
@@ -267,6 +277,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   knowledge_review_engine: 'claude',
   knowledge_review_model: '',
   code_review: true,
+  auto_approve_intent: false,
+  continue_from_intake: false,
   theme: 'system',
   session_dir: '',
 }

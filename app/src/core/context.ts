@@ -8,7 +8,7 @@ import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
 import { WORK_TYPE_LABEL, type CustomStep, type TaskRecord, type WorkState } from '../shared/work'
-import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
+import { approvalMode, autoApprovable, taskApprovalMode, type ApprovalMode } from './approval'
 import {
   NODE_INFO,
   RESPOND,
@@ -93,8 +93,11 @@ function pressSentence(
   delivery: readonly string[],
   engine: AgentEngine,
   completes: boolean,
+  intentAuto: boolean,
 ): string {
-  if (node === 'intake') return '[의도 승인]을 누르세요.'
+  // 의도 자동 승인(실험, D530)을 켰으면 자동 승인 문장을 함께 적는다
+  if (node === 'intake')
+    return intentAuto ? `[의도 승인]을 누르세요. ${AUTO_SENTENCE}` : '[의도 승인]을 누르세요.'
   if (!completes) return engine === 'codex' ? PRESS : `${PRESS} ${AUTO_SENTENCE}`
   const buttons = delivery.length ? delivery : ['[완료만]']
   const pick = buttons.length === 1 ? `${buttons[0] ?? ''}을` : `${buttons.join(', ')} 중 하나를`
@@ -112,10 +115,11 @@ export function closingMessage(
   delivery: readonly string[] = [],
   engine: AgentEngine = 'claude',
   completes: boolean = node === 'verify',
+  intentAuto = false,
 ): string {
   if (!isPipelineNode(node))
     return engine === 'codex' ? RESPOND_CLOSING.replace(`${AUTO_SENTENCE} `, '') : RESPOND_CLOSING
-  return CLOSING.replace(PRESS, pressSentence(node, delivery, engine, completes))
+  return CLOSING.replace(PRESS, pressSentence(node, delivery, engine, completes, intentAuto))
 }
 
 const APPROVAL_LABEL: Record<ApprovalMode, string> = { manual: '수동 승인', auto: '자동 승인' }
@@ -132,7 +136,14 @@ function approvalSection(
   engine: AgentEngine,
   step?: CustomStep,
   completes = false,
+  intentAuto = false,
 ): string {
+  if (intentAuto) {
+    return (
+      '자동 승인 (실험 설정 D530: 열린 질문이 없고 초안이 유효하면 카운트다운 뒤 의도를 자동 승인한다. 사람이 [취소]하면 ' +
+      '멈춘다. 초안 없이 정할 수 없는 것은 묻고, 모르는 것은 open_questions에 남긴다)'
+    )
+  }
   if (engine === 'codex') {
     const push = node === RESPOND ? ' 승인하면 앱이 push하고 답글을 게시한다.' : ''
     return `수동 승인 (Codex 작업은 자동 승인 설정과 관계없이 사람이 승인한다.${push})`
@@ -685,6 +696,8 @@ export function buildContext(input: ContextInput): string {
     type === 'custom' && work.custom_type
       ? `${work.custom_type.name} (커스텀 유형 \`${work.custom_type.id}\`)`
       : `${WORK_TYPE_LABEL[type]} (\`${type}\`)`
+  // 의도 자동 승인(실험, D530)이 이 task에 걸리는가
+  const intentAuto = task.node === 'intake' && taskApprovalMode(config, work, task) === 'auto'
   const sections: [string, string][] = [
     ...(entry ? [entry] : []),
     [
@@ -717,9 +730,13 @@ export function buildContext(input: ContextInput): string {
         taskEngine(task),
         customStep(work, task),
         completes,
+        intentAuto,
       ),
     ],
-    ['마무리 안내 문구', closingMessage(task.node, input.delivery, taskEngine(task), completes)],
+    [
+      '마무리 안내 문구',
+      closingMessage(task.node, input.delivery, taskEngine(task), completes, intentAuto),
+    ],
     ...(finishesWork(work, task)
       ? [finishingSection(input, codeReviewOn(config, work.settings))]
       : []),

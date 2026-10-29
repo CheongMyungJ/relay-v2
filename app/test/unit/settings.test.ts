@@ -5,6 +5,7 @@ import {
   continuePrompt,
   denyRules,
   firstPrompt,
+  forkPrompt,
   hookSettings,
   hookUrl,
   launchArgs,
@@ -211,6 +212,47 @@ describe('실행 인자 (시나리오 2-5, 6절)', () => {
       '--append-system-prompt-file',
       `${TASKS}\\03-verify\\instructions.md`,
     ])
+  })
+
+  it('의도 정리의 대화를 이어받는 시작은 --resume <id> --fork-session에 새 세션 id를 주고, 절차를 새로 주게 기록하지 않는다 (D531)', () => {
+    const args = launchArgs({
+      sessionId: 'new-id',
+      workDir: WORK_DIR,
+      settingsPath: 'S',
+      instructionsPath: 'I',
+      skill: 'fix',
+      contextPath: 'C',
+      forkFrom: 'intake-id',
+    })
+    expect(args).toEqual([
+      '--dangerously-skip-permissions',
+      '--resume',
+      'intake-id',
+      '--fork-session',
+      '--session-id',
+      'new-id',
+      '--add-dir',
+      WORK_DIR,
+      '--settings',
+      'S',
+      '--system-prompt-snapshot',
+      'off',
+      '--append-system-prompt-file',
+      'I',
+      forkPrompt('fix', 'C'),
+    ])
+    expect(forkPrompt('fix', 'C').startsWith(firstPrompt('fix', 'C'))).toBe(true)
+    // 이어받은 task를 다시 열 때도 기록하지 않는다. 아니면 넣지 않는다
+    const resume = {
+      sessionId: 'new-id',
+      workDir: WORK_DIR,
+      settingsPath: 'S',
+      instructionsPath: 'I',
+    }
+    expect(resumeArgs({ ...resume, snapshotOff: true })).toEqual(
+      expect.arrayContaining(['--system-prompt-snapshot', 'off']),
+    )
+    expect(resumeArgs(resume)).not.toContain('--system-prompt-snapshot')
   })
 
   it('시작과 재개는 단계 절차를 같은 옵션으로 준다. 빼면 압축 뒤 절차가 사라진다 (D441, 스파이크 S8)', () => {
