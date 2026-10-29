@@ -1593,6 +1593,7 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - core: `settings`의 `INLINE_SCREEN_ENV`와 `launchEnv`(I196), `pipeline.autoApproveStages`(I197), `independent-review`의 `REVIEW_NOTE_MAX`와 `reviewResumePrompt`의 남긴 말(I198).
 - 앱과 화면: `WorkView.autoApprove`, `TaskView.reviewNote`, `WorkRunner.reviewNote`·`markTerminal`, 독립 리뷰의 닫는 줄과 다시 여는 줄, IPC `work:review-note`. 설정 화면의 마지막 단계 표시, [새 Work]와 [Work 설정]의 자동 승인 줄 고르기, 패널의 리뷰 뒤 전할 말.
 - 평가 도구: 사람 역할 설명서(`eval/guides/relay.md`)를 M36 뒤의 단계(리뷰와 검증 단계 없음, 마지막 단계의 독립 리뷰)에 맞췄다. 쪽 이름의 설정 묶음 `relay+<이름>`과 `eval/presets/`(`docs/eval.md`).
+- 설정 변형 평가: 코드 리뷰 끔, 설계 자동 승인, 결정마다 확인을 기본 설정과 견주었고 세 기본값을 바꿀 근거는 없었다(`app/eval/reports/2026-10-29-preset-noreview.md`, `2026-10-29-preset-feature.md`). 설계 자동 승인은 32에서 사람만 아는 규칙을 2회 모두 놓쳤다. 14(원인이 둘인 버그)는 relay와 맨 CLI 모두 두 번째 원인을 놓쳐, 독립 리뷰가 이것을 잡게 할지는 다음에 볼 거리다.
 - 넣지 않은 것: 일반 유형에서 더 맞는 유형을 묻지 않게 하기(D319와 부딪힘), 작은 일의 빠른 경로(의도 승인을 건너뛰면 의도 승인은 늘 수동이라는 4.2를 바꾼다. 평가에서 수고는 여전히 맨 CLI가 앞서 다음에 사람과 정할 거리로 남긴다).
 
 **시험**
