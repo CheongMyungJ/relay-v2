@@ -86,6 +86,7 @@ test('새 Work 대화상자의 지식 정리 후보로 요청을 채운다 (D393
   await win.screenshot({ path: 'test-results/knowledge-tidy-dialog.png' })
 
   // 고치지 않은 채 후보가 없는 기준으로 바꾸면 앞 기준의 후보 요청을 남기지 않는다
+  await win.getByRole('button', { name: '브랜치 바꾸기' }).click()
   await win.getByLabel('기준 브랜치').selectOption('tidy')
   await expect(request).toHaveValue('', { timeout: 30_000 })
   await expect(win.locator('.tidy-notice')).toHaveCount(0)

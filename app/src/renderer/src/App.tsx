@@ -34,9 +34,8 @@ import {
   type DraftOrigin,
   ProjectSettingsDialog,
   RemoveProjectDialog,
-  SettingsDialog,
-  WorkSettingsDialog,
 } from './dialogs'
+import { SettingsDialog, WorkSettingsDialog } from './Settings'
 import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
 import { FilesView, openInFiles } from './Files'
@@ -404,7 +403,7 @@ export function App() {
           <GroupToggle open={open} label={p.name} onToggle={() => toggleGroup(p.id)} />
           <button
             className="project-name"
-            title={`${p.repoPath} · 프로젝트 설정 (D185)`}
+            title={`${p.repoPath} · 프로젝트 설정`}
             onClick={() => setDialog({ kind: 'project-settings', project: p })}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -734,7 +733,7 @@ export function App() {
               role="tab"
               aria-selected={filesTab}
               className={`tab${filesTab ? ' active' : ''}`}
-              title="worktree의 파일을 보고 고칩니다 (D464)"
+              title="worktree의 파일을 보고 고칩니다"
               onClick={() => setPicked((m) => ({ ...m, [work.key]: FILES_TAB }))}
             >
               파일
@@ -1252,7 +1251,7 @@ function ActionBar({
       {work.canAddRepo ? (
         <button
           disabled={busy}
-          title="고르지 않은 서브모듈을 이 Work에서 함께 고칩니다 (D473)"
+          title="고르지 않은 서브모듈을 이 Work에서 함께 고칩니다"
           onClick={onAddRepo}
         >
           레포 추가

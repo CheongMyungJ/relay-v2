@@ -110,7 +110,7 @@ test('[곁 세션 열기]는 안내 창을 거쳐 곁 세션 탭을 열고, 닫�
   await expect(notice).toHaveCount(0)
   // 설정 화면에서 다시 켤 수 있다 (꺼진 채 보인다)
   await win.getByRole('button', { name: '설정', exact: true }).click()
-  await expect(win.getByLabel('곁 세션을 열 때 안내 보기')).not.toBeChecked()
+  await expect(win.getByLabel('곁 세션을 열 때 안내 보기', { exact: true })).not.toBeChecked()
   await win.getByRole('button', { name: '취소' }).click()
   // task 탭을 고르면 그 task의 머리 띠다
   await win.getByRole('tab', { name: /01 의도 정리/ }).click()

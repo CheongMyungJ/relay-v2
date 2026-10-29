@@ -55,7 +55,7 @@ test('설정 화면에서 테마를 고르면 바로 바뀌고 다시 켜도 남
   const termBg: string[] = []
   for (const label of ['다크', '라이트'] as const) {
     await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
-    await win.getByLabel('테마').selectOption({ label })
+    await win.getByLabel('테마', { exact: true }).selectOption({ label })
     await win.getByRole('button', { name: '저장', exact: true }).click()
     await expect(win.locator('.sidebar')).toHaveCSS('background-color', SIDEBAR[label])
     // 첫 사용 안내는 테마 바탕에 그린다: 테마 글자가 어두운 터미널 바탕 위에 오지 않는다

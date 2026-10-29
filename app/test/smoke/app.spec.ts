@@ -21,8 +21,8 @@
 // 요약에 push됨이 보이고 [정리]하면 worktree가 없어지고 보관됨이 된다(산출물은 남음).
 // M7: 두 번째 Work의 새 Work 대화상자에서 고급 설정을 펼치면 이 Work의 자동 승인(앱 설정 따름: 켜짐)이 보인다(PR 자동
 // 대응은 없다, M12). 원인 분석과 수정은 마무리 단계라 자동 승인을 켜도 카운트다운이 없다 (D498).
-// M11: 같은 설정 화면에 PR 대응의 자동 승인과 "자동 대응 (PR 진행)" 절(대응 자동 시작, 자동 대응 라운드 상한)이 있고
-// 기본은 꺼짐, 3이다.
+// M11: 같은 설정 화면의 단계별 진행 표에 PR 대응의 자동 승인이, PR 구역에 대응 자동 시작과 자동 대응 라운드 상한이 있고
+// 기본은 꺼짐, 3이다 (D527, D528).
 // M8: 설정 화면에 리뷰와 검증의 질문 방식이 있고 자동 승인은 없다(옛 Work의 verify, D501) → 두 번째 Work의 원인 분석과
 // 수정이 마무리 단계로 Work 완료 화면이 된다(D493). [요약] 맨 위에 리뷰 지적과 반영이, [산출물]에 verification.md와
 // pr.md, independent-review.md가 보인다.
@@ -344,15 +344,19 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 설정 화면 (D70): 세션 상한과 카운트다운을 바꾸면 config.json에 쓴다. 자동 승인은 기본으로 원인 분석과 수정만
   // 켜져 있다 (4.2, D214)
   await win.locator('.sidebar').getByRole('button', { name: '설정', exact: true }).click()
+  const sections = win.getByRole('navigation', { name: '설정 구역' })
+  // 세션 상한은 일반 구역에 있다. 구역을 옮겨도 고친 값은 [저장]까지 남는다 (D527)
   await win.getByLabel('세션 상한').fill('2')
+  await sections.getByRole('button', { name: '단계별 진행', exact: true }).click()
   await expect(win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })).toBeChecked()
-  // 자동 승인 목록은 유형별로 묶는다. 기능 추가·변경의 설계와 계획은 끔, 구현은 켬이 기본이다 (D234, D249, D256)
-  const featureAuto = win.getByRole('group', { name: '기능 추가·변경' }).nth(1)
+  // 자동 승인과 질문 방식은 단계별 진행 표 하나에 유형별로 묶는다. 기능 추가·변경의 설계와 계획은 끔, 구현은 켬이
+  // 기본이다 (D234, D249, D256, D528)
+  const featureAuto = win.getByRole('group', { name: '기능 추가·변경' })
   await expect(featureAuto.getByLabel('설계와 계획 자동 승인')).not.toBeChecked()
   await expect(featureAuto.getByLabel('구현 자동 승인')).toBeChecked()
   // 리팩터링의 계획과 리팩터링은 켬이 기본이다 (D276, D278)
   await expect(
-    win.getByRole('group', { name: '리팩터링' }).nth(1).getByLabel('계획과 리팩터링 자동 승인'),
+    win.getByRole('group', { name: '리팩터링' }).getByLabel('계획과 리팩터링 자동 승인'),
   ).toBeChecked()
   // 설계의 설계 문답은 켬이 기본이다 (D367, D374). 질문 방식 목록에는 없어 설계 묶음은 자동 승인에만 있다 (D358)
   await expect(
@@ -360,22 +364,21 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   ).toBeChecked()
   await expect(win.getByLabel('설계 문답 질문 방식', { exact: true })).toHaveCount(0)
   // 일반의 실행은 켬이 기본이다 (D315, D318)
-  await expect(
-    win.getByRole('group', { name: '일반' }).nth(1).getByLabel('실행 자동 승인'),
-  ).toBeChecked()
-  await expect(win.getByRole('group', { name: '버그 수정' }).nth(1)).toContainText(
-    '원인 분석과 수정',
-  )
+  await expect(win.getByRole('group', { name: '일반' }).getByLabel('실행 자동 승인')).toBeChecked()
+  await expect(win.getByRole('group', { name: '버그 수정' })).toContainText('원인 분석과 수정')
   await win.getByLabel('자동 승인 카운트다운(초)').fill('600')
   // 리뷰와 검증(옛 Work, D501)은 질문 방식만 고른다. 의도 정리와 리뷰와 검증은 늘 수동이라 자동 승인이 없다 (4.2, D229)
   await expect(win.getByLabel('리뷰와 검증 질문 방식', { exact: true })).toHaveValue('draft_first')
   await expect(win.getByLabel('리뷰와 검증 자동 승인', { exact: true })).toHaveCount(0)
   await expect(win.getByLabel('의도 정리 자동 승인', { exact: true })).toHaveCount(0)
-  // 자동 대응 (M11, D154, D169, D171): 기본은 꺼짐과 상한 3이다
+  // 자동 대응 (M11, D154, D169, D171): 기본은 꺼짐과 상한 3이다. PR 대응의 자동 승인은 표에, 나머지는 PR 구역에 있다
   await expect(win.getByLabel('PR 대응 자동 승인')).not.toBeChecked()
+  await win.screenshot({ path: 'test-results/settings-steps.png' })
+  await sections.getByRole('button', { name: 'PR', exact: true }).click()
   await expect(win.getByLabel('대응 자동 시작')).not.toBeChecked()
   await expect(win.getByLabel('자동 대응 라운드 상한')).toHaveValue('3')
-  // 지식 검토의 엔진과 모델 (D334): 기본은 Claude Code와 엔진의 기본 모델(비움)이다
+  // 지식 검토의 엔진과 모델 (D334): 고급 구역에 있고 기본은 Claude Code와 엔진의 기본 모델(비움)이다
+  await sections.getByRole('button', { name: '고급', exact: true }).click()
   await expect(win.getByLabel('지식 검토 엔진')).toHaveValue('claude')
   await expect(win.getByLabel('지식 검토 모델')).toHaveValue('')
   await win.screenshot({ path: 'test-results/settings.png' })
@@ -446,10 +449,13 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   // 대화상자에 없다 (D226)
   const newWork = win.getByRole('dialog', { name: /^새 Work/ })
   await newWork.getByText('고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)').click()
-  await expect(newWork.getByText('이 Work의 자동 승인')).toBeVisible()
-  await expect(newWork.getByText('이 Work의 질문 방식')).toBeVisible()
+  await expect(newWork.getByText('이 Work의 단계별 진행')).toBeVisible()
   await expect(newWork.getByText('자동 대응')).toHaveCount(0)
-  // 이슈 기록이 켜진 프로젝트(기본, D337)는 기존 이슈 번호를 적는 칸이 있다 (D338)
+  // 브랜치는 한 줄 요약으로 접혀 있다. 이슈 기록이 켜진 프로젝트(기본, D337)는 요약에 새 이슈를 만든다고 보이고, 펼치면
+  // 기존 이슈 번호를 적는 칸이 있다 (D338, D531)
+  await expect(newWork.locator('.branch-summary')).toContainText('이슈 새로 만듦')
+  await expect(newWork.getByLabel('이슈 번호')).toHaveCount(0)
+  await newWork.getByRole('button', { name: '브랜치 바꾸기' }).click()
   await expect(newWork.getByLabel('이슈 번호')).toBeVisible()
   await win.screenshot({ path: 'test-results/new-work.png' })
   const fixAuto = win.getByLabel('원인 분석과 수정 자동 승인', { exact: true })
@@ -610,6 +616,18 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(cut.getByRole('button', { name: '다시 시도', exact: true })).toHaveCount(0)
   // 끊긴 동안은 [무시]와 Work 설정만 받는다 (D122)
   await expect(win2.getByRole('button', { name: 'Work 설정', exact: true })).toBeVisible()
+  // Work 설정 (D72, D531): 앱 설정과 같은 표에 이 Work 유형(버그 수정)의 줄만 있고, 고른 칸은 수와 [모두 앱 설정으로]로 보인다
+  await win2.getByRole('button', { name: 'Work 설정', exact: true }).click()
+  const workSettings = win2.getByRole('dialog', { name: /^Work 설정/ })
+  const fixOverride = workSettings.getByLabel('원인 분석과 수정 자동 승인', { exact: true })
+  await expect(fixOverride.locator('option').first()).toHaveText('앱 설정 따름 (켜짐)')
+  await expect(workSettings.getByLabel('구현 자동 승인', { exact: true })).toHaveCount(0)
+  await fixOverride.selectOption('off')
+  await expect(workSettings).toContainText('이 Work만 다르게 한 설정 1개')
+  await win2.screenshot({ path: 'test-results/work-settings.png' })
+  await workSettings.getByRole('button', { name: '모두 앱 설정으로' }).click()
+  await expect(fixOverride).toHaveValue('')
+  await workSettings.getByRole('button', { name: '취소', exact: true }).click()
   // 앱 밖에서 바뀐 decisions.md (D124)
   const changed = win2.locator('.recovery .notice', { hasText: '앱 밖에서 바뀐 파일이 있습니다' })
   await expect(changed).toContainText('decisions.md: 내용이 바뀜')

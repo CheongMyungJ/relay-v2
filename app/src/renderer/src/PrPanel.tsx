@@ -155,11 +155,25 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             role={pr.auto.paused ? 'status' : undefined}
             aria-label="자동 대응"
           >
-            {pr.auto.text}
+            {pr.auto.text}{' '}
+            {/* 쓰는 자리에서 바로 바꾼다: 이 Work의 대응 자동 시작 (D532). 다른 값은 [Work 설정]에서 고른다 */}
+            <button
+              className="link"
+              disabled={!!busy}
+              onClick={() =>
+                void run('대응 자동 시작', () =>
+                  window.relay.updateWorkSettings(work.key, {
+                    respond_auto_start: !pr.auto.start,
+                  }),
+                )
+              }
+            >
+              {pr.auto.start ? '이 Work의 대응 자동 시작 끄기' : '이 Work의 대응 자동 시작 켜기'}
+            </button>
           </div>
           <textarea
             aria-label="사람 지시"
-            placeholder="사람 지시 (선택). 항목이 없으면 지시만으로 시작합니다 (D182)"
+            placeholder="사람 지시 (선택). 항목이 없으면 지시만으로 시작합니다"
             value={instruction}
             disabled={!pr.respond.enabled || !!busy}
             onChange={(e) => setInstruction(e.target.value)}
@@ -231,7 +245,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
             {pr.relink.length ? (
               <button
                 disabled={!!busy || cut}
-                title="머지된 서브모듈 PR의 머지 커밋을 메인이 가리키게 하는 커밋을 더하고 push합니다 (D481)"
+                title="머지된 서브모듈 PR의 머지 커밋을 메인이 가리키게 하는 커밋을 더하고 push합니다"
                 onClick={() =>
                   void run('서브모듈 커밋 맞추기', () => window.relay.prRelink(work.key))
                 }
@@ -294,7 +308,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
 
       {pr.synced.length ? (
         <section aria-label="받은 원격 커밋">
-          <h3>받은 원격 커밋 (D193)</h3>
+          <h3>받은 원격 커밋</h3>
           <ul>
             {pr.synced.map((s, i) => (
               <li key={i}>
@@ -478,7 +492,7 @@ function MergeDialog({ work, pr, onClose }: { work: WorkView; pr: PrView; onClos
               {info.stale.rounds ? ` 커밋을 push한 대응 라운드 ${info.stale.rounds}개` : ''}
               {info.stale.rounds && info.stale.synced ? ',' : ''}
               {info.stale.synced ? ` 받은 원격 커밋 ${info.stale.synced}개` : ''}. 대응 뒤에는
-              판정을 다시 하지 않고, 대응 task의 테스트 실행과 CI로 갈음합니다 (D180).
+              판정을 다시 하지 않고, 대응 task의 테스트 실행과 CI로 갈음합니다.
               {info.verdicts.length ? (
                 <table className="verdicts">
                   <thead>

@@ -107,6 +107,8 @@ test('[새 세션]으로 만들면 사이드바와 탭이 생기고, 초안 카�
   await expect(
     dialog.getByRole('radiogroup', { name: '업무 유형' }).getByRole('radio', { name: '버그 수정' }),
   ).toBeChecked()
+  await expect(dialog.locator('.branch-summary')).toContainText('기준 main (로컬)')
+  await dialog.getByRole('button', { name: '브랜치 바꾸기' }).click()
   await expect(dialog.getByLabel('기준 브랜치')).toHaveValue('main')
   // 열리는 효과가 끝난 뒤 찍는다 (확인용 화면)
   await win.waitForTimeout(400)

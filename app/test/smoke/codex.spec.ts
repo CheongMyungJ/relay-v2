@@ -96,7 +96,11 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
   }, repo)
   const window = await app.firstWindow()
   await window.getByRole('button', { name: '설정', exact: true }).click()
-  await window.getByLabel('기본 엔진').selectOption('codex')
+  await window
+    .getByRole('navigation', { name: '설정 구역' })
+    .getByRole('button', { name: '에이전트', exact: true })
+    .click()
+  await window.getByLabel('기본 엔진', { exact: true }).selectOption('codex')
   await expect(window.getByRole('dialog', { name: '설정', exact: true })).toContainText(
     'Codex 작업은 사람이 승인합니다.',
   )
@@ -151,7 +155,11 @@ test('엔진 설정에서 Codex를 골라 앱 질문창으로 답하고 다음 t
         ?.closest('dialog:modal')
     }),
   ).resolves.toBe(true)
-  await window.getByLabel('기본 엔진').selectOption('claude')
+  await window
+    .getByRole('navigation', { name: '설정 구역' })
+    .getByRole('button', { name: '에이전트', exact: true })
+    .click()
+  await window.getByLabel('기본 엔진', { exact: true }).selectOption('claude')
   await window.getByRole('button', { name: '저장', exact: true }).click()
   await window.getByRole('button', { name: '의도 승인', exact: true }).click()
   await expect(window.locator('.band')).toContainText('Claude Code', { timeout: 30_000 })
