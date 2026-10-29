@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195), v0.36의 설정 화면 정리(M41, I196)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -209,6 +209,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I193 | relay MCP로 묻는 Claude task(D521): caller Work에서 새로 시작하는 Claude task는 `deploySkill`의 `askViaMcp`(절차의 `` `AskUserQuestion` ``을 `` `mcp__relay__ask_human` ``으로, Codex와 같은 `askViaRelay`)와 `callerAnswers`(호출자가 터미널을 보지 못한다는 `CALLER_ASK_NOTE`, Codex 배포본에도)로 절차를 쓰고, task 디렉터리의 `task.mcp.json`(`relayMcpConfig`: 서버 이름 `relay_task`, 앱 실행 파일 + `codex-bridge.mjs mcp`, 포트와 task id. 토큰은 PTY 환경 변수로만. 이름을 `relay`로 두면 사람이 README대로 사용자 범위에 등록한 바깥용 relay MCP와 겹친다. 절차의 도구 이름은 `mcp__relay_task__ask_human`이다)을 `--mcp-config`로, `--disallowedTools AskUserQuestion`을 준다. 두 옵션은 값을 여럿 받아 바로 뒤의 첫 프롬프트까지 먹으므로 늘 `--settings` 앞에 둔다(live 계약 시험이 찾았고, 가짜 claude도 그렇게 읽는다). 훅 경로에 질문 처리(`askHuman`)를 걸고 PTY에 `MCP_TOOL_TIMEOUT`(하루)을 준다. `session.started`의 `ask: 'mcp'`가 task에 남고, 재개는 그것으로 같은 인자를 다시 준다(포트가 바뀌어 설정 파일은 다시 씀). `caller_questions: recommend`면 `askHuman`이 질문 상태를 만들지 않고 질문마다 `RECOMMEND_ANSWER`로 답한다. 정리 세션의 질문은 늘 사람의 것이다. 브리지의 `initialize` 안내는 Codex 스킬 / 정리 세션 / Claude task로 가른다 | Codex task가 실제 모델로 확인한 질문 길을 그대로 쓴다. claude가 MCP 서버에 자기 환경을 물려주는 것은 2.1.312에서 확인했다(I13처럼 토큰을 파일에 쓰지 않음) | |
 | I194 | `revise`(D524): `WorkRunner.revise`가 지금 task이고 턴이 끝난 상태(`REVISABLE`)이며 같은 대화를 다시 열 수 있을 때(대화 ID가 있고 아는 엔진)만 받는다: 세션을 끝낸 뒤에 열지 못하거나 새 세션이 되면 글이 닿지 않는다. 글은 task 디렉터리의 `revise-<n>.txt`(산출물로 보이지 않게 `.md`가 아님)에 쓰고 첫 입력은 그 경로를 가리키는 한 줄(`revisePrompt`)이다: 여러 줄 인자는 Windows의 `.cmd` 래퍼(npm 설치 claude, 가짜 claude)에서 첫 줄 뒤가 잘렸고(Windows CI), '-'로 시작하는 목록은 옵션으로 읽힌다. 새 세션을 띄울 때는 남은 글을 지운다. 처리 줄 안에서 살아 있는 세션을 `endSession`으로 끝내고, 그 줄이 끝난 뒤의 줄에서 `resumeMessage`를 적고 `resume` 이벤트를 넣는다(끝낸 세션의 `pty.exit`가 그 사이에 들어가 세션이 살아 있지 않게 된다). `resumeSession`은 그 글을 다른 첫 입력(이어서 하라, 리뷰 결과)보다 먼저 쓰고 한 번만 쓴다 | 1.2(실행 중인 세션에 글을 넣지 않음)를 지키며 사람이 터미널에서 말하는 것과 같은 효과를 낸다 | |
 | I195 | `get_work`의 모양(D526, `core/mcp.workSummary`): `state`는 끊긴 작업이면 `operation`, 끝난 Work면 그 상태, 질문이 있으면 `question`, PR 진행에서 대응 task가 없으면 `pr`, 아니면 지금 task 상태(승인됨은 `working`). `review`·`completion`은 승인 화면을 보일 상태(`ReviewView.reviewable`)일 때만이고, 산출물은 task 디렉터리의 경로, 바뀐 파일은 diff의 `diff --git` 줄에서 읽고, diff는 `include_diff`일 때 10만 자까지다. `state_key`는 진행하는 쪽, 상태, 지금 task와 그 상태·세션·질문·카운트다운·오류 수, 전달, PR 상태·CI·항목 수, 끊긴 작업이다(진행 표시와 revision은 넣지 않음). `wait`는 `seen`이 지금과 다르면 바로 돌려준다. 첫 턴 힌트는 `ActivityView`의 `turn: false`가 60초를 넘을 때다 | 호출자는 앱 화면 대신 이것을 읽는다. 일하는 동안 도구마다 바뀌는 값으로 `wait`가 깨지 않게 한다 | |
+| I196 | 설정 화면의 짜임(D527~D531)은 렌더러의 순수 모듈 `renderer/settingsView`에 둔다: 구역(`SETTINGS_SECTIONS`), 하나짜리 칸의 목록(`SETTING_ENTRIES`: 키, 구역, 이름, 한 줄 설명. 이름이 입력의 aria-label), 단계별 진행 표의 줄(`STEP_ROWS`: `AGENT_STEP_TITLES`의 차례, 자동 승인 노드는 `AUTO_APPROVE_TITLES`에서 이름이 같은 것이고 PR 대응만 스킬 `pr-respond` ↔ 노드 `respond`, 질문 방식은 `SKILL_TITLES`), 찾기(`matches`: 찾는 말을 빈칸으로 나눈 낱말이 띄어쓰기를 뺀 글에 모두 들어 있음. 찾는 글은 이름, 설명, 구역 이름과 선택지 이름(테마, 엔진, 질문 방식)), 구역별로 보일 것(`sectionViews`. 바꾼 설정만 보기를 켤 때 `changedIds`를 `kept`로 담아 고치는 동안 기본값을 지나도 칸을 남기고, [기본값으로]가 그 id를 뺌), 기본값(`DEFAULT_CONFIG`)과 다른 칸·줄(`scalarChanged`, `stepChanged`, `changedCounts`)과 되돌리기(`resetScalar`: 기본 엔진·모델은 `changeDefaultEngine`·`changeDefaultModel`로 단계별 설정도 맞춤, `resetStep`: 그 단계의 자동 승인·질문 방식·`agent_steps` 항목), 진행 방식 묶음(`applyPreset`, `presetOf`: PR 묶음의 노드와 스킬은 건드리지 않고 비교에서도 뺌), Work 설정의 줄(`workStepRows`: 자동 승인이나 질문 방식이 있고 `groupShown`인 줄, 커스텀 단계는 부르는 쪽이 유형 정의에서 넣음)과 저장할 값(`shownOverrides`: 같은 줄의 노드와 스킬만 남김. 보이는 줄과 저장하는 값을 한 목록으로 정함). 새 Work는 만들기에 실패하면 접힌 브랜치 칸을 펼친다. 화면은 `renderer/Settings`(`SettingsDialog`, `WorkSettingsDialog`, 새 Work의 고급 설정도 쓰는 `WorkStepOverrides`·`CodeReviewOverride`)이고 `Modal`은 `renderer/Modal`로 옮기고 쓰는 곳이 바로 가져온다(`Settings`와 `dialogs`가 서로 가져오지 않게). `config.json`과 Work 설정의 모양, 저장 명령은 그대로다(묶음은 저장하지 않음). PR 패널의 [대응 자동 시작 켜기·끄기](D532)는 `updateWorkSettings`에 `respond_auto_start`만 보낸다 | 칸 목록을 데이터로 두어야 찾기, 바꾼 수, 구역 나누기를 한 곳에서 정하고 [단위]로 본다. 모든 앱 설정 키가 칸이나 표에 한 번씩 있는지도 [단위]가 본다 | |
 
 ## 3. 확인한 사실
 
@@ -341,6 +342,7 @@ app/src/
 | renderer | `Files` | Work의 [파일] 탭: 파일 트리와 바뀐 파일 표시, 연 파일 탭, 마크다운 보기, 편집과 저장, 터미널에서 연 파일 | D464~D468, D490~D492, I167, I179~I181 |
 | renderer | `panelWidth`, `PanelResizer` | 오른쪽 패널 너비의 범위·저장과 끄는 손잡이 | D469, I168 |
 | renderer | `termSize` | 숨은 터미널의 xterm을 PTY 크기에 맞추기 | I189 |
+| renderer | `settingsView`, `Settings` | 설정 화면의 구역·칸 목록·찾기·바꾼 칸·진행 방식 묶음과 그 화면, Work 설정 | D527~D532, I196 |
 | main | `mcp` | relay MCP의 도구 호출을 `Relay`로 잇기: 인자 모양 확인, 앱 안의 세션은 조회만, `wait`의 기다림. 브리지는 `scripts/relay-mcp.mjs` | D516~D526, I190~I195 |
 | main | `ipc`, `ports` | 렌더러 명령 처리와 스냅샷 전송, 조립 코드가 주입받는 바깥(창, 알림) | I14, I26 |
 | renderer | 화면 | 사이드바, 터미널 탭과 머리 띠, 액션 바, 오른쪽 패널(승인 화면), 대화상자, PR 패널 | 화면 구성 |
@@ -1582,6 +1584,18 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[흐름]** `test/flow/mcp.test.ts`: 조회 도구, caller Work의 relay MCP 질문(가짜 claude의 `mcpAsk`가 `--mcp-config`의 서버로 물음)과 호출자의 답, 사람의 답·승인 막기, 승인 대기의 요약과 산출물 경로, 호출자 승인과 다음 task, OS 알림 없음, `recommend`, [직접 맡기] 뒤 사람의 답과 승인, `revise`의 다시 열기와 첫 입력, `driver: human`, 앱 안의 세션과 틀린 인자, `wait`의 제한 시간과 `seen`.
 - **[계약]** `appFlags`에 relay MCP로 묻는 task의 인자(`--mcp-config`, `--disallowedTools`)를 더하고 녹화본의 옵션을 2.1.312로 새로 썼다. live 시험 5가 그 인자로 실제 claude의 시작 이벤트에 relay 서버가 연결되고 `mcp__relay__ask_human`이 있으며 `AskUserQuestion`이 빠진 것을 본다. 가짜 claude는 `--mcp-config`의 서버를 띄우고 MCP 도구의 앞뒤 훅을 녹화본의 도구 훅 모양으로 보내며, 두 옵션의 값을 실제처럼 다음 옵션 앞까지 읽는다.
 - **[스모크]** `test/smoke/mcp.spec.ts`: 앱을 띄우고 브리지(설치본은 `resources/relay-mcp.mjs`)를 Electron의 Node 모드로 띄워 도구로 프로젝트를 등록하고 Work를 맡긴다. 사이드바의 MCP 표시와 패널의 호출자 띠, 사람에게 질문창이 뜨지 않음, [직접 맡기] 뒤 "에이전트 질문" 창으로 답하고 [의도 승인]이 켜짐.
+
+### M41. 설정 화면 정리 (D527~D532)
+
+사람이 "여러 설정 화면들이 고르는 게 너무 많아서 처음 보는 사람은 뭐가 뭔지 알기 어렵고 익숙한 사람도 원하는 걸 찾는 게 시간이 걸린다"고 했고, 구역 나누기와 찾기, 단계별 표 하나, 바꾼 설정 표시, 개발용 표기 빼기, 새 Work의 브랜치 칸 접기, 쓰는 자리에서 바꾸기를 제안하자 모두 하라고 했다. 진행 방식 묶음의 구성과 쓰는 자리에서 바꿀 것은 맡겼다. 설계 v0.36.
+
+- 화면: `renderer/settingsView`(I196)와 `renderer/Settings`(설정 화면, Work 설정), `renderer/Modal`. `dialogs`의 새 Work는 브랜치 한 줄 요약과 [바꾸기], 고급 설정의 `WorkStepOverrides`. 프로젝트 설정의 설명 줄이기와 브랜치 규칙 자리 접기. PR 패널의 [이 Work의 대응 자동 시작 켜기·끄기]. 렌더러의 안내·툴팁에서 결정 번호 빼기.
+- 넣지 않은 것: 승인 화면의 "다음부터 이 단계 자동 승인", 머지 창의 "이 방식을 기본으로"(D532), Work 설정의 진행 방식 묶음, core가 만드는 알림·오류 글의 결정 번호(D530).
+
+**시험**
+
+- **[단위]** `test/unit/settings-view.test.ts`: 모든 앱 설정 키가 칸이나 표에 한 번씩 있음, 표의 줄과 자동 승인·질문 방식 잇기와 고를 수 없는 칸의 까닭, 보이는 글에 결정 번호 없음, 찾기(낱말, 띄어쓰기, 구역 가로지르기), 바꾼 설정만 보기와 구역별 수, 칸·줄 되돌리기(기본 엔진은 모델·추론 수준도), 묶음 셋과 PR 대응 줄을 건드리지 않음, 직접 고름, Work 설정의 줄.
+- **[스모크]** `test/smoke/agent-settings.spec.ts`: [에이전트] 구역의 기본 모델·추론 수준과 [단계별 진행] 표의 [단계마다 고르기], 바꾼 줄 표시와 구역의 수, 다시 켠 뒤 접힌 요약. 설정 찾기와 Escape, 진행 방식 묶음(맡기기, 꼼꼼히, 직접 고름), 바꾼 설정만 보기와 [기본값으로]. `app.spec.ts`: 구역을 옮기며 고친 값이 저장됨, 표의 유형별 묶음, PR·고급 구역, 새 Work의 브랜치 요약과 [바꾸기]. `codex.spec.ts`, `knowledge-tidy.spec.ts`, `session.spec.ts`, `side.spec.ts`, `theme.spec.ts`는 구역과 브랜치 요약에 맞췄다.
 
 ## 8. 테스트 전략
 

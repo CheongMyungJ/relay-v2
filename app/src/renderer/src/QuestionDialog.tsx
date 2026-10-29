@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { HumanAnswers, PendingQuestionView } from '../../shared/questions'
 import { call } from './commands'
-import { Modal } from './dialogs'
+import { Modal } from './Modal'
 
 export function QuestionDialog({
   workKey,

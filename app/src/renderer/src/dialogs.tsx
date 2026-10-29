@@ -1,40 +1,10 @@
-// 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1, 유형 고르기 D236), 설정 화면(D70),
-// Work 설정(D72: 자동 승인, 질문 방식, 대응 자동 시작. PR 진행 중에도 연다, D209),
+// 대화상자: 프로젝트 등록(시나리오 0), 프로젝트 설정(D185), 새 Work(시나리오 1, 유형 고르기 D236),
 // 커밋 안 된 변경의 선택지(7-5), Work 정리(시나리오 8, D178),
 // 확인 창([오류 무시하고 승인] 4.1, [Work 포기] 3.3, [머지 없이 끝내기] D179).
+// 설정 화면과 Work 설정은 Settings.tsx에 있다 (D527)
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import {
-  AGENT_APPROVAL_NOTICE,
-  AGENT_ENGINES,
-  AGENT_LABELS,
-  AGENT_MODELS,
-  changeDefaultEngine,
-  changeDefaultModel,
-  changeStepEngine,
-  customModel,
-  effortsFor,
-  setAgentStep,
-  stepModel,
-  type AgentEngine,
-  type AgentStep,
-} from '../../shared/agent'
-import {
-  AGENT_STEP_TITLES,
-  AUTO_APPROVE_TITLES,
-  QUESTION_MODE_LABEL,
-  SETTING_GROUP_LABEL,
-  SKILL_TITLES,
-  THEME_CHOICES,
-  THEME_LABEL,
-  groupShown,
-  type AppConfig,
-  type AutoApproveNode,
-  type QuestionMode,
-  type SettingGroup,
-  type QuestionSkill,
-  type ThemeChoice,
-  type WorkSettings,
-} from '../../shared/config'
+import { AGENT_APPROVAL_NOTICE } from '../../shared/agent'
+import type { WorkSettings } from '../../shared/config'
 import { DEFAULT_BRANCH_RULE } from '../../shared/project'
 import { BUILTIN_TYPES, CUSTOM_REQUEST_HINT } from '../../shared/builtin-types'
 import {
@@ -59,41 +29,15 @@ import type {
   WorkView,
 } from '../../shared/views'
 import { call } from './commands'
-
-export function Modal({
-  title,
-  children,
-  onClose,
-}: {
-  title: string
-  children: ReactNode
-  onClose: () => void
-}) {
-  // top layer에 띄운다(showModal): 패널의 버튼 줄이나 터미널 레이어에 가려지지 않고, 뒤는 눌리지 않으며,
-  // 포커스가 창 안으로 오고 Escape로 닫힌다. 닫힘은 브라우저의 close 하나로 받는다
-  const ref = useRef<HTMLDialogElement>(null)
-  useEffect(() => {
-    const dialog = ref.current
-    if (dialog && !dialog.open) dialog.showModal()
-  }, [])
-  return (
-    <dialog
-      ref={ref}
-      className="modal-dialog"
-      aria-label={title}
-      onClose={onClose}
-      onClick={(e) => {
-        // 창 밖(::backdrop)을 누르면 닫는다
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="modal">
-        <h2>{title}</h2>
-        {children}
-      </div>
-    </dialog>
-  )
-}
+import { Modal } from './Modal'
+import {
+  CodeReviewOverride,
+  WorkStepOverrides,
+  useConfig,
+  type AutoOverrides,
+  type ModeOverrides,
+} from './Settings'
+import { shownOverrides } from './settingsView'
 
 /** 프로젝트 등록: 폴더를 고르면 점검 표를 보이고, 기본 브랜치를 고쳐 등록한다 (시나리오 0, D67) */
 export function ProjectDialog({ onClose }: { onClose: () => void }) {
@@ -255,7 +199,7 @@ export function ProjectSettingsDialog({
         <div className="notice">
           예전 서브모듈 프로젝트입니다. 여기 설정은 이 프로젝트에 남은 Work에만 쓰입니다. 새 Work는
           메인 프로젝트에서 만들고, 그 Work의 이 서브모듈 설정은 메인 프로젝트 설정의 서브모듈별
-          설정에서 정합니다 (D483).
+          설정에서 정합니다.
         </div>
       ) : null}
       <label className="form-col">
@@ -268,9 +212,8 @@ export function ProjectSettingsDialog({
           onChange={(e) => setBots(e.target.value)}
         />
         <span className="dim">
-          코멘트를 대응할 거리로 받을 봇의 이름. 한 줄에 하나씩, GitHub 웹 화면에 보이는 이름으로
-          적습니다. [bot]을 붙여 적어도 됩니다 (D161, D197). 적지 않은 봇의 코멘트는 받지 않음으로
-          보이고 [받기]로 넣을 수 있습니다.
+          PR 대응 거리로 받을 봇. 한 줄에 하나씩 GitHub 화면에 보이는 이름으로 적습니다. 적지 않은
+          봇의 코멘트는 PR 패널의 [받기]로 넣습니다.
         </span>
       </label>
       <label className="form-row">
@@ -289,7 +232,7 @@ export function ProjectSettingsDialog({
         </select>
       </label>
       <div className="dim">
-        머지 창의 기본 선택입니다. 레포가 허용하지 않는 방식이면 허용하는 첫 방식을 고릅니다 (D177).
+        머지 창에서 먼저 골라 두는 방식입니다. 레포가 허용하지 않으면 허용하는 첫 방식입니다.
       </div>
       <label className="form-row">
         <span>이슈 기록</span>
@@ -301,9 +244,8 @@ export function ProjectSettingsDialog({
         />
       </label>
       <div className="dim">
-        의도를 승인하면 GitHub 이슈를 만들고 승인된 단계마다 코멘트를 덧붙입니다. 팀원이 PR을 리뷰할
-        때 맥락을 봅니다. 공개 레포에서는 산출물이 그대로 공개됩니다. 바꾸면 다음에 만드는 Work부터
-        따릅니다 (D336, D337).
+        의도를 승인하면 GitHub 이슈를 만들고 단계마다 산출물을 코멘트로 남겨 리뷰하는 팀원이 맥락을
+        봅니다. 공개 레포에서는 산출물이 공개됩니다. 다음에 만드는 Work부터 따릅니다.
       </div>
       <label className="form-row">
         <span>작업 브랜치 규칙</span>
@@ -315,12 +257,19 @@ export function ProjectSettingsDialog({
         />
       </label>
       <div className="dim">
-        새 Work의 작업 브랜치 이름입니다. 자리: {'{work-id}'}(w-20261021-001), {'{date}'}(20261021),
-        {' {seq}'}(001), {'{type}'}(fix, feat, refactor, spec, chore. 커스텀 유형은 그 id),{' '}
-        {'{slug}'}(새 Work에서 적는 짧은 이름, 비우면 앞 구분자와 함께 빠짐). 예:{' '}
-        {'{type}/{date}-{seq}-{slug}'}. 끝에는 앱이 임의의 영문·숫자 4자를 붙입니다. 비우면 relay/
-        {'{work-id}'}입니다. 바꾸면 다음에 만드는 Work부터 따릅니다 (D426, D427).
+        새 Work의 작업 브랜치 이름. 예: {'{type}/{date}-{seq}-{slug}'}. 비우면 relay/{'{work-id}'}
+        이고, 끝에는 앱이 임의의 4자를 붙입니다. 다음에 만드는 Work부터 따릅니다.
       </div>
+      <details className="dim">
+        <summary>쓸 수 있는 자리</summary>
+        <ul>
+          <li>{'{work-id}'}: w-20261021-001</li>
+          <li>{'{date}'}: 20261021</li>
+          <li>{'{seq}'}: 001</li>
+          <li>{'{type}'}: fix, feat, refactor, spec, chore. 커스텀 유형은 그 id</li>
+          <li>{'{slug}'}: 새 Work에서 적는 짧은 이름. 비우면 앞 구분자와 함께 빠집니다</li>
+        </ul>
+      </details>
       {subPaths.length ? (
         <div className="form-col">
           <span>서브모듈별 설정</span>
@@ -371,7 +320,7 @@ export function ProjectSettingsDialog({
           </table>
           <span className="dim">
             Work에서 함께 고친 서브모듈의 PR 카드에 씁니다. 받을 봇은 쉼표로 나눠 적습니다. 비우면
-            위의 메인 값을 씁니다 (D483).
+            위의 메인 값을 씁니다.
           </span>
         </div>
       ) : null}
@@ -609,6 +558,8 @@ export function NewWorkDialog({
   const [branches, setBranches] = useState<string[]>([target.defaultBranch])
   const [branch, setBranch] = useState(draft?.base ?? origin?.baseBranch ?? target.defaultBranch)
   const [location, setLocation] = useState<'local' | 'remote'>('local')
+  // 브랜치 칸(기준, 작업 브랜치, 머지 대상, 이슈 번호)을 펼쳤나. 접혀 있으면 한 줄 요약만 보인다 (D531)
+  const [branchOpen, setBranchOpen] = useState(false)
   // 머지 대상 (D428). null이면 기준 브랜치를 따른다
   const [mergeTarget, setMergeTarget] = useState<string | null>(null)
   // 작업 브랜치 (D425, D426): 규칙으로 채운 이름. 사람이 고치면 edited에 두고 규칙으로 다시 채우지 않는다
@@ -627,7 +578,7 @@ export function NewWorkDialog({
     if (on && !issue.trim()) setIssue(originIssue)
     if (!on && issue.trim() === originIssue) setIssue('')
   }
-  const [modes, setModes] = useState<Overrides>({})
+  const [modes, setModes] = useState<ModeOverrides>({})
   const [codeReview, setCodeReview] = useState<boolean | undefined>(undefined)
   const [auto, setAuto] = useState<AutoOverrides>({})
   // 묶음 Work (D470, D472): 메인 레포를 고치는지, 메인 기준 커밋의 서브모듈, 고른 서브모듈과 그 기준
@@ -767,8 +718,7 @@ export function NewWorkDialog({
     setBusy(true)
     setError(null)
     // 고른 유형에 없는 단계의 설정은 보내지 않는다 (D256)
-    const auto_approve = only(auto, AUTO_APPROVE_TITLES, type)
-    const question_mode = only(modes, SKILL_TITLES, type)
+    const { auto_approve, question_mode } = shownOverrides(type, auto, modes)
     const settings: WorkSettings = {
       ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
       ...(type === 'custom' && Object.keys(customAuto).length
@@ -780,6 +730,7 @@ export function NewWorkDialog({
     const issueNumber = issueNumberInput(issue)
     if (issueNumber === undefined) {
       setBusy(false)
+      setBranchOpen(true)
       setError('이슈 번호는 1 이상의 정수로 적으세요')
       return
     }
@@ -813,7 +764,11 @@ export function NewWorkDialog({
     )
     setBusy(false)
     if (r.ok) onCreated(r.workKey)
-    else setError(r.error)
+    else {
+      // 만들지 못한 까닭은 브랜치 칸(기준, 작업 브랜치, 머지 대상, 이슈 번호)인 때가 많아 접힌 칸을 펼쳐 보인다 (D531)
+      setBranchOpen(true)
+      setError(r.error)
+    }
   }
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
@@ -867,44 +822,160 @@ export function NewWorkDialog({
           placeholder={chosenCustom?.requestHint ?? REQUEST_PLACEHOLDER[type ?? 'bugfix']}
         />
       </label>
-      <div className="row">
-        <label className="field">
-          기준 브랜치
-          <select
-            aria-label="기준 브랜치"
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
+      {/* 브랜치는 한 줄 요약으로 접는다. 바꿀 때만 펼친다 (D531) */}
+      <div className="field">
+        브랜치
+        <div className="branch-summary">
+          <span>
+            기준 <code>{location === 'remote' ? `origin/${branch}` : branch}</code>
+            {location === 'remote' ? ' (원격)' : ' (로컬)'} → 작업 브랜치{' '}
+            {(edited ?? ruleName) ? (
+              <code>{edited ?? ruleName}-xxxx</code>
+            ) : (
+              <span className="dim">{type ? '이름을 정하는 중' : '유형을 고르면 정함'}</span>
+            )}{' '}
+            → PR 대상 <code>{shownTarget}</code>
+            {target.issueLog ? (
+              <>
+                {' · 이슈 '}
+                {!issue.trim() ? (
+                  '새로 만듦'
+                ) : issueNumberInput(issue) ? (
+                  <code>#{issueNumberInput(issue)}</code>
+                ) : (
+                  <span className="error">번호를 확인하세요</span>
+                )}
+              </>
+            ) : null}
+          </span>
+          <button
+            className="link"
+            aria-label="브랜치 바꾸기"
+            aria-expanded={branchOpen}
+            onClick={() => setBranchOpen((o) => !o)}
           >
-            {branchList.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </label>
-        <fieldset className="field">
-          <legend>기준 위치</legend>
-          <label>
-            <input
-              type="radio"
-              checked={location === 'local'}
-              onChange={() => setLocation('local')}
-            />
-            로컬
-          </label>
-          <label
-            title={target.origin ? 'git fetch 뒤 origin/<브랜치>에서 분기' : 'origin 원격이 없음'}
-          >
-            <input
-              type="radio"
-              disabled={!target.origin}
-              checked={location === 'remote'}
-              onChange={() => setLocation('remote')}
-            />
-            원격
-          </label>
-        </fieldset>
+            {branchOpen ? '접기' : '바꾸기'}
+          </button>
+        </div>
       </div>
+      {branchOpen ? (
+        <div className="branch-fields">
+          <div className="row">
+            <label className="field">
+              기준 브랜치
+              <select
+                aria-label="기준 브랜치"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+              >
+                {branchList.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="field">
+              <legend>기준 위치</legend>
+              <label>
+                <input
+                  type="radio"
+                  checked={location === 'local'}
+                  onChange={() => setLocation('local')}
+                />
+                로컬
+              </label>
+              <label
+                title={
+                  target.origin ? 'git fetch 뒤 origin/<브랜치>에서 분기' : 'origin 원격이 없음'
+                }
+              >
+                <input
+                  type="radio"
+                  disabled={!target.origin}
+                  checked={location === 'remote'}
+                  onChange={() => setLocation('remote')}
+                />
+                원격
+              </label>
+            </fieldset>
+          </div>
+          <div className="row branch-row">
+            <label
+              className="field grow"
+              title="프로젝트 설정의 브랜치 규칙으로 채웁니다. 고칠 수 있고, 끝에는 앱이 임의의 4자를 붙입니다"
+            >
+              작업 브랜치
+              <span className="branch-name">
+                <input
+                  aria-label="작업 브랜치"
+                  value={edited ?? ruleName}
+                  placeholder={type ? target.branchRule : '유형을 고르면 규칙으로 채웁니다'}
+                  onChange={(e) => setEdited(e.target.value.trim() ? e.target.value : null)}
+                />
+                <code className="dim">-xxxx</code>
+              </span>
+              <span className="dim">
+                끝의 -xxxx는 만들 때 붙이는 임의의 영문·숫자 4자입니다(다른 사람과 이름이 겹치지
+                않게).
+                {edited !== null ? (
+                  <>
+                    {' '}
+                    <button className="link" onClick={() => setEdited(null)}>
+                      규칙으로 되돌리기
+                    </button>
+                  </>
+                ) : null}
+              </span>
+            </label>
+            {hasSlug ? (
+              <label className="field">
+                짧은 이름 (선택)
+                <input
+                  aria-label="짧은 이름"
+                  value={slug}
+                  placeholder="login-timeout"
+                  onChange={(e) => setSlug(e.target.value)}
+                />
+                <span className="dim">
+                  브랜치 규칙의 {'{slug}'} 자리. 영문 소문자, 숫자, -만 씁니다
+                </span>
+              </label>
+            ) : null}
+            <label
+              className="field"
+              title="[PR 생성]이 PR을 보낼 브랜치입니다. 앞 Work의 작업 브랜치 위에 쌓을 때 고릅니다"
+            >
+              머지 대상
+              <select
+                aria-label="머지 대상"
+                value={shownTarget}
+                onChange={(e) => setMergeTarget(e.target.value === branch ? null : e.target.value)}
+              >
+                {(branchList.includes(shownTarget) ? branchList : [...branchList, shownTarget]).map(
+                  (b) => (
+                    <option key={b} value={b}>
+                      {b === branch ? `${b} (기준 브랜치)` : b}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+          </div>
+          {target.issueLog ? (
+            <label className="field">
+              이슈 번호 (선택)
+              <input
+                aria-label="이슈 번호"
+                inputMode="numeric"
+                value={issue}
+                placeholder="요청이 온 이슈의 번호. 비우면 의도를 승인할 때 새 이슈를 만듭니다"
+                onChange={(e) => setIssue(e.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       {bundleSubs.length > 0 ? (
         <RepoTable
           main={target.name}
@@ -917,84 +988,8 @@ export function NewWorkDialog({
           onChange={(p, next) => setPicked((x) => (p in x ? { ...x, [p]: next } : x))}
         />
       ) : null}
-      <div className="row branch-row">
-        <label
-          className="field grow"
-          title="프로젝트 설정의 브랜치 규칙으로 채웁니다. 고칠 수 있고, 끝에는 앱이 임의의 4자를 붙입니다 (D425~D427)"
-        >
-          작업 브랜치
-          <span className="branch-name">
-            <input
-              aria-label="작업 브랜치"
-              value={edited ?? ruleName}
-              placeholder={type ? target.branchRule : '유형을 고르면 규칙으로 채웁니다'}
-              onChange={(e) => setEdited(e.target.value.trim() ? e.target.value : null)}
-            />
-            <code className="dim">-xxxx</code>
-          </span>
-          <span className="dim">
-            끝의 -xxxx는 만들 때 붙이는 임의의 영문·숫자 4자입니다(다른 사람과 이름이 겹치지 않게).
-            {edited !== null ? (
-              <>
-                {' '}
-                <button className="link" onClick={() => setEdited(null)}>
-                  규칙으로 되돌리기
-                </button>
-              </>
-            ) : null}
-          </span>
-        </label>
-        {hasSlug ? (
-          <label className="field">
-            짧은 이름 (선택)
-            <input
-              aria-label="짧은 이름"
-              value={slug}
-              placeholder="login-timeout"
-              onChange={(e) => setSlug(e.target.value)}
-            />
-            <span className="dim">
-              브랜치 규칙의 {'{slug}'} 자리. 영문 소문자, 숫자, -만 씁니다
-            </span>
-          </label>
-        ) : null}
-        <label
-          className="field"
-          title="[PR 생성]이 PR을 보낼 브랜치입니다. 앞 Work의 작업 브랜치 위에 쌓을 때 고릅니다 (D428)"
-        >
-          머지 대상
-          <select
-            aria-label="머지 대상"
-            value={shownTarget}
-            onChange={(e) => setMergeTarget(e.target.value === branch ? null : e.target.value)}
-          >
-            {(branchList.includes(shownTarget) ? branchList : [...branchList, shownTarget]).map(
-              (b) => (
-                <option key={b} value={b}>
-                  {b === branch ? `${b} (기준 브랜치)` : b}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
-      </div>
-      {target.issueLog ? (
-        <label className="field">
-          이슈 번호 (선택)
-          <input
-            aria-label="이슈 번호"
-            inputMode="numeric"
-            value={issue}
-            placeholder="요청이 온 이슈의 번호. 비우면 의도를 승인할 때 새 이슈를 만듭니다"
-            onChange={(e) => setIssue(e.target.value)}
-          />
-        </label>
-      ) : null}
       {origin?.abandonable ? (
-        <label
-          className="toggle"
-          title="다시 하기: 새 Work를 만든 뒤 원래 Work를 포기합니다 (D421)"
-        >
+        <label className="toggle" title="다시 하기: 새 Work를 만든 뒤 원래 Work를 포기합니다">
           <input
             type="checkbox"
             aria-label="원래 Work 포기"
@@ -1007,23 +1002,26 @@ export function NewWorkDialog({
       {/* 처음 쓰는 사람을 헷갈리게 하지 않게 하나로 접는다. PR 자동 대응은 PR 진행이 된 뒤 [Work 설정]에서 고른다 (D226) */}
       <details>
         <summary>고급 설정 (나중에 [Work 설정]에서도 바꿀 수 있음)</summary>
-        <h3>이 Work의 자동 승인 (Claude Code)</h3>
+        <h3>이 Work의 단계별 진행</h3>
         <div className="dim">
-          {AGENT_APPROVAL_NOTICE} 마지막 단계(Work 완료 화면)는 늘 수동이라 켜도 쓰이지 않습니다.
+          {AGENT_APPROVAL_NOTICE} 고르지 않은 칸은 앱 설정을 따릅니다. 마지막 단계(Work 완료 화면)는
+          늘 수동이라 켜도 쓰이지 않습니다.
         </div>
-        <AutoApproveOverrides config={config} type={type} value={auto} onChange={setAuto} />
-        {chosenCustom ? (
-          <CustomAutoApprove
-            steps={chosenCustom.steps}
-            value={customAuto}
-            onChange={setCustomAuto}
-          />
-        ) : null}
-        <h3>이 Work의 질문 방식</h3>
-        <QuestionModes config={config} type={type} value={modes} onChange={setModes} />
+        <WorkStepOverrides
+          config={config}
+          type={type}
+          auto={auto}
+          onAuto={setAuto}
+          modes={modes}
+          onModes={setModes}
+          customSteps={chosenCustom?.steps}
+          customAuto={customAuto}
+          onCustomAuto={setCustomAuto}
+        />
         <h3>이 Work의 독립 리뷰</h3>
-        <div className="dim">끄면 마지막 단계의 독립 리뷰가 판정표만 확인합니다.</div>
-        <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
+        <div className="setting-rows">
+          <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
+        </div>
       </details>
       {error ? <div className="error">{error}</div> : null}
       <div className="buttons">
@@ -1102,7 +1100,7 @@ function RepoTable({
             </td>
             <td className="dim">
               {editMain
-                ? '기준은 아래 기준 브랜치와 위치입니다'
+                ? '기준은 위 브랜치 줄의 기준 브랜치와 위치입니다'
                 : '고치지 않습니다: 기준 커밋에 고정해 빌드와 테스트에만 씁니다'}
             </td>
           </tr>
@@ -1171,7 +1169,7 @@ function RepoTable({
                       </select>
                       <select
                         aria-label={`${m.path} 머지 대상`}
-                        title="[PR 생성]이 PR을 보낼 브랜치 (D428)"
+                        title="[PR 생성]이 PR을 보낼 브랜치"
                         value={shownTarget}
                         disabled={disabled}
                         onChange={(e) =>
@@ -1200,923 +1198,6 @@ function RepoTable({
         작업 브랜치 이름은 모든 레포가 같습니다.
       </span>
     </div>
-  )
-}
-
-// ---------- 설정 목록의 묶음 (D256) ----------
-
-const GROUPS: readonly SettingGroup[] = [
-  'common',
-  'bugfix',
-  'feature',
-  'refactor',
-  'spec',
-  'general',
-  'custom',
-  'pr',
-]
-
-/**
- * 설정 목록을 묶음(공통 / 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 / PR 대응)마다 모은다 (D256, D278, D318, D374). type을 주면 그 유형에서 보이는 묶음만
- * 둔다. Work 설정은 그 Work 유형의 단계만 보인다 (I57)
- */
-function grouped<K extends string>(
-  items: readonly (readonly [K, string, SettingGroup])[],
-  type: WorkType | null,
-): [SettingGroup, (readonly [K, string, SettingGroup])[]][] {
-  return GROUPS.filter((g) => type === null || groupShown(g, type))
-    .map((g): [SettingGroup, (readonly [K, string, SettingGroup])[]] => [
-      g,
-      items.filter(([, , group]) => group === g),
-    ])
-    .filter(([, list]) => list.length > 0)
-}
-
-/** 그 유형에서 보이는 단계의 값만 남긴다 */
-function only<K extends string, V>(
-  value: Partial<Record<K, V>>,
-  items: readonly (readonly [K, string, SettingGroup])[],
-  type: WorkType,
-): Partial<Record<K, V>> {
-  const shown = new Set(items.filter(([, , g]) => groupShown(g, type)).map(([k]) => k))
-  return Object.fromEntries(Object.entries(value).filter(([k]) => shown.has(k as K))) as Partial<
-    Record<K, V>
-  >
-}
-
-/** 묶음의 제목과 그 아래 줄 */
-function Groups<K extends string>({
-  items,
-  type,
-  row,
-}: {
-  items: readonly (readonly [K, string, SettingGroup])[]
-  type: WorkType | null
-  row: (key: K, title: string) => ReactNode
-}) {
-  return (
-    <div className="form-grid">
-      {grouped(items, type).map(([group, list]) => (
-        <div
-          key={group}
-          className="form-group"
-          role="group"
-          aria-label={SETTING_GROUP_LABEL[group]}
-        >
-          <div className="form-group-title">{SETTING_GROUP_LABEL[group]}</div>
-          {list.map(([key, title]) => row(key, title))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/** 설정 줄의 단계 id 표시. verify는 옛 Work에만 있어 그렇게 적는다 (D501) */
-const skillNote = (skill: string) => (skill === 'verify' ? 'verify, 옛 Work만' : skill)
-
-// ---------- 질문 방식 (5.6.1, D26, D72) ----------
-
-type Overrides = Partial<Record<QuestionSkill, QuestionMode>>
-
-/** 앱 설정. 대화상자를 열 때 읽는다 */
-function useConfig(): AppConfig | null {
-  const [config, setConfig] = useState<AppConfig | null>(null)
-  useEffect(() => {
-    void window.relay.config().then(setConfig)
-  }, [])
-  return config
-}
-
-const MODES = Object.entries(QUESTION_MODE_LABEL) as [QuestionMode, string][]
-
-/** Work별 질문 방식 (D72). 고르지 않은 스킬은 앱 설정을 따른다. type이 있으면 그 유형의 단계만 보인다 (D256) */
-function QuestionModes({
-  config,
-  type,
-  value,
-  onChange,
-}: {
-  config: AppConfig | null
-  type: WorkType | null
-  value: Overrides
-  onChange: (v: Overrides) => void
-}) {
-  const set = (skill: QuestionSkill, mode: string) => {
-    const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== skill))
-    onChange(mode ? { ...rest, [skill]: mode as QuestionMode } : rest)
-  }
-  return (
-    <Groups
-      items={SKILL_TITLES}
-      type={type}
-      row={(skill, title) => (
-        <label key={skill} className="form-row">
-          <span>
-            {title} <span className="dim">({skillNote(skill)})</span>
-          </span>
-          <select
-            aria-label={`${title} 질문 방식`}
-            value={value[skill] ?? ''}
-            onChange={(e) => set(skill, e.target.value)}
-          >
-            <option value="">
-              앱 설정 따름{config ? ` (${QUESTION_MODE_LABEL[config.question_mode[skill]]})` : ''}
-            </option>
-            {MODES.map(([mode, label]) => (
-              <option key={mode} value={mode}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-    />
-  )
-}
-
-// ---------- 자동 승인 (4.2, D72) ----------
-
-type AutoOverrides = Partial<Record<AutoApproveNode, boolean>>
-
-const onOff = (on: boolean) => (on ? '켜짐' : '꺼짐')
-
-/**
- * Work별 자동 승인 (D72). 고르지 않은 단계는 앱 설정을 따른다. 의도 정리와 리뷰와 검증은 늘 수동이다 (4.2).
- * type이 있으면 그 유형의 단계만 보인다 (D256)
- */
-function AutoApproveOverrides({
-  config,
-  type,
-  value,
-  onChange,
-}: {
-  config: AppConfig | null
-  type: WorkType | null
-  value: AutoOverrides
-  onChange: (v: AutoOverrides) => void
-}) {
-  const set = (node: AutoApproveNode, v: string) => {
-    const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== node))
-    onChange(v ? { ...rest, [node]: v === 'on' } : rest)
-  }
-  const pick = (node: AutoApproveNode) => {
-    const v = value[node]
-    return v === undefined ? '' : v ? 'on' : 'off'
-  }
-  return (
-    <Groups
-      items={AUTO_APPROVE_TITLES}
-      type={type}
-      row={(node, title) => (
-        <label key={node} className="form-row">
-          <span>
-            {title} <span className="dim">({node})</span>
-          </span>
-          <select
-            aria-label={`${title} 자동 승인`}
-            value={pick(node)}
-            onChange={(e) => set(node, e.target.value)}
-          >
-            <option value="">
-              앱 설정 따름{config ? ` (${onOff(config.auto_approve[node])})` : ''}
-            </option>
-            <option value="on">켜기</option>
-            <option value="off">끄기</option>
-          </select>
-        </label>
-      )}
-    />
-  )
-}
-
-/**
- * 커스텀 단계의 자동 승인 (D457): 고르지 않은 단계는 유형 정의(type.json)의 기본값을 따른다. 의도 정리와 리뷰와 검증은 늘
- * 수동이다
- */
-function CustomAutoApprove({
-  steps,
-  value,
-  onChange,
-}: {
-  steps: readonly { id: string; title: string; autoApprove: boolean }[]
-  value: Record<string, boolean>
-  onChange: (v: Record<string, boolean>) => void
-}) {
-  const set = (step: string, v: string) => {
-    const rest = Object.fromEntries(Object.entries(value).filter(([k]) => k !== step))
-    onChange(v ? { ...rest, [step]: v === 'on' } : rest)
-  }
-  return (
-    <div className="form-grid">
-      <div className="form-group" role="group" aria-label="커스텀 단계">
-        <div className="form-group-title">커스텀 단계</div>
-        {steps.map((s) => {
-          const v = value[s.id]
-          return (
-            <label key={s.id} className="form-row">
-              <span>
-                {s.title} <span className="dim">({s.id})</span>
-              </span>
-              <select
-                aria-label={`${s.title} 자동 승인`}
-                value={v === undefined ? '' : v ? 'on' : 'off'}
-                onChange={(e) => set(s.id, e.target.value)}
-              >
-                <option value="">유형 기본값 따름 ({onOff(s.autoApprove)})</option>
-                <option value="on">켜기</option>
-                <option value="off">끄기</option>
-              </select>
-            </label>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/**
- * Work별 독립 리뷰의 코드 리뷰 (D72, D497): 앱 설정 따름, 켜기, 끄기. 리뷰를 요청할 때의 값을 쓴다. 끄면 판정표만 확인한다
- */
-function CodeReviewOverride({
-  config,
-  value,
-  onChange,
-}: {
-  config: AppConfig | null
-  value: boolean | undefined
-  onChange: (v: boolean | undefined) => void
-}) {
-  return (
-    <div className="form-grid">
-      <label
-        className="form-row"
-        title="마지막 단계가 판정표를 쓰고 리뷰를 요청하면 앱이 따로 띄우는 독립 리뷰의 코드 리뷰. 끄면 판정표만 확인한다 (D495, D497)"
-      >
-        <span>독립 리뷰의 코드 리뷰</span>
-        <select
-          aria-label="독립 리뷰의 코드 리뷰"
-          value={value === undefined ? '' : value ? 'on' : 'off'}
-          onChange={(e) => onChange(e.target.value ? e.target.value === 'on' : undefined)}
-        >
-          <option value="">앱 설정 따름{config ? ` (${onOff(config.code_review)})` : ''}</option>
-          <option value="on">켜기</option>
-          <option value="off">끄기</option>
-        </select>
-      </label>
-    </div>
-  )
-}
-
-/**
- * Work별 대응 자동 시작 (D72, D154): 앱 설정 따름, 켜기, 끄기. 켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 PR을 읽어
- * 새 항목이 들어오면 쌓인 것과 함께 시작한다 (D210)
- */
-function AutoStartOverride({
-  config,
-  value,
-  onChange,
-}: {
-  config: AppConfig | null
-  value: boolean | undefined
-  onChange: (v: boolean | undefined) => void
-}) {
-  return (
-    <div className="form-grid">
-      <label
-        className="form-row"
-        title="받은 새 항목이 들어오면 PR 대응 task를 자동으로 시작한다 (D154, D210)"
-      >
-        <span>대응 자동 시작</span>
-        <select
-          aria-label="대응 자동 시작"
-          value={value === undefined ? '' : value ? 'on' : 'off'}
-          onChange={(e) => onChange(e.target.value ? e.target.value === 'on' : undefined)}
-        >
-          <option value="">
-            앱 설정 따름{config ? ` (${onOff(config.respond_auto_start)})` : ''}
-          </option>
-          <option value="on">켜기</option>
-          <option value="off">끄기</option>
-        </select>
-      </label>
-    </div>
-  )
-}
-
-/**
- * Work 설정 (D72): 이 Work의 자동 승인, 질문 방식, 대응 자동 시작. 자동 승인은 바로 적용하고(턴이 끝날 때의 설정으로 판정,
- * 카운트다운 중에 끄면 멈춤, D128), 질문 방식은 다음에 시작하는 task부터 쓴다 (D73). 대응 자동 시작은 다음에 들어오는 새
- * 항목부터 쓴다 (D210). PR 진행 중에도 연다 (D209)
- */
-export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose: () => void }) {
-  const [modes, setModes] = useState<Overrides>(work.settings.question_mode ?? {})
-  const [auto, setAuto] = useState<AutoOverrides>(work.settings.auto_approve ?? {})
-  const [customAuto, setCustomAuto] = useState<Record<string, boolean>>(
-    work.settings.custom_auto_approve ?? {},
-  )
-  const [autoStart, setAutoStart] = useState<boolean | undefined>(work.settings.respond_auto_start)
-  const [codeReview, setCodeReview] = useState<boolean | undefined>(work.settings.code_review)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const config = useConfig()
-
-  const save = async () => {
-    setBusy(true)
-    const r = await call(() =>
-      // 보이지 않는 다른 유형의 단계 값은 남기지 않는다. 사람이 보거나 지울 수 없어서다 (D256, PR #23 리뷰)
-      window.relay.updateWorkSettings(work.key, {
-        auto_approve: only(auto, AUTO_APPROVE_TITLES, work.type),
-        ...(work.customType ? { custom_auto_approve: customAuto } : {}),
-        question_mode: only(modes, SKILL_TITLES, work.type),
-        respond_auto_start: autoStart ?? null,
-        code_review: codeReview ?? null,
-      }),
-    )
-    setBusy(false)
-    if (r.ok) onClose()
-    else setError(r.error)
-  }
-
-  return (
-    <Modal
-      title={`Work 설정 · ${work.workId} (${work.customType?.name ?? WORK_TYPE_LABEL[work.type]})`}
-      onClose={onClose}
-    >
-      <h3>자동 승인 (Claude Code)</h3>
-      <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
-      <div className="dim">
-        바로 적용합니다. 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춥니다. Work의
-        마지막 단계(Work 완료 화면)는 늘 수동입니다.
-      </div>
-      <AutoApproveOverrides config={config} type={work.type} value={auto} onChange={setAuto} />
-      {work.customType ? (
-        <CustomAutoApprove
-          steps={work.customType.steps}
-          value={customAuto}
-          onChange={setCustomAuto}
-        />
-      ) : null}
-      <h3>자동 대응 (PR 진행)</h3>
-      <div className="dim">
-        켜도 이미 받은 새 항목으로는 시작하지 않고, 다음에 새 항목이 들어오면 함께 시작합니다.
-      </div>
-      <AutoStartOverride config={config} value={autoStart} onChange={setAutoStart} />
-      <h3>독립 리뷰 (Work 마무리)</h3>
-      <div className="dim">
-        마지막 단계가 리뷰를 요청할 때의 값을 씁니다. 끄면 판정표만 확인하고 Work 완료 화면과 PR
-        초안에 코드 리뷰를 하지 않았다고 남깁니다. 옛 Work(verify가 있는 Work)에는 쓰지 않습니다.
-      </div>
-      <CodeReviewOverride config={config} value={codeReview} onChange={setCodeReview} />
-      <h3>질문 방식</h3>
-      <div className="dim">질문 방식은 다음에 시작하는 task부터 씁니다.</div>
-      <QuestionModes config={config} type={work.type} value={modes} onChange={setModes} />
-      {error ? <div className="error">{error}</div> : null}
-      <div className="buttons">
-        <button onClick={onClose}>취소</button>
-        <button className="primary" disabled={busy} onClick={() => void save()}>
-          저장
-        </button>
-      </div>
-    </Modal>
-  )
-}
-
-// ---------- 설정 화면 (D70) ----------
-
-type NumberKey =
-  | 'session_limit'
-  | 'format_error_bounce_max'
-  | 'handoff_body_warn_chars'
-  | 'intent_warn_chars'
-  | 'pr_poll_interval_sec'
-
-const NUMBERS: [NumberKey, string, string][] = [
-  ['session_limit', '세션 상한', '살아 있는 세션의 합계. 넘으면 대기열에서 기다린다 (D18)'],
-  ['format_error_bounce_max', '형식 오류 되돌림 횟수', 'Stop 훅으로 되돌리는 연속 횟수 (D21)'],
-  ['handoff_body_warn_chars', 'handoff 본문 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
-  ['intent_warn_chars', 'intent 분량 경고 기준', '글자 수. 넘으면 경고만 한다'],
-  [
-    'pr_poll_interval_sec',
-    'PR 읽기 주기(초)',
-    'PR 진행인 Work의 PR을 읽는 주기. 다음 읽기부터 쓴다 (D158)',
-  ],
-]
-
-/** 모델 고르기에서 직접 입력을 뜻하는 값. 모델 이름에 쓸 수 없는 띄어쓰기로 시작한다 */
-const CUSTOM_OPTION = ' custom'
-
-/**
- * 엔진의 모델 고르기. 첫 선택지(빈 값)는 엔진 기본이나 기본 따름이다. 목록에 없는 모델은 [직접 입력]으로 쓸 수 있고, 앱이
- * 확인하지 않는다고 알린다
- */
-function ModelSelect(props: {
-  label: string
-  engine: AgentEngine
-  value: string
-  empty: string
-  onChange: (model: string) => void
-}) {
-  const [typing, setTyping] = useState(false)
-  const custom = typing || customModel(props.engine, props.value)
-  return (
-    <span className="model-select">
-      <select
-        aria-label={props.label}
-        value={custom ? CUSTOM_OPTION : props.value}
-        onChange={(e) => {
-          const picked = e.target.value
-          setTyping(picked === CUSTOM_OPTION)
-          props.onChange(picked === CUSTOM_OPTION ? '' : picked)
-        }}
-      >
-        <option value="">{props.empty}</option>
-        {AGENT_MODELS[props.engine].map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-        <option value={CUSTOM_OPTION}>직접 입력…</option>
-      </select>
-      {custom ? (
-        <>
-          <input
-            aria-label={`${props.label} 직접 입력`}
-            placeholder="모델 이름"
-            value={props.value}
-            onChange={(e) => props.onChange(e.target.value.trim())}
-          />
-          <span className="dim">
-            직접 입력한 모델은 앱이 확인하지 않습니다. 이름이 틀리거나 고른 추론 수준을 받지 않으면
-            CLI가 실패할 수 있습니다.
-          </span>
-        </>
-      ) : null}
-    </span>
-  )
-}
-
-/** 추론 수준 고르기. 엔진·모델이 추론 수준을 지원하지 않으면 끄고 그렇다고 보인다 */
-function EffortSelect(props: {
-  label: string
-  engine: AgentEngine
-  model: string
-  value: string
-  empty: string
-  onChange: (effort: string) => void
-}) {
-  const efforts = effortsFor(props.engine, props.model)
-  const none = efforts.length === 0
-  return (
-    <span className="effort-select">
-      <select
-        aria-label={props.label}
-        value={none ? '' : props.value}
-        disabled={none}
-        onChange={(e) => props.onChange(e.target.value)}
-      >
-        <option value="">{props.empty}</option>
-        {efforts.map((effort) => (
-          <option key={effort} value={effort}>
-            {effort}
-          </option>
-        ))}
-      </select>
-      {none ? <span className="dim">이 모델은 추론 수준을 지원하지 않음</span> : null}
-      {!none &&
-      props.value !== '' &&
-      (props.model === '' || customModel(props.engine, props.model)) ? (
-        <span className="dim">
-          {props.model === '' ? '엔진 기본 모델' : '직접 입력한 모델'}이 이 수준을 받지 않으면 CLI가
-          거절하거나 무시할 수 있음
-        </span>
-      ) : null}
-    </span>
-  )
-}
-
-/**
- * 앱 설정 (D70). 바꾸면 바로 적용하고, 질문 방식만 다음에 시작하는 task부터 쓴다 (D73).
- * 자동 승인은 턴이 끝날 때의 설정으로 판정하고, 카운트다운 중에 끄면 멈춘다. 카운트다운 초는 다음 카운트다운부터 쓴다 (D128)
- */
-export function SettingsDialog({
-  onClose,
-  onCustomTypes,
-}: {
-  onClose: () => void
-  /** 업무 유형 화면을 연다 (D459) */
-  onCustomTypes?: () => void
-}) {
-  const config = useConfig()
-  const [draft, setDraft] = useState<AppConfig | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const value = draft ?? config
-
-  const save = async () => {
-    if (!value) return
-    setBusy(true)
-    setError(null)
-    const r = await call(() =>
-      window.relay.updateConfig({
-        agent_engine: value.agent_engine,
-        agent_model: value.agent_model,
-        agent_effort: value.agent_effort,
-        // 상세 설정은 단계마다 덮어쓴다. 기본을 따르는 단계는 빈 객체로 지운다
-        agent_steps: Object.fromEntries(
-          AGENT_STEP_TITLES.map(([skill]) => [skill, value.agent_steps[skill] ?? {}]),
-        ),
-        session_limit: value.session_limit,
-        auto_approve: value.auto_approve,
-        auto_approve_countdown_sec: value.auto_approve_countdown_sec,
-        question_mode: value.question_mode,
-        format_error_bounce_max: value.format_error_bounce_max,
-        handoff_body_warn_chars: value.handoff_body_warn_chars,
-        intent_warn_chars: value.intent_warn_chars,
-        pr_draft: value.pr_draft,
-        side_notice: value.side_notice,
-        pr_poll_interval_sec: value.pr_poll_interval_sec,
-        respond_auto_start: value.respond_auto_start,
-        respond_auto_round_max: value.respond_auto_round_max,
-        code_review: value.code_review,
-        reply_signature: value.reply_signature,
-        knowledge_review_engine: value.knowledge_review_engine,
-        knowledge_review_model: value.knowledge_review_model,
-        theme: value.theme,
-        session_dir: value.session_dir,
-      }),
-    )
-    setBusy(false)
-    if (r.ok) onClose()
-    else setError(r.error)
-  }
-
-  return (
-    <Modal title="설정" onClose={onClose}>
-      {onCustomTypes ? (
-        <div className="row">
-          <button onClick={onCustomTypes}>업무 유형…</button>
-          <span className="dim">커스텀 유형을 만들고 고칩니다</span>
-        </div>
-      ) : null}
-      {value ? (
-        <>
-          <div className="dim">
-            기본 엔진·모델·추론 수준과 상세 설정은 새로 만드는 task부터 적용합니다. 기존 task를
-            재개하면 원래 엔진·모델·추론 수준을 사용합니다. 질문 방식은 다음에 시작하는 task부터
-            씁니다.
-          </div>
-          <div className="form-grid">
-            <label className="form-row" title="터미널은 테마와 관계없이 어둡습니다 (D335)">
-              <span>테마</span>
-              <select
-                aria-label="테마"
-                value={value.theme}
-                onChange={(e) => setDraft({ ...value, theme: e.target.value as ThemeChoice })}
-              >
-                {THEME_CHOICES.map((t) => (
-                  <option key={t} value={t}>
-                    {THEME_LABEL[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-row">
-              <span>기본 엔진</span>
-              <select
-                aria-label="기본 엔진"
-                value={value.agent_engine}
-                onChange={(e) =>
-                  setDraft(changeDefaultEngine(value, e.target.value as AgentEngine))
-                }
-              >
-                {AGENT_ENGINES.map((engine) => (
-                  <option key={engine} value={engine}>
-                    {AGENT_LABELS[engine]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="form-row" title="비우면 엔진의 기본 모델을 씁니다">
-              <span>기본 모델</span>
-              <ModelSelect
-                label="기본 모델"
-                engine={value.agent_engine}
-                value={value.agent_model}
-                empty="엔진 기본"
-                onChange={(model) => setDraft(changeDefaultModel(value, model))}
-              />
-            </label>
-            <div className="form-row">
-              <span>기본 추론 수준</span>
-              <EffortSelect
-                label="기본 추론 수준"
-                engine={value.agent_engine}
-                model={value.agent_model}
-                value={value.agent_effort}
-                empty="엔진 기본"
-                onChange={(effort) => setDraft({ ...value, agent_effort: effort })}
-              />
-            </div>
-            {NUMBERS.map(([key, label, hint]) => (
-              <label key={key} className="form-row" title={hint}>
-                <span>{label}</span>
-                <input
-                  type="number"
-                  aria-label={label}
-                  value={value[key]}
-                  onChange={(e) => setDraft({ ...value, [key]: Number(e.target.value) })}
-                />
-              </label>
-            ))}
-            <label
-              className="form-row"
-              title="Work 완료 화면의 [PR 생성]이 draft PR을 만든다 (D71)"
-            >
-              <span>draft PR로 만들기</span>
-              <input
-                type="checkbox"
-                aria-label="draft PR로 만들기"
-                checked={value.pr_draft}
-                onChange={(e) => setDraft({ ...value, pr_draft: e.target.checked })}
-              />
-            </label>
-            <label
-              className="form-row"
-              title="곁 세션을 열 때 쓰임과 권하는 쓰는 법을 알리는 창을 띄운다. 창의 [다시 보지 않기]가 끈다 (D392)"
-            >
-              <span>곁 세션을 열 때 안내 보기</span>
-              <input
-                type="checkbox"
-                aria-label="곁 세션을 열 때 안내 보기"
-                checked={value.side_notice}
-                onChange={(e) => setDraft({ ...value, side_notice: e.target.checked })}
-              />
-            </label>
-            <label
-              className="form-row"
-              title="마무리 단계(옛 Work는 verify)가 지식을 바꾸면 앱이 따로 부르는 짧은 검토 호출의 CLI. Work의 엔진과 따로 고른다 (D300, D334)"
-            >
-              <span>지식 검토 엔진</span>
-              <select
-                aria-label="지식 검토 엔진"
-                value={value.knowledge_review_engine}
-                onChange={(e) =>
-                  setDraft({ ...value, knowledge_review_engine: e.target.value as AgentEngine })
-                }
-              >
-                {AGENT_ENGINES.map((engine) => (
-                  <option key={engine} value={engine}>
-                    {AGENT_LABELS[engine]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              className="form-row"
-              title="비우면 엔진의 기본(Claude Code는 sonnet, Codex는 CLI 설정)을 쓴다 (D334)"
-            >
-              <span>지식 검토 모델</span>
-              <input
-                type="text"
-                aria-label="지식 검토 모델"
-                placeholder={value.knowledge_review_engine === 'claude' ? 'sonnet' : 'CLI 기본'}
-                value={value.knowledge_review_model}
-                onChange={(e) => setDraft({ ...value, knowledge_review_model: e.target.value })}
-              />
-            </label>
-            <label
-              className="form-row"
-              title="앱이 게시하는 PR 답글 끝에 붙이는 표시. 답글이 내 계정으로 올라가므로 AI가 썼다고 알린다 (D173)"
-            >
-              <span>답글 표시 문구</span>
-              <input
-                type="text"
-                aria-label="답글 표시 문구"
-                value={value.reply_signature}
-                onChange={(e) => setDraft({ ...value, reply_signature: e.target.value })}
-              />
-            </label>
-            <label
-              className="form-row"
-              title="[새 세션] 창에 채울 폴더(절대 경로). 비우면 <RELAY_HOME>/home/. 다음에 만드는 세션부터 씁니다 (D398)"
-            >
-              <span>기본 세션 폴더</span>
-              <input
-                type="text"
-                aria-label="기본 세션 폴더"
-                placeholder="<RELAY_HOME>/home/"
-                value={value.session_dir}
-                onChange={(e) => setDraft({ ...value, session_dir: e.target.value })}
-              />
-            </label>
-          </div>
-          <details className="agent-steps">
-            <summary>상세 설정 (단계별 엔진·모델·추론 수준)</summary>
-            <div className="dim">
-              단계마다 엔진·모델·추론 수준을 고릅니다. 고르지 않은 값은 위의 기본을 따릅니다. 단계의
-              엔진이 기본 엔진과 다르면 그 엔진의 기본 모델·추론 수준을 씁니다.
-            </div>
-            <Groups
-              items={AGENT_STEP_TITLES}
-              type={null}
-              row={(skill, title) => {
-                const step = value.agent_steps[skill] ?? {}
-                const engine = step.engine ?? value.agent_engine
-                const set = (next: AgentStep) =>
-                  setDraft({
-                    ...value,
-                    agent_steps: setAgentStep(value.agent_steps, skill, next, value),
-                  })
-                return (
-                  <div key={skill} className="form-row agent-step">
-                    <span>
-                      {title} <span className="dim">({skillNote(skill)})</span>
-                    </span>
-                    <div className="agent-step-selects">
-                      <select
-                        aria-label={`${title} 엔진`}
-                        value={step.engine ?? ''}
-                        onChange={(e) =>
-                          set(
-                            changeStepEngine(
-                              value,
-                              step,
-                              (e.target.value || undefined) as AgentEngine | undefined,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="">앱 기본 따름</option>
-                        {AGENT_ENGINES.map((e) => (
-                          <option key={e} value={e}>
-                            {AGENT_LABELS[e]}
-                          </option>
-                        ))}
-                      </select>
-                      <ModelSelect
-                        label={`${title} 모델`}
-                        engine={engine}
-                        value={step.model ?? ''}
-                        empty="기본 따름"
-                        onChange={(model) => set({ ...step, model })}
-                      />
-                      <EffortSelect
-                        label={`${title} 추론 수준`}
-                        engine={engine}
-                        model={stepModel(value, step)}
-                        value={step.effort ?? ''}
-                        empty="기본 따름"
-                        onChange={(effort) => set({ ...step, effort })}
-                      />
-                    </div>
-                  </div>
-                )
-              }}
-            />
-          </details>
-          <h3>질문 방식</h3>
-          <Groups
-            items={SKILL_TITLES}
-            type={null}
-            row={(skill, title) => (
-              <label key={skill} className="form-row">
-                <span>
-                  {title} <span className="dim">({skillNote(skill)})</span>
-                </span>
-                <select
-                  aria-label={`${title} 질문 방식`}
-                  value={value.question_mode[skill]}
-                  onChange={(e) =>
-                    setDraft({
-                      ...value,
-                      question_mode: {
-                        ...value.question_mode,
-                        [skill]: e.target.value as QuestionMode,
-                      },
-                    })
-                  }
-                >
-                  {MODES.map(([mode, label]) => (
-                    <option key={mode} value={mode}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          />
-          <h3>자동 승인 (Claude Code)</h3>
-          <div className="dim">{AGENT_APPROVAL_NOTICE}</div>
-          <div className="dim">
-            켠 단계는 조건(4.3)을 만족하면 카운트다운 뒤 승인합니다. 턴이 끝날 때의 설정으로
-            판정하고, 카운트다운 중에 끄면 멈춥니다. 의도 정리와 Work의 마지막 단계(Work 완료
-            화면)는 늘 수동입니다.
-          </div>
-          <Groups
-            items={AUTO_APPROVE_TITLES}
-            type={null}
-            row={(node, title) => (
-              <label key={node} className="form-row">
-                <span>
-                  {title} <span className="dim">({node})</span>
-                </span>
-                <input
-                  type="checkbox"
-                  aria-label={`${title} 자동 승인`}
-                  checked={value.auto_approve[node]}
-                  onChange={(e) =>
-                    setDraft({
-                      ...value,
-                      auto_approve: { ...value.auto_approve, [node]: e.target.checked },
-                    })
-                  }
-                />
-              </label>
-            )}
-          />
-          <div className="form-grid">
-            <label
-              className="form-row"
-              title="자동 승인 전에 기다리는 초. [취소]로 멈춘다. 다음 카운트다운부터 쓴다 (4.3)"
-            >
-              <span>자동 승인 카운트다운(초)</span>
-              <input
-                type="number"
-                aria-label="자동 승인 카운트다운(초)"
-                value={value.auto_approve_countdown_sec}
-                onChange={(e) =>
-                  setDraft({ ...value, auto_approve_countdown_sec: Number(e.target.value) })
-                }
-              />
-            </label>
-          </div>
-          <h3>독립 리뷰 (Work 마무리)</h3>
-          <div className="dim">
-            Work의 마지막 단계가 판정표를 쓰고 리뷰를 요청하면 relay가 세션을 닫고 따로 리뷰를 돌린
-            뒤 같은 대화를 다시 엽니다. 판정표 확인은 늘 하고, 코드 리뷰는 여기서 켜고 끕니다.
-            Work마다 바꿀 수 있습니다.
-          </div>
-          <div className="form-grid">
-            <label
-              className="form-row"
-              title="독립 리뷰의 코드 리뷰(찾기와 확인). 끄면 판정표만 확인한다 (D495, D497)"
-            >
-              <span>독립 리뷰의 코드 리뷰</span>
-              <input
-                type="checkbox"
-                aria-label="독립 리뷰의 코드 리뷰"
-                checked={value.code_review}
-                onChange={(e) => setDraft({ ...value, code_review: e.target.checked })}
-              />
-            </label>
-          </div>
-          <h3>자동 대응 (PR 진행)</h3>
-          <div className="dim">
-            켜면 PR을 읽어 받은 새 항목으로 PR 대응 task를 자동으로 시작합니다. 켜도 이미 받은
-            항목과 앱을 켤 때 읽은 항목만으로는 시작하지 않습니다. 사람이 [대응 시작]이나 승인을
-            누르지 않고 이어진 라운드가 상한에 닿으면 멈추고 알립니다. PR 대응의 자동 승인은 위의
-            목록에서 켭니다. Codex 대응 결과의 push와 답글 게시는 사람이 승인한 뒤 실행합니다.
-          </div>
-          <div className="form-grid">
-            <label
-              className="form-row"
-              title="받은 새 항목이 들어오면 PR 대응 task를 자동으로 시작한다 (D154, D210)"
-            >
-              <span>대응 자동 시작</span>
-              <input
-                type="checkbox"
-                aria-label="대응 자동 시작"
-                checked={value.respond_auto_start}
-                onChange={(e) => setDraft({ ...value, respond_auto_start: e.target.checked })}
-              />
-            </label>
-            <label
-              className="form-row"
-              title="사람이 [대응 시작]이나 승인을 누르지 않고 이어지는 대응 라운드의 상한 (D171)"
-            >
-              <span>자동 대응 라운드 상한</span>
-              <input
-                type="number"
-                aria-label="자동 대응 라운드 상한"
-                value={value.respond_auto_round_max}
-                onChange={(e) =>
-                  setDraft({ ...value, respond_auto_round_max: Number(e.target.value) })
-                }
-              />
-            </label>
-          </div>
-        </>
-      ) : (
-        <div className="dim">불러오는 중…</div>
-      )}
-      {error ? <div className="error">{error}</div> : null}
-      <div className="buttons">
-        <button onClick={onClose}>취소</button>
-        <button className="primary" disabled={busy || !value} onClick={() => void save()}>
-          저장
-        </button>
-      </div>
-    </Modal>
   )
 }
 
@@ -2496,7 +1577,7 @@ export function CleanDialog({
                 </label>
               ) : null}
               {preview.remote ? (
-                <label className="toggle" title="PR을 머지한 Work만 고를 수 있습니다 (D178)">
+                <label className="toggle" title="PR을 머지한 Work만 고를 수 있습니다">
                   <input
                     type="checkbox"
                     aria-label="원격 브랜치 삭제"

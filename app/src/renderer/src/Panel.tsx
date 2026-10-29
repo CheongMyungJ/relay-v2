@@ -28,7 +28,8 @@ import type {
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { Activity, ActivityRecent } from './Activity'
 import { call } from './commands'
-import { ConfirmDialog, Modal, UncommittedDialog } from './dialogs'
+import { ConfirmDialog, UncommittedDialog } from './dialogs'
+import { Modal } from './Modal'
 import { DraftCards } from './DraftCards'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
@@ -419,7 +420,7 @@ function TaskNotice({ task, pr }: { task: TaskView; pr: boolean }) {
     return (
       <div className="notice">
         막힘. 세션이 없습니다. [세션 재개]로 필요한 것을 주세요. 근본부터 다시 하려면 [머지 없이
-        끝내기] 뒤 새 Work로 하세요 (D182).
+        끝내기] 뒤 새 Work로 하세요.
       </div>
     )
   }
@@ -746,8 +747,8 @@ function Review({
             {!gate.approve && gate.blocking.length ? (
               <span className="error">
                 {respond
-                  ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요 (D204)'
-                  : 'intent 초안의 머리글 오류는 넘길 수 없습니다 (D90)'}
+                  ? 'replies.md의 오류는 넘길 수 없습니다: 터미널에서 고치게 하세요'
+                  : 'intent 초안의 머리글 오류는 넘길 수 없습니다'}
               </span>
             ) : null}
             {respond?.blocked ? <span className="error">{respond.blocked}</span> : null}
@@ -756,7 +757,7 @@ function Review({
                 승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
                 개를 게시합니다
                 {respond.deferred.length
-                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
+                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께)`
                   : ''}
               </span>
             ) : null}
@@ -981,7 +982,7 @@ function RespondSummary({ respond }: { respond: NonNullable<ReviewView['respond'
             ))}
           </ul>
         ) : (
-          <div className="dim">없음: 사람 지시만으로 시작한 라운드 (D182)</div>
+          <div className="dim">없음: 사람 지시만으로 시작한 라운드</div>
         )}
       </section>
       {respond.instruction ? (
@@ -1075,7 +1076,7 @@ function DoneNotice({ work, branch }: { work: WorkView; branch: BranchInfo | nul
               <div className="error">
                 {name(pr)}에서 승인했지만 push·게시하지 못한 대응 라운드 {lost.length}개(
                 {lost.map((r) => r.label).join(', ')})는 머지에 들어가지 않았습니다. 그 커밋은 작업
-                브랜치에만 있고 답글은 게시하지 않았습니다 (D193).
+                브랜치에만 있고 답글은 게시하지 않았습니다.
               </div>
             ) : null}
             {pr.ended ? (

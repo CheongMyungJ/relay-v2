@@ -1823,12 +1823,7 @@ fieldset.field {
   word-break: break-all;
 }
 
-/* 설정 화면과 Work 설정 (D70, D72) */
-.form-grid {
-  display: grid;
-  gap: 8px;
-}
-
+/* 프로젝트 설정의 이름과 칸 한 줄 */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 200px;
@@ -1844,8 +1839,8 @@ fieldset.field {
 /* 설정 목록의 묶음: 공통 / 버그 수정 / 기능 추가·변경 / PR 대응 (D256) */
 .form-group {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-group);
@@ -1856,30 +1851,239 @@ fieldset.field {
   font-size: 12px;
   font-weight: 600;
   padding-bottom: 6px;
+  margin-bottom: 2px;
   border-bottom: 1px solid var(--border);
-}
-
-/* 상세 설정: 단계마다 엔진·모델·추론 수준 */
-.agent-steps {
-  display: grid;
-  gap: 8px;
-}
-
-.form-row.agent-step {
-  grid-template-columns: 1fr auto;
-}
-
-.agent-step-selects {
-  display: grid;
-  grid-template-columns: repeat(3, 140px);
-  gap: 6px;
-  align-items: start;
 }
 
 .effort-select,
 .model-select {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+/* 설정 화면 (D527): 위에 찾기, 왼쪽에 구역, 오른쪽에 고른 구역 */
+/* 설정 화면은 넓고, 구역을 옮겨도 창 크기가 같으며, 오른쪽만 넘친다 */
+.modal.settings {
+  width: min(1000px, 94vw);
+  height: min(760px, 90vh);
+  overflow: hidden;
+}
+
+.settings-top {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.settings-top input[type='search'] {
+  flex: 1;
+}
+
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-self: start;
+}
+
+.settings-nav button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+
+.settings-nav button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.settings-nav button[aria-current='page'] {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--bg-raise);
+  border-color: var(--border);
+}
+
+.settings-nav hr {
+  width: 100%;
+  margin: 6px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* 구역의 바꾼 설정 수 (D531) */
+.changed-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.settings-pane,
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-pane {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.settings-section > h3 {
+  margin: 0;
+}
+
+/* 설정 한 줄: 이름과 한 줄 설명, 고르는 칸 */
+.setting-rows {
+  display: grid;
+  gap: 2px;
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+}
+
+.setting-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+
+.setting-help {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.setting-control {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+
+.setting-control > select,
+.setting-control > input[type='text'],
+.setting-control > input[type='number'],
+.setting-control > .model-select,
+.setting-control > .effort-select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 기본값(Work 설정은 앱 설정)과 다른 줄 (D531) */
+.setting-row.changed,
+.step-row.changed {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.setting-row.changed .setting-label::before,
+.step-row.changed .setting-label::before {
+  content: '●';
+  margin-right: 6px;
+  font-size: 9px;
+  vertical-align: 2px;
+  color: var(--accent-text);
+}
+
+/* 단계별 진행 표 (D528): 단계 / 자동 승인 / 질문 방식 / 엔진·모델. Work 설정은 앞의 세 열 */
+.step-table {
+  display: grid;
+  gap: 8px;
+}
+
+.step-head,
+.step-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 150px 200px;
+  gap: 6px 12px;
+  align-items: center;
+}
+
+.step-table.overrides .step-head,
+.step-table.overrides .step-row {
+  grid-template-columns: minmax(0, 1fr) 160px 200px;
+}
+
+.step-head {
+  padding: 0 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.step-row {
+  min-height: 30px;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+}
+
+.step-row select {
+  width: 100%;
+}
+
+.step-agent {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: start;
+  padding: 0 0 4px 12px;
+}
+
+.step-agent select {
+  width: 100%;
+}
+
+/* 새 Work의 브랜치 한 줄 요약과 펼친 칸 (D531) */
+.branch-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.branch-summary code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.branch-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-group);
 }
 
 /* 업무 유형 고르기 (D236, D237): 붙은 버튼 묶음 */
