@@ -28,7 +28,6 @@ import {
   CleanDialog,
   ConfirmDialog,
   DeleteWorkDialog,
-  Modal,
   NewWorkDialog,
   ProjectDialog,
   type DraftOrigin,
@@ -36,6 +35,7 @@ import {
   RemoveProjectDialog,
 } from './dialogs'
 import { SettingsDialog, WorkSettingsDialog } from './Settings'
+import { Modal } from './Modal'
 import { CustomTypesDialog } from './CustomTypes'
 import { Activity } from './Activity'
 import { FilesView, openInFiles } from './Files'

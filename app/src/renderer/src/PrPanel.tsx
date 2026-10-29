@@ -12,7 +12,8 @@ import type {
 } from '../../shared/views'
 import type { MergeMethod } from '../../shared/work'
 import { call } from './commands'
-import { ConfirmDialog, Modal } from './dialogs'
+import { ConfirmDialog } from './dialogs'
+import { Modal } from './Modal'
 
 const short = (commit: string) => commit.slice(0, 8)
 

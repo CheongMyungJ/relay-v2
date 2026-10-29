@@ -19,13 +19,10 @@ import {
 } from '../../shared/agent'
 import {
   AGENT_STEP_TITLES,
-  AUTO_APPROVE_TITLES,
   QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
-  SKILL_TITLES,
   THEME_CHOICES,
   THEME_LABEL,
-  groupShown,
   type AppConfig,
   type AutoApproveNode,
   type QuestionMode,
@@ -45,12 +42,15 @@ import {
   SETTINGS_SECTIONS,
   applyPreset,
   changedCounts,
+  changedIds,
   filtering,
   presetOf,
   resetScalar,
   resetStep,
   scalarChanged,
   sectionViews,
+  settingId,
+  shownOverrides,
   stepChanged,
   workStepRows,
   type ScalarKey,
@@ -86,18 +86,6 @@ function byGroup<T extends { group: SettingGroup }>(rows: readonly T[]): [Settin
   return GROUPS.map((g): [SettingGroup, T[]] => [g, rows.filter((r) => r.group === g)]).filter(
     ([, list]) => list.length > 0,
   )
-}
-
-/** 그 유형에서 보이는 단계의 값만 남긴다 (D256) */
-export function only<K extends string, V>(
-  value: Partial<Record<K, V>>,
-  items: readonly (readonly [K, string, SettingGroup])[],
-  type: WorkType,
-): Partial<Record<K, V>> {
-  const shown = new Set(items.filter(([, , g]) => groupShown(g, type)).map(([k]) => k))
-  return Object.fromEntries(Object.entries(value).filter(([k]) => shown.has(k as K))) as Partial<
-    Record<K, V>
-  >
 }
 
 const MODES = Object.entries(QUESTION_MODE_LABEL) as [QuestionMode, string][]
@@ -408,10 +396,13 @@ function StepTable({
   rows,
   value,
   onChange,
+  onReset,
 }: {
   rows: readonly StepRow[]
   value: AppConfig
   onChange: (next: AppConfig) => void
+  /** [기본값으로]: 되돌린 값과 그 줄의 id */
+  onReset: (next: AppConfig, id: string) => void
 }) {
   const [agentOpen, setAgentOpen] = useState(false)
   return (
@@ -457,7 +448,7 @@ function StepTable({
                     <button
                       className="link"
                       aria-label={`${row.title} 기본값으로`}
-                      onClick={() => onChange(resetStep(value, row))}
+                      onClick={() => onReset(resetStep(value, row), settingId(row))}
                     >
                       기본값으로
                     </button>
@@ -595,6 +586,7 @@ function SectionBody({
   full,
   value,
   onChange,
+  onReset,
 }: {
   section: SettingsSection
   view: SectionView
@@ -602,6 +594,8 @@ function SectionBody({
   full: boolean
   value: AppConfig
   onChange: (next: AppConfig) => void
+  /** [기본값으로]: 되돌린 값과 그 칸이나 줄의 id */
+  onReset: (next: AppConfig, id: string) => void
 }) {
   const codex =
     value.agent_engine === 'codex' ||
@@ -617,7 +611,9 @@ function SectionBody({
         </div>
       ) : null}
       {section === 'agent' && codex ? <div className="notice">{AGENT_APPROVAL_NOTICE}</div> : null}
-      {view.steps.length ? <StepTable rows={view.steps} value={value} onChange={onChange} /> : null}
+      {view.steps.length ? (
+        <StepTable rows={view.steps} value={value} onChange={onChange} onReset={onReset} />
+      ) : null}
       {view.entries.length ? (
         <div className="setting-rows">
           {view.entries.map((entry) => (
@@ -627,7 +623,7 @@ function SectionBody({
               help={entry.help}
               changed={scalarChanged(value, entry.key)}
               resetLabel="기본값으로"
-              onReset={() => onChange(resetScalar(value, entry.key))}
+              onReset={() => onReset(resetScalar(value, entry.key), settingId(entry))}
             >
               <ScalarControl entry={entry} value={value} onChange={onChange} />
             </SettingRow>
@@ -655,10 +651,12 @@ export function SettingsDialog({
   const [section, setSection] = useState<SettingsSection>('general')
   const [query, setQuery] = useState('')
   const [changedOnly, setChangedOnly] = useState(false)
+  // 바꾼 설정만 보기를 켤 때 바꾼 칸들. 고치는 동안 값이 기본값을 지나도 칸이 사라지지 않게 남긴다
+  const [kept, setKept] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const value = draft ?? config
-  const filter = { query, changedOnly }
+  const filter = { query, changedOnly, kept }
   const narrowed = filtering(filter)
 
   const save = async () => {
@@ -729,7 +727,10 @@ export function SettingsDialog({
             type="checkbox"
             aria-label="바꾼 설정만 보기"
             checked={changedOnly}
-            onChange={(e) => setChangedOnly(e.target.checked)}
+            onChange={(e) => {
+              setChangedOnly(e.target.checked)
+              setKept(e.target.checked && value ? changedIds(value) : new Set())
+            }}
           />
           바꾼 설정만 보기
         </label>
@@ -778,6 +779,10 @@ export function SettingsDialog({
                     full={!narrowed}
                     value={value}
                     onChange={setDraft}
+                    onReset={(next, id) => {
+                      setDraft(next)
+                      setKept((k) => new Set([...k].filter((x) => x !== id)))
+                    }}
                   />
                 </section>
               ))}
@@ -1069,13 +1074,18 @@ export function WorkSettingsDialog({ work, onClose }: { work: WorkView; onClose:
   const [error, setError] = useState<string | null>(null)
   const config = useConfig()
   // 보이지 않는 다른 유형의 단계 값은 남기지 않는다. 사람이 보거나 지울 수 없어서다 (D256, PR #23 리뷰)
-  const shownAuto = only(auto, AUTO_APPROVE_TITLES, work.type)
-  const shownModes = only(modes, SKILL_TITLES, work.type)
-  const shownCustom = work.customType ? customAuto : {}
+  const { auto_approve: shownAuto, question_mode: shownModes } = shownOverrides(
+    work.type,
+    auto,
+    modes,
+  )
+  // 커스텀 단계는 이 Work의 유형 정의에 있는 단계만 센다(줄이 있는 것)
+  const customIds = new Set(work.customType?.steps.map((st) => st.id) ?? [])
+  const shownCustom = Object.keys(customAuto).filter((id) => customIds.has(id))
   const count =
     Object.keys(shownAuto).length +
     Object.keys(shownModes).length +
-    Object.keys(shownCustom).length +
+    shownCustom.length +
     (autoStart === undefined ? 0 : 1) +
     (codeReview === undefined ? 0 : 1)
 

@@ -201,6 +201,17 @@ test('설정 찾기와 바꾼 설정만 보기, 진행 방식 묶음, [기본값
   await field(win, '바꾼 설정만 보기').check()
   await expect(field(win, '세션 상한')).toBeVisible()
   await expect(field(win, '테마')).toHaveCount(0)
+  // 고치다 값이 기본값(3)을 지나도 칸이 사라지지 않는다
+  await field(win, '세션 상한').fill('3')
+  await expect(field(win, '세션 상한')).toBeVisible()
+  await field(win, '세션 상한').fill('5')
+  // 선택지 이름으로도 찾는다
+  await search.fill('Codex')
+  await expect(field(win, '기본 엔진')).toHaveCount(0)
+  await field(win, '바꾼 설정만 보기').uncheck()
+  await expect(field(win, '기본 엔진')).toBeVisible()
+  await search.fill('')
+  await field(win, '바꾼 설정만 보기').check()
   await win.screenshot({ path: 'test-results/settings-changed.png' })
   await win.getByRole('button', { name: '세션 상한 기본값으로' }).click()
   await expect(dialog).toContainText('기본값과 다른 설정이 없습니다.')

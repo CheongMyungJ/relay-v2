@@ -13,6 +13,7 @@ import {
   STEP_ROWS,
   applyPreset,
   changedCounts,
+  changedIds,
   filtering,
   matches,
   presetOf,
@@ -20,6 +21,7 @@ import {
   resetStep,
   scalarChanged,
   sectionViews,
+  shownOverrides,
   stepChanged,
   workStepRows,
   type StepRow,
@@ -127,6 +129,40 @@ describe('찾기와 바꾼 설정만 보기', () => {
   })
 })
 
+describe('찾기의 선택지와 고치는 동안의 바꾼 설정만 보기', () => {
+  it('화면에 보이는 선택지 이름으로도 찾는다', () => {
+    const codex = sectionViews(config(), { query: 'Codex', changedOnly: false })
+    expect(codex.agent.entries.map((e) => e.key)).toEqual(['agent_engine'])
+    expect(codex.advanced.entries.map((e) => e.key)).toEqual(['knowledge_review_engine'])
+    expect(codex.steps.steps).toHaveLength(STEP_ROWS.length)
+    expect(
+      sectionViews(config(), { query: '다크', changedOnly: false }).general.entries.map(
+        (e) => e.key,
+      ),
+    ).toEqual(['theme'])
+    const ask = sectionViews(config(), { query: '결정마다', changedOnly: false })
+    expect(ask.steps.steps.map((r) => r.skill)).toEqual(
+      STEP_ROWS.filter((r) => r.question).map((r) => r.skill),
+    )
+  })
+
+  it('보기를 켤 때 바꾼 칸(kept)은 고치다 기본값과 같아져도 남는다', () => {
+    const before = config({
+      session_limit: 5,
+      auto_approve: { ...DEFAULT_CONFIG.auto_approve, fix: false },
+    })
+    const kept = changedIds(before)
+    expect([...kept].sort()).toEqual(['session_limit', 'step:fix'])
+    // 고치다 기본값(3)을 지난다
+    const editing = config({ session_limit: 3 })
+    const v = sectionViews(editing, { query: '', changedOnly: true, kept })
+    expect(v.general.entries.map((e) => e.key)).toEqual(['session_limit'])
+    expect(v.steps.steps.map((r) => r.skill)).toEqual(['fix'])
+    // kept가 없으면 사라진다
+    expect(sectionViews(editing, { query: '', changedOnly: true }).general.entries).toEqual([])
+  })
+})
+
 describe('기본값으로 되돌리기', () => {
   it('하나짜리 칸은 기본값으로 돌아간다', () => {
     const c = config({ session_limit: 7 })
@@ -195,6 +231,25 @@ describe('진행 방식 묶음 (D529)', () => {
   it('묶음과 다른 값을 한 칸이라도 고르면 직접 고름(null)이다', () => {
     const c = config({ question_mode: { ...DEFAULT_CONFIG.question_mode, fix: 'confirm_each' } })
     expect(presetOf(c)).toBeNull()
+  })
+})
+
+describe('Work 설정에 저장할 값', () => {
+  it('보이는 줄(workStepRows)에 있는 단계의 값만 남긴다', () => {
+    const auto = { fix: false, implement: true, respond: true }
+    const modes = {
+      fix: 'confirm_each',
+      design: 'confirm_each',
+      'pr-respond': 'confirm_each',
+    } as const
+    expect(shownOverrides('bugfix', auto, modes)).toEqual({
+      auto_approve: { fix: false, respond: true },
+      question_mode: { fix: 'confirm_each', 'pr-respond': 'confirm_each' },
+    })
+    expect(shownOverrides('feature', auto, modes)).toEqual({
+      auto_approve: { implement: true, respond: true },
+      question_mode: { design: 'confirm_each', 'pr-respond': 'confirm_each' },
+    })
   })
 })
 

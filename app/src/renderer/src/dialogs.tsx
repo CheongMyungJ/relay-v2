@@ -4,7 +4,7 @@
 // 설정 화면과 Work 설정은 Settings.tsx에 있다 (D527)
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { AGENT_APPROVAL_NOTICE } from '../../shared/agent'
-import { AUTO_APPROVE_TITLES, SKILL_TITLES, type WorkSettings } from '../../shared/config'
+import type { WorkSettings } from '../../shared/config'
 import { DEFAULT_BRANCH_RULE } from '../../shared/project'
 import { BUILTIN_TYPES, CUSTOM_REQUEST_HINT } from '../../shared/builtin-types'
 import {
@@ -33,13 +33,11 @@ import { Modal } from './Modal'
 import {
   CodeReviewOverride,
   WorkStepOverrides,
-  only,
   useConfig,
   type AutoOverrides,
   type ModeOverrides,
 } from './Settings'
-
-export { Modal }
+import { shownOverrides } from './settingsView'
 
 /** 프로젝트 등록: 폴더를 고르면 점검 표를 보이고, 기본 브랜치를 고쳐 등록한다 (시나리오 0, D67) */
 export function ProjectDialog({ onClose }: { onClose: () => void }) {
@@ -720,8 +718,7 @@ export function NewWorkDialog({
     setBusy(true)
     setError(null)
     // 고른 유형에 없는 단계의 설정은 보내지 않는다 (D256)
-    const auto_approve = only(auto, AUTO_APPROVE_TITLES, type)
-    const question_mode = only(modes, SKILL_TITLES, type)
+    const { auto_approve, question_mode } = shownOverrides(type, auto, modes)
     const settings: WorkSettings = {
       ...(Object.keys(auto_approve).length ? { auto_approve } : {}),
       ...(type === 'custom' && Object.keys(customAuto).length
@@ -767,7 +764,11 @@ export function NewWorkDialog({
     )
     setBusy(false)
     if (r.ok) onCreated(r.workKey)
-    else setError(r.error)
+    else {
+      // 만들지 못한 까닭은 브랜치 칸(기준, 작업 브랜치, 머지 대상, 이슈 번호)인 때가 많아 접힌 칸을 펼쳐 보인다 (D531)
+      setBranchOpen(true)
+      setError(r.error)
+    }
   }
   // 초안의 기준 브랜치가 목록에 없어도(지운 브랜치, 원격에만 있음) 고른 채로 보이고, 없으면 만들기가 알린다
   const branchList = branches.includes(branch) ? branches : [...branches, branch]
@@ -828,9 +829,11 @@ export function NewWorkDialog({
           <span>
             기준 <code>{location === 'remote' ? `origin/${branch}` : branch}</code>
             {location === 'remote' ? ' (원격)' : ' (로컬)'} → 작업 브랜치{' '}
-            <code>
-              {(edited ?? ruleName) || (type ? target.branchRule : '유형을 고르면 정함')}-xxxx
-            </code>{' '}
+            {(edited ?? ruleName) ? (
+              <code>{edited ?? ruleName}-xxxx</code>
+            ) : (
+              <span className="dim">{type ? '이름을 정하는 중' : '유형을 고르면 정함'}</span>
+            )}{' '}
             → PR 대상 <code>{shownTarget}</code>
             {target.issueLog ? (
               <>

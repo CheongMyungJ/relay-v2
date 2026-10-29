@@ -6,7 +6,8 @@ import { QUESTION_MODE_LABEL, QUESTION_MODES, type QuestionMode } from '../../sh
 import type { CustomTypeFiles, CustomTypeList, CustomTypeView } from '../../shared/views'
 import type { BuiltinWorkType, TypeSource, TypeTarget } from '../../shared/work'
 import { call } from './commands'
-import { Modal, customStages } from './dialogs'
+import { customStages } from './dialogs'
+import { Modal } from './Modal'
 
 /** [단계 더하기]의 기반 단계 (D448, D512): 기본 유형의 단계 */
 const BASE_STEPS: readonly (readonly [BuiltinWorkType, string, string])[] = [

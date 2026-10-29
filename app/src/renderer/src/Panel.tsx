@@ -28,7 +28,8 @@ import type {
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
 import { Activity, ActivityRecent } from './Activity'
 import { call } from './commands'
-import { ConfirmDialog, Modal, UncommittedDialog } from './dialogs'
+import { ConfirmDialog, UncommittedDialog } from './dialogs'
+import { Modal } from './Modal'
 import { DraftCards } from './DraftCards'
 import { Diff, Markdown } from './Markdown'
 import { PrPanel } from './PrPanel'
@@ -756,7 +757,7 @@ function Review({
                 승인하면 push하고 답글 {respond.replies.filter((r) => !r.url && !r.skipped).length}
                 개를 게시합니다
                 {respond.deferred.length
-                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께, D193)`
+                  ? ` (미룬 앞 라운드 ${respond.deferred.join(', ')}와 함께)`
                   : ''}
               </span>
             ) : null}

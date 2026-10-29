@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import { SESSION_NAME_MAX } from '../../shared/session'
 import type { CommandResult, DraftView, ProjectView, SessionView } from '../../shared/views'
 import { call } from './commands'
-import { ConfirmDialog, Modal } from './dialogs'
+import { ConfirmDialog } from './dialogs'
+import { Modal } from './Modal'
 import { DraftCards } from './DraftCards'
 
 /** 머리 띠 (D405) */

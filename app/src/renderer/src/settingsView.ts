@@ -1,12 +1,14 @@
 // 설정 화면의 짜임 (D527~D531): 구역, 칸의 이름과 한 줄 설명, 찾기, 기본값과 다른 칸, 단계별 진행 표의 줄, 진행 방식 묶음.
 // 화면(Settings.tsx)이 이것으로 그리고 [단위] settings-view.test.ts가 규칙을 본다
-import { changeDefaultEngine, changeDefaultModel } from '../../shared/agent'
+import { AGENT_LABELS, changeDefaultEngine, changeDefaultModel } from '../../shared/agent'
 import {
   AGENT_STEP_TITLES,
   AUTO_APPROVE_TITLES,
   DEFAULT_CONFIG,
+  QUESTION_MODE_LABEL,
   SETTING_GROUP_LABEL,
   SKILL_TITLES,
+  THEME_LABEL,
   groupShown,
   type AgentStepName,
   type AppConfig,
@@ -189,6 +191,20 @@ export const SETTING_ENTRIES: readonly SettingEntry[] = [
   },
 ]
 
+const ENGINE_WORDS = Object.values(AGENT_LABELS).join(' ')
+
+/** 칸에서 고르는 값의 이름: 화면에 보이는 선택지로도 찾게 한다("Codex", "다크") */
+const OPTION_WORDS: Partial<Record<ScalarKey, string>> = {
+  theme: Object.values(THEME_LABEL).join(' '),
+  agent_engine: ENGINE_WORDS,
+  knowledge_review_engine: ENGINE_WORDS,
+}
+
+/** 칸의 찾기 글: 이름, 설명, 구역 이름, 선택지 */
+function entryText(e: SettingEntry): string {
+  return `${e.label} ${e.help} ${SECTION_LABEL[e.section]} ${OPTION_WORDS[e.key] ?? ''}`
+}
+
 export function scalarChanged(config: AppConfig, key: ScalarKey): boolean {
   return config[key] !== DEFAULT_CONFIG[key]
 }
@@ -254,14 +270,15 @@ export const STEP_ROWS: readonly StepRow[] = AGENT_STEP_TITLES.map(([skill, titl
   }
 })
 
-/** 줄의 찾기 글: 이름, 묶음 이름, 그 줄에서 고를 수 있는 것 */
+/** 줄의 찾기 글: 이름, 묶음 이름, 그 줄에서 고를 수 있는 것과 그 선택지, 구역 이름 */
 function stepText(row: StepRow): string {
   return [
     row.title,
     SETTING_GROUP_LABEL[row.group],
     row.auto ? '자동 승인' : '',
-    row.question ? '질문 방식' : '',
-    '엔진 모델 추론 수준',
+    row.question ? `질문 방식 ${Object.values(QUESTION_MODE_LABEL).join(' ')}` : '',
+    `엔진 모델 추론 수준 ${ENGINE_WORDS}`,
+    SECTION_LABEL.steps,
   ].join(' ')
 }
 
@@ -304,6 +321,27 @@ export function workStepRows(type: WorkType | null): StepRow[] {
       r.group !== 'custom' &&
       (type === null || groupShown(r.group, type)),
   )
+}
+
+/**
+ * Work 설정에 저장할 값: 그 유형에서 보이는 줄(workStepRows)의 단계 값만 남긴다. 보이지 않는 다른 유형의 단계 값은 사람이
+ * 보거나 지울 수 없어서다 (D256). 보이는 줄과 저장하는 값을 같은 목록으로 정한다
+ */
+export function shownOverrides(
+  type: WorkType,
+  auto: Partial<Record<AutoApproveNode, boolean>>,
+  modes: Partial<Record<QuestionSkill, QuestionMode>>,
+): {
+  auto_approve: Partial<Record<AutoApproveNode, boolean>>
+  question_mode: Partial<Record<QuestionSkill, QuestionMode>>
+} {
+  const rows = workStepRows(type)
+  const nodes = new Set<string>(rows.flatMap((r) => (r.auto ? [r.auto] : [])))
+  const skills = new Set<string>(rows.flatMap((r) => (r.question ? [r.question] : [])))
+  return {
+    auto_approve: Object.fromEntries(Object.entries(auto).filter(([k]) => nodes.has(k))),
+    question_mode: Object.fromEntries(Object.entries(modes).filter(([k]) => skills.has(k))),
+  }
 }
 
 // ---------- 진행 방식 묶음 (D529) ----------
@@ -384,6 +422,23 @@ export interface SectionView {
 export interface SettingsFilter {
   query: string
   changedOnly: boolean
+  /**
+   * 바꾼 설정만 보기에서 기본값과 같아져도 남길 칸과 줄의 id(settingId). 보기를 켤 때 바꾼 것을 담아 두어, 고치는 동안 값이
+   * 기본값을 지나도 칸이 사라지지 않게 한다. [기본값으로]는 그 id를 뺀다
+   */
+  kept?: ReadonlySet<string>
+}
+
+/** 칸(키)과 표의 줄(step:<단계>)의 id */
+export const settingId = (item: SettingEntry | StepRow): string =>
+  'key' in item ? item.key : `step:${item.skill}`
+
+/** 지금 기본값과 다른 칸과 줄의 id */
+export function changedIds(config: AppConfig): Set<string> {
+  return new Set([
+    ...SETTING_ENTRIES.filter((e) => scalarChanged(config, e.key)).map(settingId),
+    ...STEP_ROWS.filter((r) => stepChanged(config, r)).map(settingId),
+  ])
 }
 
 /** 찾는 말이나 바꾼 칸만 보기가 있으면 구역을 가로질러 고른다 */
@@ -392,20 +447,21 @@ export function filtering(filter: SettingsFilter): boolean {
 }
 
 /**
- * 구역마다 보일 칸과 표의 줄. 걸러 보지 않으면 구역의 모든 것이다. 찾기는 칸의 이름, 설명, 구역 이름에서 찾고, 바꾼 칸만
- * 보기는 기본값과 다른 것만 남긴다
+ * 구역마다 보일 칸과 표의 줄. 걸러 보지 않으면 구역의 모든 것이다. 찾기는 칸의 이름, 설명, 구역 이름, 선택지에서 찾고, 바꾼
+ * 칸만 보기는 기본값과 다른 것(과 kept)만 남긴다
  */
 export function sectionViews(
   config: AppConfig,
   filter: SettingsFilter,
 ): Record<SettingsSection, SectionView> {
   const query = filter.query.trim()
+  const kept = (item: SettingEntry | StepRow) => filter.kept?.has(settingId(item)) ?? false
   const keepEntry = (e: SettingEntry) =>
-    (!query || matches(query, `${e.label} ${e.help} ${SECTION_LABEL[e.section]}`)) &&
-    (!filter.changedOnly || scalarChanged(config, e.key))
+    (!query || matches(query, entryText(e))) &&
+    (!filter.changedOnly || scalarChanged(config, e.key) || kept(e))
   const keepStep = (r: StepRow) =>
-    (!query || matches(query, `${stepText(r)} ${SECTION_LABEL.steps}`)) &&
-    (!filter.changedOnly || stepChanged(config, r))
+    (!query || matches(query, stepText(r))) &&
+    (!filter.changedOnly || stepChanged(config, r) || kept(r))
   return Object.fromEntries(
     SETTINGS_SECTIONS.map((s) => [
       s,
