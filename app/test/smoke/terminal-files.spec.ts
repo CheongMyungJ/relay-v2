@@ -83,9 +83,12 @@ test('출력의 경로를 Ctrl+클릭하면 열고, 붙여넣은 그림은 저�
   await expect(win.locator('.layout')).toBeVisible()
   await win.locator('.sidebar').getByRole('button', { name: '새 세션' }).click()
   const create = win.getByRole('dialog', { name: '새 세션' })
+  // 기본 폴더가 채워진 뒤(앱이 다 켜진 뒤)에 바꾼다. 먼저 바꾸면 [만들기]가 켜져, 앱이 켜지기와 세션 띄우기를 기다리는
+  // 동안 창이 남는다(느린 러너에서 5초를 넘김)
+  await expect(create.getByLabel('세션 폴더')).toHaveValue(path.join(home, 'home'))
   await create.getByLabel('세션 폴더').fill(cwd)
   await create.getByRole('button', { name: '만들기' }).click()
-  await expect(create).toBeHidden()
+  await expect(create).toBeHidden({ timeout: 30_000 })
 
   const { x, y } = await wordAt(win, 'Wrote 1 lines to notes.md', 'notes.md')
 
