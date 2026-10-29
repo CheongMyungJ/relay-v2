@@ -14,7 +14,7 @@ relay를 고치거나 기여하려는 사람을 위한 글입니다. 사용법�
 
 ## 개발 환경
 
-Node.js 22, git, 로그인한 Claude Code가 필요합니다. `npm ci`가 node-pty(터미널용 네이티브 모듈)와 Electron 바이너리도 받습니다.
+Node.js 22, git, 로그인한 Claude Code가 필요합니다. `npm ci`가 node-pty(터미널용 네이티브 모듈)도 받습니다. Electron 바이너리는 앱을 처음 띄울 때 받습니다.
 
 ```bash
 cd app
@@ -34,6 +34,27 @@ npm run test:eval                            # 평가 도구 (평가 도구를 �
 RELAY_REAL_CLAUDE=dry npm run test:claude    # [실제] 시험 도구 (가짜 claude)
 npm run build && npm run test:smoke          # [스모크] (화면을 고쳤을 때. Linux는 xvfb-run -a로)
 cd ../skills && node check.mjs               # 스킬 정적 검사 (스킬을 고쳤을 때)
+```
+
+### 화면 찍기
+
+화면을 고친 뒤 눈으로 확인할 때 씁니다. 에이전트도 사람에게 묻기 전에 이것으로 스스로 봅니다(`CLAUDE.md`).
+
+```bash
+npm run shot                                            # 첫 화면 → test-results/shot.png
+npm run shot -- out.png --project                       # sample 레포를 등록한 뒤
+npm run shot -- out.png --project --steps steps.mjs     # 찍기 전에 steps.mjs의 default export (win, ctx)를 부른다
+npm run shot -- out.png --scenario scenario.json        # 가짜 claude의 시나리오(test/support/scenarios.ts의 모양)
+```
+
+빌드한 뒤 [스모크]처럼 가짜 `claude`와 임시 `RELAY_HOME`으로 띄우므로 실제 `claude`나 쓰던 relay 기록을 건드리지 않습니다. Linux에서 DISPLAY가 없으면(클라우드 세션 등) `xvfb-run`으로 돕니다. `steps.mjs`의 `win`은 Playwright `Page`이고, 여러 장이 필요하면 그 안에서 `win.screenshot({ path })`을 부릅니다.
+
+```js
+// steps.mjs
+export default async (win) => {
+  await win.getByRole('button', { name: '새 Work' }).click()
+  await win.getByLabel('요청').fill('빈 배열의 평균이 NaN이다')
+}
 ```
 
 시험의 층, 어느 층에 시험을 둘지, 실제 `claude`로 도는 [실제]와 [계약] 실제 쪽의 정기 실행은 [구현 계획 8장](docs/implementation.md)에 있습니다.
