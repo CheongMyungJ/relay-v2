@@ -1,5 +1,5 @@
 // [스모크] 커스텀 유형 (M30, M39, D459, D460, D512, D513): 업무 유형 화면에서 기반 단계로 단계를 더해 전역 유형을 만들고
-// (산출물 참조 경고), 기본 유형을 베이스로 고르면 칸이 모두 채워진다. 만든 유형은 새 Work 대화상자의 기본 다섯 뒤에 보이고,
+// (산출물 참조 경고), 기본 유형을 베이스로 고르면 칸이 모두 채워진다. 만든 유형은 새 Work 대화상자의 기본 여섯 뒤에 보이고,
 // 고르면 설명과 단계 목록이 보인다. 시작해 의도를 승인하면 첫 커스텀 단계가 그 이름의 탭으로 돈다. 첫 단계는 유형에서
 // 자동 승인을 켜 두어 승인 화면에 카운트다운과 [취소]가 보이고(4.3, D83, D457), [취소]하면 까닭이 보이며 사람이 [승인]하면
 // 마지막 단계(적용, 시작만 하고 기다린다)로 간다. 마지막 단계는 Work를 마무리해 단계 줄에 리뷰와 검증이 없다 (D493).
@@ -141,11 +141,11 @@ test('업무 유형 화면에서 만든 유형으로 시작하면 의도 승인 
   await win.getByRole('button', { name: '취소' }).click()
   await win.getByRole('button', { name: '닫기' }).click()
 
-  // 새 Work: 기본 다섯 뒤에 커스텀 유형이 보이고, 고르면 설명과 단계가 보인다 (D460)
+  // 새 Work: 기본 여섯 뒤에 커스텀 유형이 보이고, 고르면 설명과 단계가 보인다 (D460)
   await win.getByRole('button', { name: '새 Work' }).click()
   await win.getByLabel('요청').fill(GENERAL_REQUEST)
   const types = win.getByRole('radiogroup', { name: '업무 유형' })
-  await expect(types.getByRole('radio')).toHaveCount(6)
+  await expect(types.getByRole('radio')).toHaveCount(7)
   await types.getByRole('radio', { name: '조사 후 적용' }).click()
   await expect(win.locator('.work-type-hint')).toContainText('먼저 조사하고 그대로 적용하는 일')
   await expect(win.locator('.work-type-hint')).toContainText('단계: 의도 정리 → 조사 → 적용')

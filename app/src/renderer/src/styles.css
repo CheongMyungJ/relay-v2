@@ -743,6 +743,33 @@ textarea {
   white-space: nowrap;
 }
 
+/* 지금 돌고 있는 서브에이전트 (D542) */
+.activity-agents {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.activity-agents ul {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}
+
+/* 자율 진행의 계획 (D542) */
+.plan-pieces {
+  margin: 4px 0;
+  padding-left: 0;
+  list-style: none;
+}
+.plan-pieces li {
+  margin: 2px 0;
+}
+.plan-pieces li.done {
+  color: var(--text-dim);
+}
+.plan-mark {
+  display: inline-block;
+  width: 1em;
+}
+
 .human-question {
   margin: 12px 0;
   padding: 14px;
@@ -2764,4 +2791,10 @@ button.link:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* 자식 Work는 부모 아래에 들여 쓴다 (D549) */
+.work-item.child-work {
+  margin-left: 14px;
+  width: calc(100% - 14px);
 }

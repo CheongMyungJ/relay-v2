@@ -11,6 +11,7 @@ export const FINAL_NODE: Readonly<Record<BuiltinWorkType, NodeName>> = {
   refactor: 'refactor',
   spec: 'spec',
   general: 'execute',
+  auto: 'orchestrate',
 }
 
 /** Work 완료 화면이 된 마무리 단계 task (D493): 독립 리뷰를 받은 뒤 승인 대기다. drive의 pauseAt에 쓴다 */
@@ -50,6 +51,19 @@ export type Step =
       fail?: boolean
       agent?: string
       inner?: Step[]
+    }
+  /**
+   * relay MCP의 다른 도구를 부른다 (D544). args의 글 값에 든 {이름}은 앞의 save로 채운다. until이 있으면 결과 JSON이 맞을
+   * 때까지 다시 부른다
+   */
+  | {
+      do: 'mcpCall'
+      tool: string
+      args?: Record<string, unknown>
+      save?: string
+      until?: string
+      tries?: number
+      pause?: number
     }
   | { do: 'notify'; type: string }
   /**
@@ -615,6 +629,86 @@ export const GENERAL_FILES = {
 export const GENERAL_PR =
   '# README에 테스트 명령과 avg 예시\n\n## 요약\n## 주요 결정\n## 변경\n## 테스트\n'
 
+// ---------- 자율 (D533) ----------
+
+export const AUTO_REQUEST = ['avg.js에 median(xs)을 더해 주세요. 빈 배열은 0입니다.', ''].join('\n')
+
+/** 자율 intent 초안의 완료조건 (D305, D540): 줄마다 확인 방법 */
+export const AUTO_CRITERIA = [
+  '- [ ] median([3, 1, 2])는 2다 — 확인: npm test',
+  '- [ ] median([])는 0이다 — 확인: npm test',
+]
+
+/** 자율 intent 초안 (5.3, D540). 머리글이 없다 */
+export function autoIntentDraft() {
+  const sections: [string, string][] = [
+    ['목표', 'avg.js에 median을 더한다.'],
+    ['비목표', '- avg의 동작 바꾸기'],
+    ['원하는 결과', 'median을 import해 쓸 수 있다.'],
+    ['완료조건', AUTO_CRITERIA.join('\n')],
+  ]
+  return sections.map(([name, text]) => `## ${name}\n${text}\n`).join('\n')
+}
+
+/** plan.md의 `## 전략` (D535). 시험을 먼저 커밋하므로 TDD다 (D536) */
+export const AUTO_STRATEGY = [
+  '- 방식: TDD',
+  '- 본 신호: 입출력이 분명한 새 함수',
+  '- 고려한 대안: 없음',
+  '- 사람 제안 판정: 없음',
+].join('\n')
+
+/** plan.md (5.6.16, D534): 여섯 절. strategy를 주면 `## 전략`을 바꾼다 */
+export function autoPlan(o: { strategy?: string; summary?: string } = {}) {
+  return [
+    '## 전략',
+    o.strategy ?? AUTO_STRATEGY,
+    '',
+    '## 조각',
+    '| id | 목표 | 실행 형태 | 맡는 파일 | 끝난 조건 | 결과 |',
+    '|---|---|---|---|---|---|',
+    '| p1 | median 시험 | 직접 | `test/median.test.js` | 시험이 실패함 | 끝남 |',
+    '| p2 | median 구현 | 직접 | `src/avg.js` | 시험이 통과함 | 끝남 |',
+    '',
+    '## 바뀐 계획',
+    '- 없음',
+    '',
+    '## 변경 요약',
+    o.summary ?? '- test/median.test.js, src/avg.js — median과 시험',
+    '',
+    '## 완료조건별 자체 확인',
+    '| 완료조건 | 한 일 | 확인 결과 |',
+    '|---|---|---|',
+    '| median([3, 1, 2])는 2다 | 시험 | npm test 통과 |',
+    '| median([])는 0이다 | 시험 | npm test 통과 |',
+    '',
+    '## 테스트 실행',
+    '- 명령: npm test',
+    '- 결과: 통과',
+    '- 실패 항목: 없음',
+    '',
+  ].join('\n')
+}
+
+/** 자율 verification.md의 판정 절 (D538) */
+export const AUTO_VERDICTS = [
+  '## 완료조건 판정',
+  '| 완료조건 | 판정 | 근거 |',
+  '|---|---|---|',
+  '| median([3, 1, 2])는 2다 | 통과 | npm test |',
+  '| median([])는 0이다 | 통과 | npm test |',
+  '',
+  '## 나중에 정리할 곳',
+  '- 없음',
+  '',
+  '## 남은 위험',
+  '- 없음',
+  '',
+].join('\n')
+
+/** 자율 pr.md (일반 템플릿, D538) */
+export const AUTO_PR = '# median 추가\n\n## 요약\n## 주요 결정\n## 변경\n## 테스트\n'
+
 // ---------- 설계 (D350) ----------
 
 export const SPEC_REQUEST = [
@@ -852,6 +946,23 @@ export function steps(node: NodeName): Step[] {
         },
         { do: 'stop' },
       ]
+    case 'orchestrate':
+      // 방식(TDD)과 조각을 plan.md에 쓰고 시험 커밋 뒤에 구현을 커밋한다 (5.6.16, D535, D536). 사람에게 묻지 않는다
+      return [
+        { do: 'prompt' },
+        { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
+        { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
+        { do: 'write', file: 'plan.md', text: autoPlan() },
+        {
+          do: 'write',
+          file: 'handoff.md',
+          text: handoff({
+            decisions: [decision('TDD로 한다')],
+            summary: '시험을 먼저 커밋하고 median을 구현했다.',
+          }),
+        },
+        { do: 'stop' },
+      ]
     case 'verify':
       // 리뷰에 지적이 없어 묻지 않고 판정한다 (5.6.6, D229)
       return [
@@ -1018,6 +1129,25 @@ export function generalScenario(override: Partial<Record<SkillName, Step[]>> = {
     { 'work-start': intake, execute: steps('execute'), verify: generalAfter(), ...override },
     'execute',
     GENERAL_VERDICTS,
+  )
+}
+
+/** 자율 시나리오 (3.1, D533): intake → orchestrate(마무리) (D493). 마무리는 사람에게 묻지 않는다 (D538) */
+export function autoScenario(override: Partial<Record<SkillName, Step[]>> = {}): Scenario {
+  const intake = steps('intake').map((st) =>
+    st.do === 'write' && st.file === 'intent.draft.md' ? { ...st, text: autoIntentDraft() } : st,
+  )
+  const after = steps('verify').map((st) =>
+    st.do === 'write' && st.file === 'verification.md'
+      ? { ...st, text: REVIEW_NONE + AUTO_VERDICTS }
+      : st.do === 'write' && st.file === 'pr.md'
+        ? { ...st, text: AUTO_PR }
+        : st,
+  )
+  return finishing(
+    { 'work-start': intake, orchestrate: steps('orchestrate'), verify: after, ...override },
+    'orchestrate',
+    AUTO_VERDICTS,
   )
 }
 

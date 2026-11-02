@@ -21,12 +21,13 @@ import type {
   ProjectView,
   RepoCompletion,
   RepoDiffView,
+  PlanProgressView,
   ReviewView,
   TaskView,
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
-import { Activity, ActivityRecent } from './Activity'
+import { Activity, ActivityAgents, ActivityRecent } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Modal } from './Modal'
@@ -195,12 +196,15 @@ function CallerBand({ work }: { work: WorkView }) {
     setBusy(false)
     if (!r.ok) setError(r.error)
   }
+  // 자식 Work는 부모 Work의 자율 진행이 진행한다 (D543, D549)
+  const parent = work.parent
   return (
-    <section className="notice caller-band" aria-label="MCP 호출자">
-      <strong>MCP 호출자가 진행하는 Work</strong>
+    <section className="notice caller-band" aria-label={parent ? '부모 Work' : 'MCP 호출자'}>
+      <strong>{parent ? '부모 Work가 진행하는 자식 Work' : 'MCP 호출자가 진행하는 Work'}</strong>
       <div className="dim">
-        질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운
-        [취소], [Work 포기]는 여기서도 할 수 있습니다.
+        {parent
+          ? `질문 답과 승인은 부모 Work(${parent.key.split('/')[1] ?? parent.key})의 자율 진행이 하고, 마치면 부모가 합치거나 PR로 냅니다. 터미널에서 직접 말할 수 있고, [즉시 중단], [Work 포기]도 여기서 할 수 있습니다.`
+          : '질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운 [취소], [Work 포기]는 여기서도 할 수 있습니다.'}
       </div>
       {open ? (
         <div className="notice-actions">
@@ -465,8 +469,10 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
           <h3>진행</h3>
           <Activity activity={task.activity} />
           <ActivityRecent activity={task.activity} />
+          <ActivityAgents activity={task.activity} />
         </section>
       ) : null}
+      {review.plan ? <PlanProgress plan={review.plan} /> : null}
       <section>
         <h3>handoff</h3>
         <div>
@@ -490,6 +496,56 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         )}
       </section>
     </>
+  )
+}
+
+/**
+ * 자율 진행의 계획 (D542): 고른 방식, 조각마다 실행 형태와 결과(끝남 표시), 바뀐 계획. 에이전트가 plan.md를 고칠 때마다 다시
+ * 읽는다
+ */
+function PlanProgress({ plan }: { plan: PlanProgressView }) {
+  const done = plan.pieces.filter((p) => p.done).length
+  return (
+    <section className="plan-progress">
+      <h3>계획</h3>
+      <div>
+        방식:{' '}
+        {plan.strategies.length ? (
+          plan.strategies.join(' + ')
+        ) : (
+          <span className="dim">아직 없음</span>
+        )}
+      </div>
+      {plan.pieces.length ? (
+        <>
+          <div className="dim">
+            조각 {done}/{plan.pieces.length} 끝남
+          </div>
+          <ul className="plan-pieces">
+            {plan.pieces.map((p, i) => (
+              <li key={`${p.id}-${i}`} className={p.done ? 'done' : undefined}>
+                <span className="plan-mark">{p.done ? '✓' : '·'}</span> {p.id} {p.goal}
+                <span className="dim">
+                  {' '}
+                  ({p.how}
+                  {p.result ? ` · ${p.result}` : ''})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {plan.changes.length ? (
+        <>
+          <div className="dim">바뀐 계획</div>
+          <ul>
+            {plan.changes.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
   )
 }
 
@@ -719,7 +775,9 @@ function Review({
         ) : null}
         {readOnly ? null : work?.driver === 'caller' ? (
           // 승인과 전달은 호출자가 한다 (D523). 사람은 패널 맨 위의 [직접 맡기]로 맡는다
-          <div className="notice caller-drives">MCP 호출자가 승인을 기다립니다</div>
+          <div className="notice caller-drives">
+            {work.parent ? '부모 Work가 정하기를 기다립니다' : 'MCP 호출자가 승인을 기다립니다'}
+          </div>
         ) : review.completion && work ? (
           <CompletionActions
             review={review}

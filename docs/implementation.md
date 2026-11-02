@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195), v0.36의 설정 화면 정리(M41, I196)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195), v0.36의 설정 화면 정리(M41, I196), v0.37의 자율 유형(M42~M44, I197~I204)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -210,6 +210,14 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I194 | `revise`(D524): `WorkRunner.revise`가 지금 task이고 턴이 끝난 상태(`REVISABLE`)이며 같은 대화를 다시 열 수 있을 때(대화 ID가 있고 아는 엔진)만 받는다: 세션을 끝낸 뒤에 열지 못하거나 새 세션이 되면 글이 닿지 않는다. 글은 task 디렉터리의 `revise-<n>.txt`(산출물로 보이지 않게 `.md`가 아님)에 쓰고 첫 입력은 그 경로를 가리키는 한 줄(`revisePrompt`)이다: 여러 줄 인자는 Windows의 `.cmd` 래퍼(npm 설치 claude, 가짜 claude)에서 첫 줄 뒤가 잘렸고(Windows CI), '-'로 시작하는 목록은 옵션으로 읽힌다. 새 세션을 띄울 때는 남은 글을 지운다. 처리 줄 안에서 살아 있는 세션을 `endSession`으로 끝내고, 그 줄이 끝난 뒤의 줄에서 `resumeMessage`를 적고 `resume` 이벤트를 넣는다(끝낸 세션의 `pty.exit`가 그 사이에 들어가 세션이 살아 있지 않게 된다). `resumeSession`은 그 글을 다른 첫 입력(이어서 하라, 리뷰 결과)보다 먼저 쓰고 한 번만 쓴다 | 1.2(실행 중인 세션에 글을 넣지 않음)를 지키며 사람이 터미널에서 말하는 것과 같은 효과를 낸다 | |
 | I195 | `get_work`의 모양(D526, `core/mcp.workSummary`): `state`는 끊긴 작업이면 `operation`, 끝난 Work면 그 상태, 질문이 있으면 `question`, PR 진행에서 대응 task가 없으면 `pr`, 아니면 지금 task 상태(승인됨은 `working`). `review`·`completion`은 승인 화면을 보일 상태(`ReviewView.reviewable`)일 때만이고, 산출물은 task 디렉터리의 경로, 바뀐 파일은 diff의 `diff --git` 줄에서 읽고, diff는 `include_diff`일 때 10만 자까지다. `state_key`는 진행하는 쪽, 상태, 지금 task와 그 상태·세션·질문·카운트다운·오류 수, 전달, PR 상태·CI·항목 수, 끊긴 작업이다(진행 표시와 revision은 넣지 않음). `wait`는 `seen`이 지금과 다르면 바로 돌려준다. 첫 턴 힌트는 `ActivityView`의 `turn: false`가 60초를 넘을 때다 | 호출자는 앱 화면 대신 이것을 읽는다. 일하는 동안 도구마다 바뀌는 값으로 `wait`가 깨지 않게 한다 | |
 | I196 | 설정 화면의 짜임(D527~D531)은 렌더러의 순수 모듈 `renderer/settingsView`에 둔다: 구역(`SETTINGS_SECTIONS`), 하나짜리 칸의 목록(`SETTING_ENTRIES`: 키, 구역, 이름, 한 줄 설명. 이름이 입력의 aria-label), 단계별 진행 표의 줄(`STEP_ROWS`: `AGENT_STEP_TITLES`의 차례, 자동 승인 노드는 `AUTO_APPROVE_TITLES`에서 이름이 같은 것이고 PR 대응만 스킬 `pr-respond` ↔ 노드 `respond`, 질문 방식은 `SKILL_TITLES`), 찾기(`matches`: 찾는 말을 빈칸으로 나눈 낱말이 띄어쓰기를 뺀 글에 모두 들어 있음. 찾는 글은 이름, 설명, 구역 이름과 선택지 이름(테마, 엔진, 질문 방식)), 구역별로 보일 것(`sectionViews`. 바꾼 설정만 보기를 켤 때 `changedIds`를 `kept`로 담아 고치는 동안 기본값을 지나도 칸을 남기고, [기본값으로]가 그 id를 뺌), 기본값(`DEFAULT_CONFIG`)과 다른 칸·줄(`scalarChanged`, `stepChanged`, `changedCounts`)과 되돌리기(`resetScalar`: 기본 엔진·모델은 `changeDefaultEngine`·`changeDefaultModel`로 단계별 설정도 맞춤, `resetStep`: 그 단계의 자동 승인·질문 방식·`agent_steps` 항목), 진행 방식 묶음(`applyPreset`, `presetOf`: PR 묶음의 노드와 스킬은 건드리지 않고 비교에서도 뺌), Work 설정의 줄(`workStepRows`: 자동 승인이나 질문 방식이 있고 `groupShown`인 줄, 커스텀 단계는 부르는 쪽이 유형 정의에서 넣음)과 저장할 값(`shownOverrides`: 같은 줄의 노드와 스킬만 남김. 보이는 줄과 저장하는 값을 한 목록으로 정함). 새 Work는 만들기에 실패하면 접힌 브랜치 칸을 펼친다. 화면은 `renderer/Settings`(`SettingsDialog`, `WorkSettingsDialog`, 새 Work의 고급 설정도 쓰는 `WorkStepOverrides`·`CodeReviewOverride`)이고 `Modal`은 `renderer/Modal`로 옮기고 쓰는 곳이 바로 가져온다(`Settings`와 `dialogs`가 서로 가져오지 않게). `config.json`과 Work 설정의 모양, 저장 명령은 그대로다(묶음은 저장하지 않음). PR 패널의 [대응 자동 시작 켜기·끄기](D532)는 `updateWorkSettings`에 `respond_auto_start`만 보낸다 | 칸 목록을 데이터로 두어야 찾기, 바꾼 수, 구역 나누기를 한 곳에서 정하고 [단위]로 본다. 모든 앱 설정 키가 칸이나 표에 한 번씩 있는지도 [단위]가 본다 | |
+| I197 | 자율 유형(D533)은 기본 유형 여섯째로 표를 넓혀 넣는다: `WorkType`·`WORK_TYPES`(맨 뒤)·화면 이름, `PIPELINES`(`intake, orchestrate`), `STEP_NODES`·`NODE_INFO`(orchestrate, "자율 진행", `plan.md`), handoff 스키마의 옛 `recommended_next.node`(ALL_NODES와 같아야 함), `SkillName`·`AutoApproveNode`와 설정 표, `BUILTIN_TYPES`(원본 `skills/types/auto/type.json`), `skills/assemble.mjs`의 유형·단계 표. 자율 진행은 커스텀 유형의 기반 단계로 내놓지 않는다(관문과 자율 마무리는 노드 orchestrate와 유형 auto에만 붙음) | 일반 유형(I85~I89)과 같은 길이라 새 구조가 없다. 표에서 나오는 화면(새 Work의 유형 버튼, 설정 묶음)은 고치지 않아도 따라온다 | |
+| I198 | 관문(D535~D537)은 `core/autonomy`에 둔다: 방식 줄 읽기(`readStrategy`), plan.md 관문(`planIssues`), 커밋 관문(`commitIssues`). `checkTask`가 노드 orchestrate의 plan.md가 있으면 방식 줄을 늘 보고, 리뷰 요청과 마무리 때 절과 커밋을 본다. 커밋은 `WorkRunner.autonomyFacts`가 `git log --reverse --name-only base..HEAD`(`adapters/git.commitFiles`)로 읽어 `TaskCheckInput.autonomy`로 넘긴다. 읽지 못하면 넘기지 않아 커밋 관문을 건너뛴다(D541). 시험 파일 모양(`isTestPath`, D202)은 `core/test-path`로 옮겨 PR 대응과 같이 쓴다(`core/respond`는 다시 내보냄) | core는 git을 부르지 않는다(I9). 형식 검사와 같은 길이라 되돌림, 상한, [오류 무시하고 승인]이 그대로다. `core/autonomy`가 `core/respond`를 부르면 `respond → validate → autonomy → respond`로 돌아 나눴다 | |
+| I199 | 자율 마무리(D538)는 공용 글의 설정 구간 표시 `guided`/`autonomous`로 고른다. `assemblyFlags`와 `skills/assemble.mjs`의 `flagsOf`가 넷째 표시로 내고(자율만 autonomous, 커스텀 포함 나머지는 guided), `_final.md`의 지적 고르기·실패와 판정 불가·`확인: 사람`·완료조건 줄을 두 구간으로 나눈다. 겹친 구간이 안 되므로 `code guided`처럼 표시를 함께 쓴다 | 유형 이름 대신 설정으로 고른다는 D508을 그대로 따른다. 다른 유형의 조립 결과는 바뀌지 않는다(스킬 검사가 guided 유형에 자율 글이 없음을 본다) | |
+| I200 | 계획 표시(D542)는 `core/autonomy.planView`가 plan.md를 읽어(표의 머리 줄에서 id·목표·실행 형태·결과 칸을 찾음) `ReviewView.plan`으로 넣고, 패널의 진행 중 화면(`Progress`)이 그린다. 서브에이전트는 `LiveSession.agents`(tool_use_id → 이름과 시작 시각)에 바깥 대화의 Agent·Task 도구를 PreToolUse에서 넣고 Post에서 빼며, 새 턴(UserPromptSubmit)에서 비운다. `ActivityView.agents`로 보내고 수가 바뀌면 진행 표시를 다시 보낸다 | 새 훅 필드를 쓰지 않는다(tool_name, tool_use_id, tool_input은 진행 표시가 이미 씀). 화면은 core를 부르지 않으므로(렌더러는 shared만) main이 모양을 만든다 | |
+| I201 | 자식 Work 만들기(D543)는 `createWork`의 `parent`(부모 Work·task, 의도, 맡는 파일)다: `intent: { version: 1 }`과 `driver: caller`로 만들고 첫 task는 `nextStage(intake)`(자율 진행)이며, 효과 `writeIntent`가 `confirmedIntent`로 intent.md를 쓴 뒤 `startTask`다. `Relay.createWork`의 셋째 인자 `WorkCaller`에 `parent`를 더하고, 자식은 첫 task의 엔진을 orchestrate 설정으로 고르고 이슈를 만들지 않는다. 기준 브랜치는 부모 작업 브랜치(로컬)다 | 의도 승인 효과(confirmIntent)는 의도 정리 task의 초안을 읽으므로 따로 둔다. 표에서 나오는 다음 단계를 쓰면 자율 밖의 유형에도 같은 길이 된다 | |
+| I202 | 자식 도구(D544~D547)는 `main/children.ChildService`가 받는다. 브리지(`scripts/codex-bridge.mjs`)는 `RELAY_CHILD_TOOLS=1`이면 다섯 도구를 내놓고 `/child/<task>`로 `{ tool, args }`를 보낸다(`RELAY_NO_ASK=1`이면 ask_human을 빼고). 훅 서버는 그 task의 경로에 `child` 처리가 있을 때만 받는다(`HookRouteOptions.child`). `WorkRunner.spawnsChildren`(자식이 아닌 자율 Work의 Claude 자율 진행)이 MCP 설정(`relayMcpConfig`의 `children`·`noAsk`)과 `keepAskTool`(사람이 진행하면 `--disallowedTools`를 주지 않음)을 정한다. 자식의 답·승인·전달·고칠 점·포기는 `McpService.call`을 부르고, 기다림은 0.5초마다 자식 스냅샷의 state_key를 본다 | 처리를 relay MCP와 같이 써 caller Work의 막기(사람 승인 막기, 질문을 호출자에게)가 그대로 자식에 붙는다. 기다림은 메모리의 스냅샷을 보므로 가볍다 | |
+| I203 | 부모 마무리의 관문(D548)은 `TaskCheckInput.openChildren`(`RunnerContext.openChildren` → `ChildService.openChildren`, `core/children.isOpenChild`)이다. 자식의 절차 끝 안내는 `CHILD_ASK_NOTE`(`deploySkill`의 `callerAnswers: 'parent'`)다 | 관문은 형식 오류와 같은 길(D541)이다 | |
+| I204 | 화면(D549)은 `WorkView.parent`(부모 key, task, 맡는 파일)로 정한다: `sidebar.nestChildren`이 자식을 부모 아래에 두고, 사이드바 항목은 `child-work`로 들여 쓰며 "자식" 표시를 붙이고, `CallerBand`와 승인 자리의 글을 바꾼다. 가짜 claude는 `mcpCall` 단계(결과를 vars에 두고 until로 다시 부름)와 자식 task의 `<스킬>#child` 시나리오 키(자식 안내로 앎), `git` 단계의 vars 채우기를 더했다 | 녹화본에 없는 필드를 지어내지 않는다: MCP 도구 호출은 claude의 훅 모양을 바꾸지 않는다 | |
 
 ## 3. 확인한 사실
 
@@ -1596,6 +1604,52 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 - **[단위]** `test/unit/settings-view.test.ts`: 모든 앱 설정 키가 칸이나 표에 한 번씩 있음, 표의 줄과 자동 승인·질문 방식 잇기와 고를 수 없는 칸의 까닭, 보이는 글에 결정 번호 없음, 찾기(낱말, 띄어쓰기, 구역 가로지르기), 바꾼 설정만 보기와 구역별 수, 칸·줄 되돌리기(기본 엔진은 모델·추론 수준도), 묶음 셋과 PR 대응 줄을 건드리지 않음, 직접 고름, Work 설정의 줄.
 - **[스모크]** `test/smoke/agent-settings.spec.ts`: [에이전트] 구역의 기본 모델·추론 수준과 [단계별 진행] 표의 [단계마다 고르기], 바꾼 줄 표시와 구역의 수, 다시 켠 뒤 접힌 요약. 설정 찾기와 Escape, 진행 방식 묶음(맡기기, 꼼꼼히, 직접 고름), 바꾼 설정만 보기와 [기본값으로]. `app.spec.ts`: 구역을 옮기며 고친 값이 저장됨, 표의 유형별 묶음, PR·고급 구역, 새 Work의 브랜치 요약과 [바꾸기]. `codex.spec.ts`, `knowledge-tidy.spec.ts`, `session.spec.ts`, `side.spec.ts`, `theme.spec.ts`는 구역과 브랜치 요약에 맞췄다.
+
+### M42. 자율 유형 (D533~D541)
+
+사람이 "사람이든 다른 에이전트든 relay에 지시하면 의도 정리만 먼저 하고 그 뒤는 relay가 알아서 적절한 방식으로 하는" 모습을 바랐고, 고정된 유형과 단계 대신 결과를 검사하는 하네스와 재귀하는 Work를 제안했다(`docs/autonomous-work.md`). 기존 유형을 플레이북으로 쓰는 것과 자식 Work를 바깥용 relay MCP로 만드는 것은 사람이 빼라고 했다. 이 마일스톤은 제안의 A1(자식 없는 자율 Work와 관문)이다. 자식 Work와 PR 나누기(A4, A5)는 따로 한다. 설계 v0.37.
+
+- core: `autonomy`(방식 줄, plan.md·커밋 관문, I198), `test-path`, `validate`의 `autonomy` 입력과 plan.md 절, `pipeline`·`builtin-types`·`review`(`stageLead`의 plan.md)의 표, `assemblyFlags`의 `guided`/`autonomous`(I199).
+- 어댑터: `git.commitFiles`.
+- 앱: `WorkRunner.autonomyFacts`. 화면은 표에서 따라온다(새 Work의 유형 버튼 여섯, 설정 묶음 "자율").
+- 스킬: `skills/types/auto/`(type.json, intake.md, orchestrate.md), `_final.md`의 자율 구간, work-start·`_common.md`의 유형 목록, `skills/check.mjs`의 자율 대조(D533~D540, 5.6.16).
+- 넣지 않은 것: 자식 Work와 부모·자식 도구, PR 나누기, 계획 탭과 서브에이전트 활동 표시, 평가 시나리오(제안 14절의 A2~A6).
+
+**시험**
+
+- **[단위]** `test/unit/autonomy.test.ts`: 방식 이름 여섯과 `+`, 줄이 없거나 모르는 이름, 설계 먼저의 `## 설계`, 필수 절, 동작 파일 판정, 시험 먼저 방식의 커밋 차례(같은 커밋과 뒤 커밋은 오류), `(테스트 못 더함)` 줄, 문서만 바꾼 커밋, `checkTask`에서 리뷰 요청 때만 커밋을 보고 커밋을 읽지 못하면 건너뜀. 표가 바뀐 기존 시험(pipeline, config, builtin-types, settings-view, templates, draft, session, side, validate).
+- **[흐름]** `test/flow/autonomous.test.ts`: 자율 Work가 intake → orchestrate(마무리) → 완료로 가고 plan.md·시험 뒤 구현 커밋·자율 마무리 절차가 배포됨, 방식이 TDD인데 구현을 먼저 커밋하면 리뷰 요청에서 되돌리고 방식을 고치면 이어 감.
+- **[정적]** `skills/check.mjs` 모두 통과(자율 구간, orchestrate 대조, 유형 폴더 여섯).
+- **[실제]** 이 환경에서 실제 claude로 자율 Work를 돌리지 않았다. 남은 검증이다.
+
+### M43. 자율 진행 지켜보기 (D542)
+
+제안의 A2. 진행 중 패널의 계획과 서브에이전트 표시. 설계 v0.37.
+
+- core: `autonomy.planView`. 앱: `ReviewView.plan`, `LiveSession.agents`, `ActivityView.agents`. 화면: `Panel`의 `PlanProgress`, `Activity`의 `ActivityAgents`.
+- 넣지 않은 것: 관문 표(관문 오류는 지금처럼 형식 오류 목록으로 보인다), 자식 Work 트리.
+
+**시험**
+
+- **[단위]** `test/unit/autonomy.test.ts`: 방식, 조각과 결과(끝남 판정), 바뀐 계획, 형식이 틀린 plan.md.
+- **[흐름]** `test/flow/activity.test.ts`: Task 도구가 도는 동안 돌고 있는 서브에이전트로 보이고 끝나면 빠짐.
+- **[화면]** `npm run shot`으로 자율 Work의 진행 중 패널(방식, 조각 1/3, 바뀐 계획, 서브에이전트 1개)을 찍어 봤다.
+
+### M44. 자식 Work와 PR 나누기 (D543~D549)
+
+제안의 A4·A5. 사람이 자식 작업도 "부모에게 의도를 전달받아 진행하는 Work 같은 단위"로 보자고 했고, 들어가 보고 대화할 수 있기를 바랐다. 설계 v0.37.
+
+- core: `children`(상한, 정하지 않은 자식, 겹침), `machine.createWork`의 `parent`와 `writeIntent`, `validate`의 `openChildren`, `settings`의 `CHILD_ASK_NOTE`·`keepAskTool`·`relayMcpConfig`의 `children`·`noAsk`.
+- 어댑터: `hooks`의 `/child/<task>`, `claude`·`codex`의 `callerAnswers: 'parent'`.
+- 앱: `main/children.ChildService`, `Relay.children`·`WorkCaller.parent`·`appConfig`, `WorkRunner`의 `spawnsChildren`·`childCall`·`writeParentIntent`, `RunnerContext.children`·`openChildren`. 브리지의 자식 도구.
+- 화면: 사이드바의 자식 자리와 표시, 패널 띠와 승인 자리의 글.
+- 스킬: orchestrate.md의 `## Child Works`와 실행 형태 `자식 Work`.
+- 넣지 않은 것: 쌓인 PR, Codex 부모, 사람이 자식 터미널에 말한 것을 부모에게 알리기(사람 입력 알림), 자식의 토큰 예산.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 상한, 정하지 않은 자식, 겹침, 자식 Work 만들기의 전이(첫 task, intent, 효과 차례), 부모 마무리의 관문, 사이드바의 자리.
+- **[흐름]** `test/flow/children.test.ts`: spawn → wait → merge와 `git merge`(자식은 자율 진행 하나, 부모가 승인, 전달 없음, 자식 안내, 자식 도구 없음, 부모는 AskUserQuestion을 남김), 정하지 않은 자식이 부모 리뷰 요청을 되돌리고 discard 뒤 이어 감, 부모 기준 커밋에서 시작한 자식의 pr(가짜 gh), 부모가 커밋한 뒤의 자식은 pr 거절, 깊이 1.
 
 ## 8. 테스트 전략
 

@@ -190,7 +190,7 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
     expect(Number(fixHook?.payload['ms'])).toBeGreaterThanOrEqual(1400)
   })
 
-  it('실패한 도구(PostToolUseFailure)는 끝남으로 보이고, 서브에이전트 안의 도구는 바깥 도구를 덮지 않으며, 실패한 질문 도구도 질문 대기를 끝낸다 (D216)', async () => {
+  it('실패한 도구(PostToolUseFailure)는 끝남으로 보이고, 서브에이전트 안의 도구는 바깥 도구를 덮지 않으며, 돌고 있는 서브에이전트로 보이고, 실패한 질문 도구도 질문 대기를 끝낸다 (D216, D542)', async () => {
     // 수정 세션: npm test가 실패하고, Task 도구 안에서 서브에이전트가 Grep을 쓰고, 질문 도구가 실패한 뒤 1.5초 쉰다
     const fix = steps('fix')
     h = await harness({
@@ -237,13 +237,18 @@ describe('[흐름] 진행 표시와 세션 시각 (M12 R2)', () => {
         u.activity !== null &&
         u.activity.phase === undefined,
     )
+    // 서브에이전트 도구는 끝날 때까지 돌고 있는 서브에이전트로도 보인다 (D542)
     expect(
-      updates.map((u) => [u.activity?.tool?.label, u.activity?.tool?.endedAt === null]),
+      updates.map((u) => [
+        u.activity?.tool?.label,
+        u.activity?.tool?.endedAt === null,
+        u.activity?.agents?.map((x) => x.label) ?? [],
+      ]),
     ).toEqual([
-      ['Bash(npm test)', true],
-      ['Bash(npm test)', false],
-      ['Task(원인 찾기)', true],
-      ['Task(원인 찾기)', false],
+      ['Bash(npm test)', true, []],
+      ['Bash(npm test)', false, []],
+      ['Task(원인 찾기)', true, ['Task(원인 찾기)']],
+      ['Task(원인 찾기)', false, []],
     ])
     // 훅은 모두 빈 본문의 200으로 답했다. 서브에이전트의 도구 훅에는 agent_id가 있다
     const toolHooks = h

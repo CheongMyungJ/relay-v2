@@ -23,6 +23,7 @@ import {
   stageOf,
   taskTitle,
 } from './pipeline'
+import { PLAN_FILE } from './autonomy'
 import {
   DESIGN_FILE,
   FIX_FILE,
@@ -562,6 +563,8 @@ const LEAD: Partial<
   },
   spec: { file: SPEC_FILE, title: '설계 문답', sections: ['주제 목록'] },
   execute: { file: EXECUTION_FILE, title: '실행', sections: ['계획', '완료조건별 자체 확인'] },
+  // 자율 진행은 고른 방식과 나눈 조각을 먼저 보인다 (D534)
+  orchestrate: { file: PLAN_FILE, title: '계획', sections: ['전략', '조각', '바뀐 계획'] },
   verify: { file: VERIFICATION_FILE, title: '리뷰 지적', sections: ['리뷰 지적', '반영'] },
 }
 
@@ -569,7 +572,8 @@ const LEAD: Partial<
  * [요약] 탭 맨 위에 둘 이 단계의 핵심 (D223). 의도 정리는 intent 초안의 목표·비목표·완료조건을, 원인 분석과 수정은
  * fix.md의 `## 원인`을, 설계와 계획은 design.md의 `## 유저 시나리오`와 `## 요구사항`을, 구현은 implement.md의
  * `## 계획과 달라진 점`을, 계획과 리팩터링은 refactor.md의 `## 계획`과 `## 찾은 버그와 받아들인 차이`를(D278),
- * 설계 문답은 spec.md의 `## 주제 목록`을(D374), 실행은 execution.md의 `## 계획`과 `## 완료조건별 자체 확인`을(D318), 리뷰와
+ * 설계 문답은 spec.md의 `## 주제 목록`을(D374), 실행은 execution.md의 `## 계획`과 `## 완료조건별 자체 확인`을(D318), 자율 진행은
+ * plan.md의 `## 전략`, `## 조각`, `## 바뀐 계획`을(D534), 리뷰와
  * 검증은 verification.md의 `## 리뷰 지적`과 `## 반영`을 보인다(D229, D256). 없는
  * 절은 빼고, 파일이 없거나 보일 절이 하나도 없으면 null이다. 다른 단계도 null이다
  */

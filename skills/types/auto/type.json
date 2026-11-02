@@ -1,0 +1,30 @@
+{
+  "schema_version": 2,
+  "name": "자율",
+  "description": "의도만 정하면 진행 방식과 나누기를 에이전트가 고르는 일: 작은 수정부터 여러 모듈에 걸친 기능까지",
+  "request_hint": "할 일과 끝났다고 볼 조건을 적어 주세요. 어떻게 할지는 relay가 고릅니다",
+  "branch_prefix": "work",
+  "check_method": true,
+  "target": "code",
+  "steps": [
+    {
+      "id": "orchestrate",
+      "title": "자율 진행",
+      "sections": [
+        "전략",
+        "조각",
+        "바뀐 계획",
+        "변경 요약",
+        "완료조건별 자체 확인",
+        "테스트 실행"
+      ],
+      "lead": [
+        "전략",
+        "조각"
+      ],
+      "question_mode": "draft_first",
+      "auto_approve": false,
+      "step_base": false
+    }
+  ]
+}

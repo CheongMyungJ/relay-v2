@@ -26,6 +26,7 @@
 // - PR 대응 task(스킬 pr-respond)의 respond 단계는 context.md의 이번 라운드 항목(`#### \`<항목 id>\` — …`)을 읽어
 //   response.md(항목마다 한 줄)와 replies.md(코멘트 항목마다 `## <항목 id>`, D190)를 쓴다. merge 단계는 앱이 fetch한
 //   원격 브랜치(remote: PR 브랜치, base: 기준 브랜치)를 worktree에서 병합한다(D181, D193. context.md의 브랜치 이름).
+// - mcpCall 단계는 --mcp-config의 relay 서버의 다른 도구(자식 Work 도구, D544)를 부르고 결과를 기록에 남긴다.
 // - --mcp-config로 relay MCP를 받은 task(D521)의 mcpAsk 단계는 그 서버의 ask_human으로 묻고 답을 기록에 남긴다(Codex의
 //   ask와 같은 브리지). --mcp-config와 --disallowedTools의 값은 첫 프롬프트로 읽지 않는다.
 // - SIGHUP을 받으면 실제 claude처럼 SessionEnd(reason: other)를 보내고 응답을 받은 뒤 끝난다(D231).
@@ -475,7 +476,12 @@ async function steps(list, ctx, vars) {
         fs.writeFileSync(file, fill(text, vars))
       }
     } else if (s === 'git') {
-      execFileSync('git', step.args ?? [], { stdio: 'ignore' })
+      // 인자의 {이름}은 vars로 채운다 (자식 Work의 브랜치를 합칠 때, D547)
+      execFileSync(
+        'git',
+        (step.args ?? []).map((x) => fill(x, vars)),
+        { stdio: 'ignore' },
+      )
     } else if (s === 'respond') {
       // PR 대응: 항목마다 결과를, 코멘트 항목마다 답글 초안을 쓴다. skip의 항목은 답글을 빼고(형식 오류를 흉내 낸다),
       // text의 {id}는 항목 id다
@@ -554,6 +560,43 @@ async function steps(list, ctx, vars) {
         { ...fields, tool_response: message.result?.content ?? [], duration_ms: 0 },
         fields.tool_name,
       )
+    } else if (s === 'mcpCall') {
+      // relay MCP의 다른 도구를 부른다 (D544, 자식 Work 도구). args의 글 값에 든 {이름}은 vars로 채운다. until(정규식 글)이
+      // 있으면 결과 JSON이 맞을 때까지 다시 부른다(최대 tries번). save가 있으면 결과의 work를 vars[save]에 둔다
+      const fillArgs = (v) =>
+        typeof v === 'string'
+          ? fill(v, vars)
+          : Array.isArray(v)
+            ? v.map(fillArgs)
+            : v && typeof v === 'object'
+              ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fillArgs(x)]))
+              : v
+      const args = fillArgs(step.args ?? {})
+      const tries = step.until ? (step.tries ?? 60) : 1
+      let message = null
+      let text = ''
+      for (let i = 0; i < tries; i++) {
+        message = await relayMcp().call('tools/call', { name: step.tool, arguments: args })
+        text = message.result?.content?.[0]?.text ?? JSON.stringify(message)
+        if (!step.until || new RegExp(step.until).test(text)) break
+        await sleep(step.pause ?? 300)
+      }
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        parsed = text
+      }
+      record({
+        type: 'mcp',
+        tool: step.tool,
+        isError: message?.result?.isError === true,
+        result: parsed,
+      })
+      if (step.save && parsed && typeof parsed === 'object' && 'work' in parsed) {
+        vars[step.save] = parsed.work
+        if (parsed.branch) vars[`${step.save}Branch`] = parsed.branch
+      }
     } else if (s === 'tool') {
       // 도구 호출 (D216): PreToolUse, ms만큼 실행, PostToolUse. 두 훅은 같은 tool_use_id를 가진다.
       // fail이면 PostToolUse 대신 PostToolUseFailure를 보낸다. agent가 있으면 서브에이전트 안의 도구라 훅에
@@ -671,18 +714,25 @@ async function run() {
     attempt: 0,
   }
   if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
+  // 자식 Work(D543)의 task는 같은 스킬의 부모 task와 가르려고 '<스킬>#child' 키를 먼저 본다. 자식은 부모가 답한다는 안내를 받는다
+  const childKey =
+    opts.guide !== null && /This Work is a child Work/.test(fs.readFileSync(opts.guide, 'utf8'))
+      ? `${ctx.skill}#child`
+      : null
+  const pick = (map) =>
+    map ? ((childKey ? map[childKey] : undefined) ?? map[ctx.taskId] ?? map[ctx.skill]) : undefined
   const list = session
     ? ((opts.resume ? scenario.sessionResume : scenario.session) ?? [])
     : side
       ? ((opts.resume ? scenario.sideResume : scenario.side) ?? [])
       : opts.resume && opts.prompt?.startsWith('relay: 독립 리뷰가 끝났습니다')
         ? // 독립 리뷰 결과로 다시 연 마무리 세션 (D496)
-          (scenario.reviewed?.[ctx.taskId] ?? scenario.reviewed?.[ctx.skill] ?? [])
+          (pick(scenario.reviewed) ?? [])
         : opts.resume
-          ? (scenario.resume?.[ctx.taskId] ?? scenario.resume?.[ctx.skill] ?? [])
+          ? (pick(scenario.resume) ?? [])
           : opts.prompt === null
             ? (scenario.cleanup ?? [])
-            : (scenario.tasks?.[ctx.taskId] ?? scenario.tasks?.[ctx.skill] ?? [{ do: 'prompt' }])
+            : (pick(scenario.tasks) ?? [{ do: 'prompt' }])
   await steps(list, ctx, vars)
   out('[가짜 claude] 대기')
 }

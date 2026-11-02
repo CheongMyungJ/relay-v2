@@ -440,6 +440,7 @@ describe('마무리 안내 문구 (D104, D132)', () => {
         refactor: false,
         spec: false,
         execute: false,
+        orchestrate: false,
         respond: false,
       },
     }
@@ -471,6 +472,7 @@ describe('Work별 덮어쓰기 (D72)', () => {
       refactor: true,
       spec: true,
       execute: true,
+      orchestrate: true,
       respond: true,
     },
     question_mode: { ...DEFAULT_CONFIG.question_mode, fix: 'confirm_each' },

@@ -10,6 +10,8 @@ import handoffSchemaV1 from '../shared/generated/handoff.v1.schema.json'
 import type { CheckSummary, FormatIssue, TypeTarget, WorkType } from '../shared/work'
 import { checkMethodOn, typeTarget } from './builtin-types'
 import { NODE_INFO } from './pipeline'
+import { commitIssues, PLAN_FILE, PLAN_SECTIONS, planIssues, type AutonomyFacts } from './autonomy'
+import { openChildrenIssue } from './children'
 
 /** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
 export const FORMAT_VERSION = 1
@@ -731,6 +733,13 @@ export interface TaskCheckInput {
    * 마무리할 때의 필수 산출물이 다르고, 리뷰 요청은 task마다 한 번이다
    */
   finishing?: { requested: boolean }
+  /**
+   * 자율 진행(orchestrate)의 커밋 (D536, D537): 기준 커밋 뒤의 커밋과 커밋마다 바뀐 파일. 리뷰 요청과 마무리 때 plan.md의
+   * 방식과 시험을 커밋으로 본다. 자율 진행이 아니면 없다
+   */
+  autonomy?: AutonomyFacts
+  /** 자율 진행의 정하지 않은 자식 Work (D548). 리뷰 요청과 마무리 때 남아 있으면 오류다. 없거나 비면 없다 */
+  openChildren?: readonly string[]
 }
 
 /**
@@ -881,6 +890,22 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     })
   }
   errors.push(...(draft?.errors ?? []))
+  // 자율 진행의 관문 (D535~D537): plan.md의 방식 줄은 파일이 있으면 늘 보고, 커밋은 리뷰 요청과 마무리 때 본다
+  const plan = node === 'orchestrate' ? files[PLAN_FILE] : undefined
+  if (plan !== undefined) {
+    errors.push(...planIssues(plan))
+    if (status === 'review_requested' || status === 'awaiting_approval') {
+      errors.push(...missingSections(PLAN_FILE, plan, PLAN_SECTIONS, '자율 진행 산출물'))
+      if (input.autonomy) errors.push(...commitIssues(plan, input.autonomy))
+      if (input.openChildren?.length)
+        errors.push({
+          file: PLAN_FILE,
+          part: 'body',
+          field: '조각',
+          message: openChildrenIssue(input.openChildren),
+        })
+    }
+  }
   // 커스텀 단계 산출물의 절 (D453). 파일이 있으면 늘 본다
   const stepText = step ? files[`${step.id}.md`] : undefined
   if (step && stepText !== undefined) {

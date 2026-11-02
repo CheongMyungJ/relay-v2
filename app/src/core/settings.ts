@@ -182,6 +182,11 @@ export interface LaunchInput {
    * 뺀다. 없으면 넣지 않아 지금과 같은 인자다
    */
   mcpConfigPath?: string
+  /**
+   * MCP 설정을 주어도 터미널의 질문 도구를 남긴다 (D544): 사람이 진행하는 자율 Work의 자율 진행은 자식 도구 때문에 relay
+   * 서버를 받지만 질문은 지금처럼 터미널에서 묻는다
+   */
+  keepAskTool?: boolean
 }
 
 /** 앱 질문창 대신 터미널에서 묻는 Claude Code 도구 (D24). relay MCP로 묻는 task에서는 뺀다 (D521) */
@@ -212,13 +217,20 @@ export const CALLER_ASK_NOTE =
   '\n## Who answers\n\nA relay MCP caller (another agent working for the human) answers your questions and approves this step. It cannot see this terminal. Put everything it needs to answer (lists, scenarios, explanations you would write in terminal text) into the question text itself.\n'
 
 /**
+ * 자식 Work(D543)의 절차 끝에 붙이는 안내: 질문과 승인은 부모 Work의 자율 진행이 하고, 전달은 부모가 정한다
+ */
+export const CHILD_ASK_NOTE =
+  '\n## Who answers\n\nThis Work is a child Work: the parent Work that made it answers your questions and decides your result (merge into its branch, its own PR, or discard). The parent cannot see this terminal. Put everything it needs to answer into the question text itself. Ask only what the intent cannot settle; the parent asks the human when it must. Do not push or open PRs.\n'
+
+/**
  * 질문을 relay MCP로 묻는 task의 옵션 (D521): relay 서버를 더하고 터미널의 질문 도구를 뺀다. 두 옵션은 값을 여럿 받아
  * 뒤에 오는 첫 프롬프트까지 값으로 먹는다(Claude Code 2.1.312에서 확인): 늘 --settings 앞에 둔다
  */
-function askArgs(input: { mcpConfigPath?: string }): string[] {
-  return input.mcpConfigPath
-    ? ['--mcp-config', input.mcpConfigPath, '--disallowedTools', CLI_ASK_TOOL]
-    : []
+function askArgs(input: { mcpConfigPath?: string; keepAskTool?: boolean }): string[] {
+  if (!input.mcpConfigPath) return []
+  return input.keepAskTool
+    ? ['--mcp-config', input.mcpConfigPath]
+    : ['--mcp-config', input.mcpConfigPath, '--disallowedTools', CLI_ASK_TOOL]
 }
 
 /** relay MCP 서버 (D521). 브리지는 Codex task와 같은 것이고 훅 서버의 /question으로 묻는다 */
@@ -239,6 +251,10 @@ export function relayMcpConfig(o: {
   bridge: string
   port: number
   taskId: string
+  /** 자식 Work 도구를 내놓는다 (D544). 브리지가 RELAY_CHILD_TOOLS를 보고 도구 목록에 더한다 */
+  children?: boolean
+  /** ask_human을 빼는가 (D544): 자식 도구만 받고 질문은 터미널에서 묻는 task */
+  noAsk?: boolean
 }): RelayMcpConfig {
   return {
     mcpServers: {
@@ -250,6 +266,8 @@ export function relayMcpConfig(o: {
           ELECTRON_RUN_AS_NODE: '1',
           RELAY_HOOK_PORT: String(o.port),
           RELAY_HOOK_TASK: o.taskId,
+          ...(o.children ? { RELAY_CHILD_TOOLS: '1' } : {}),
+          ...(o.noAsk ? { RELAY_NO_ASK: '1' } : {}),
         },
       },
     },

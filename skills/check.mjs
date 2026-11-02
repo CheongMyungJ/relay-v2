@@ -30,6 +30,10 @@ const SKILLS = [...SKILL_FILES, ...Object.keys(OWN_TYPE)];
 
 // 업무 유형(D232, D258, D302, D350)과 유형마다 조립하는 공용 스킬(D279, D508)
 const SHARED = ['work-start', 'verify', 'pr-respond'];
+// 옛 Work의 verify(D501)는 자율(D533)보다 먼저 없어져 자율 구간이 없다
+const typesOf = (name) => (name === 'verify' ? TYPES.filter((t) => t !== 'auto') : TYPES);
+// 완료조건 줄마다 확인 방법을 붙이는 유형 (D305, D509)
+const CHECK_METHOD_TYPES = ['general', 'auto', 'custom'];
 
 const design = read('docs/design.md');
 const common = read('skills/_common.md');
@@ -51,7 +55,7 @@ const bodyOf = (name, type) => {
   return text.slice(0, text.length - common.length);
 };
 const variants = SKILLS.flatMap((name) =>
-  (SHARED.includes(name) ? TYPES : [OWN_TYPE[name] ?? 'custom']).map((type) => {
+  (SHARED.includes(name) ? typesOf(name) : [OWN_TYPE[name] ?? 'custom']).map((type) => {
     try {
       return { name, type, label: SHARED.includes(name) ? `${name}·${type}` : name, text: bodyOf(name, type) };
     } catch (e) {
@@ -215,10 +219,10 @@ for (const v of variants.filter((x) => x.name === 'work-start')) {
   const lines = cond.split('\n').filter((l) => l.trim());
   check(lines.length >= 3 && lines.every((l) => l.startsWith('- [ ] ')), `${v.label}: 완료조건 줄이 모두 "- [ ] "로 시작`);
   // 일반은 줄마다 확인 방법을 붙인다 (D305). 앱의 검사(core/validate의 CHECK_METHOD, I86)와 같은 규칙이다
-  if (v.type === 'general' || v.type === 'custom') check(lines.every((l) => CHECK_METHOD.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
+  if (CHECK_METHOD_TYPES.includes(v.type)) check(lines.every((l) => CHECK_METHOD.test(l)), `${v.label}: 완료조건 줄마다 확인 방법 (D305)`);
   // 확인 방법을 쓰지 않는 유형(D509)은 템플릿 줄에도 붙이지 않는다. 설계는 붙이지 않고(D356), 대상 문서는 설계 유형의 intake
   // 지시가 제약에 적게 한다 (D351, 아래 [4])
-  if (v.type !== 'general' && v.type !== 'custom') check(lines.every((l) => !CHECK_METHOD.test(l)), `${v.label}: 완료조건 템플릿에 확인 방법 없음 (D356, D509)`);
+  if (!CHECK_METHOD_TYPES.includes(v.type)) check(lines.every((l) => !CHECK_METHOD.test(l)), `${v.label}: 완료조건 템플릿에 확인 방법 없음 (D356, D509)`);
 }
 
 console.log('\n[4] 설계 대조: 산출물 템플릿의 절 제목');
@@ -230,13 +234,14 @@ const templateSources = {
   refactor: ['#### 5.6.10'],
   spec: ['#### 5.6.12'],
   execute: ['#### 5.6.11'],
+  orchestrate: ['#### 5.6.16'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
 // 공용 스킬은 유형마다 조립한 글로 본다 (D279). verify의 pr.md 템플릿은 설계 5.6.6에 유형마다 하나씩 있으므로, 그 유형의
 // 템플릿 절은 있어야 하고 다른 유형에만 있는 절은 없어야 한다
 // 커스텀은 일반과 같은 pr.md다 (D456)
-const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정', custom: '## 주요 결정' };
+const PR_MARK = { bugfix: '## 원인', feature: '## 동작', refactor: '## 목표 구조', spec: '## 다시 볼 결정', general: '## 주요 결정', auto: '## 주요 결정', custom: '## 주요 결정' };
 // 설계의 verification.md는 테스트 파일 변경 대신 문서 밖 파일 변경을, 남은 위험 앞에 다시 볼 결정을 둔다 (D374).
 // 나중에 정리할 곳은 코드를 바꾸는 유형에만 있다 (D437)
 const SPEC_VERIFICATION = { drop: ['## 테스트 파일 변경', '## 나중에 정리할 곳'], add: ['## 문서 밖 파일 변경', '## 다시 볼 결정'] };
@@ -340,6 +345,9 @@ const spec = {
     ['D266', '구조 조건: 읽거나 명령으로 확인, 한 줄에 하나, 방법은 쓰지 않음', /structural conditions that can be checked[\s\S]*one per line[\s\S]*Not the order or method/, ['refactor']],
     ['D266', '구조 목표가 막연하면 확인할 수 있는 구조를 물음', /vague[\s\S]*ask for a structure that can be checked/, ['refactor']],
     ['5.6.4', '일반의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of execute/, ['general']],
+    ['D540', '자율: 사람만 아는 규칙은 의도 정리에서 물음', /Ask now what only the human knows/, ['auto']],
+    ['D540', '자율: 다른 유형을 권하지 않음', /Do not ask whether another type fits better/, ['auto']],
+    ['D533', '자율: 방법과 나누기는 쓰지 않음(자율 진행이 고름)', /Do not plan how to do the work, and do not split it/, ['auto']],
     ['D241', '일반의 사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*execute decides/, ['general']],
     ['D303', '더 맞는 유형: 초안 전에 알리고 물음, 그대로 감 / 유형 바꿈(blocked)', /better[\s\S]*before you write the draft[\s\S]*keep `general` \/ change the type \(`blocked`\)/, ['general']],
     ['D503', '일반·커스텀 기본 완료조건 없음: 요청에 맞는 항목만', /Write the items that fit the request, one per line/, ['general', 'custom']],
@@ -417,6 +425,17 @@ const spec = {
     ['D267', '사람이 정할 결정: 목표 구조 선택지, 범위·비목표·제약, 사람 제안', /Several target structures[\s\S]*widens the scope, or touches the intent's non-goals or constraints[\s\S]*do not take a human suggestion/],
     ['D270', '동작 차이: 다른 방법 / 받아들임 / 범위에서 뺌, 받아들이면 그 기대값만, by: human', /must change behavior a little[\s\S]*keep the current behavior another way \/ accept the difference \/ drop that part[\s\S]*only that expected value[\s\S]*`by: human`/],
     ['5.6.10', '완료조건: 다섯 절, 안전망, 단계 커밋, 찾은 버그, 사람 결정, 테스트 명령', /## Done when[\s\S]*five template sections[\s\S]*safety net[\s\S]*committed separately[\s\S]*plan step is committed[\s\S]*not fixed[\s\S]*`decisions`[\s\S]*test command/],
+  ],
+  orchestrate: [
+    ['5.6.16', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
+    ['5.6.16', '순서: 읽기 → 방식과 조각(코드 전에 씀) → 조각과 커밋 → 계획 고침 → 자체 확인 → 테스트 명령', /\*\*Read\*\*[\s\S]*\*\*Pick the strategy\*\*[\s\S]*before you change code[\s\S]*\*\*Do the pieces\*\*[\s\S]*\*\*Change the plan when it is wrong\.\*\*[\s\S]*\*\*Self-check\.\*\*[\s\S]*test command at the end/],
+    ['D535', '방식 줄과 이름 여섯, +로 여럿', /`- 방식: <name>`[\s\S]*joined with ` \+ `[\s\S]*`바로 고침`[\s\S]*`재현 시험 먼저`[\s\S]*`안전망 먼저`[\s\S]*`TDD`[\s\S]*`설계 먼저`[\s\S]*`스파이크 먼저`/],
+    ['D536', '시험 먼저 방식은 앱이 커밋 차례로 봄', /relay checks the claim[\s\S]*a commit that changes only tests must come before the first commit that changes other code/],
+    ['D537', '동작 변경에 시험이 없으면 (테스트 못 더함) 줄, 앱이 봄', /`- \(테스트 못 더함\) 바꾼 동작 — 이유`[\s\S]*relay checks this/],
+    ['D534', '계획을 고치면 바뀐 계획에 무엇을 왜', /`## 바뀐 계획`: what changed and why/],
+    ['D539', '서브에이전트는 코드를 바꾸지 않음', /Subagents do not change code in this Work/],
+    ['5.6.16', '사람이 정할 결정: 사람만 아는 사실, 범위, 사람 제안', /only the human knows[\s\S]*widens the scope[\s\S]*human suggestion/],
+    ['5.6.16', '완료조건: 여섯 절과 실제 방식, 조각 결과, 확인 방법, 시험이나 까닭, 커밋, 테스트 명령', /## Done when[\s\S]*six template sections[\s\S]*really worked[\s\S]*`결과`[\s\S]*check method[\s\S]*`\(테스트 못 더함\)`[\s\S]*committed[\s\S]*test command/],
   ],
   execute: [
     ['5.6.11', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -584,7 +603,7 @@ for (const [name, items] of Object.entries(spec)) {
     if (name === '_common') check(re.test(common), `${name}: ${desc} (${ref})`);
     else if (!SHARED.includes(name)) check(re.test(variants.find((v) => v.name === name).text), `${name}: ${desc} (${ref})`);
     else {
-      const want = types ?? TYPES;
+      const want = types ?? typesOf(name);
       const miss = want.filter((t) => !re.test(variants.find((v) => v.name === name && v.type === t).text));
       check(miss.length === 0, `${name}${types ? `·${types.join('·')}` : ''}: ${desc} (${ref})${miss.length ? ` (빠진 유형: ${miss.join(', ')})` : ''}`);
     }
@@ -616,7 +635,7 @@ for (const name of ['work-start', 'pr-respond', 'custom']) check(!/<!-- \/?type/
 check(!/<!-- \/?type/.test(read('skills/_final.md') + read('skills/_review.md')), '_final.md·_review.md: 유형 표시 없음, 설정 구간만 (D508)');
 // 산출물 이름으로 다른 유형의 글이 섞이지 않았는지 본다. work-start는 유형 불일치 질문(D238)에 네 유형을 말하므로 산출물만 본다
 // 커스텀 단계의 산출물은 단계마다 이름이 다르다(<단계 id>.md, D453)
-const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'], custom: [] };
+const ARTIFACT = { bugfix: ['`fix.md`'], feature: ['`design.md`', '`implement.md`'], refactor: ['`refactor.md`'], spec: ['`spec.md`'], general: ['`execution.md`'], auto: ['`plan.md`'], custom: [] };
 for (const v of variants.filter((x) => SHARED.includes(x.name))) {
   const foreign = TYPES.filter((t) => t !== v.type).flatMap((t) => ARTIFACT[t]).filter((a) => v.text.includes(a));
   check(foreign.length === 0, `${v.label}: 다른 유형의 산출물이 없음${foreign.length ? ` (${foreign.join(', ')})` : ''}`);
@@ -658,7 +677,8 @@ for (const t of TYPES) {
   check(!/<!--/.test(fin) && !/<!--/.test(rev), `_final.md·_review.md·${t}: 조립한 글에 유형 표시가 남지 않음 (줄 단위 표시)`);
   // 템플릿은 옛 verify(5.6.6)와 같다: verification.md와 그 유형의 pr.md. 테스트 파일 변경 절만 없다 (D504)
   const finH = uniq(codeBlocks(fin, 'markdown').flatMap(headings));
-  const verH = uniq(codeBlocks(assemble(stripFrontMatter(skills.verify), t), 'markdown').flatMap(headings)).filter((h) => h !== '## 테스트 파일 변경');
+  // 자율은 옛 verify가 없어 일반의 템플릿과 견준다 (pr.md도 일반과 같다, D538)
+  const verH = uniq(codeBlocks(assemble(stripFrontMatter(skills.verify), t === 'auto' ? 'general' : t), 'markdown').flatMap(headings)).filter((h) => h !== '## 테스트 파일 변경');
   const missing = verH.filter((h) => !finH.includes(h));
   const extra = finH.filter((h) => !verH.includes(h));
   check(missing.length === 0 && extra.length === 0, `_final.md·${t}: 템플릿 절이 5.6.6과 같음(테스트 파일 변경 빼고, D504)${missing.length || extra.length ? ` (빠짐: ${missing.join(', ')} / 더함: ${extra.join(', ')})` : ''}`);
@@ -668,11 +688,20 @@ for (const t of TYPES) {
     ['D494', '판정표를 쓰고 status: review_requested로 리뷰를 한 번 요청하고 안내 문구를 찍고 턴을 끝냄', /`## 완료조건 판정`[\s\S]*`status: review_requested`[\s\S]*`리뷰 요청 안내 문구`[\s\S]*end your turn[\s\S]*once only/],
     ['D496', '다시 열리면 independent-review.md를 읽고 지적을 리뷰 지적에 옮김', /reopens[\s\S]*`independent-review\.md`[\s\S]*`## 리뷰 지적`/],
     ['D497', '코드 리뷰를 끄면 리뷰 지적에 적고 pr.md에 "독립 코드 리뷰를 하지 않음"', /코드 리뷰를 끔[\s\S]*독립 코드 리뷰를 하지 않음/],
-    ['D229', '반영할 지적을 물음: 차단·권장만 / 모두 / 반영하지 않음, by: human', /차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*`by: human`/],
+    ...(t === 'auto'
+      ? [
+          ['D538', '사람에게 묻지 않고 마무리: 지적·판정·사람 확인 항목', /runs without the human until the completion screen[\s\S]*Do not ask about findings, verdicts or `확인: 사람` items/],
+          ['D538', '반영할 지적을 스스로 고름: 확인된 차단·권장, by: ai', /decide yourself\. Apply every 차단 and 권장 finding that is 확인됨[\s\S]*`by: ai`/],
+          ['D538', '실패·판정 불가 → 고칠 수 있으면 고치고, 아니면 이대로와 남은 위험, 새 Work는 스스로 하지 않음', /fix it here when you can within the intent[\s\S]*completion screen as is[\s\S]*`남은 위험`[\s\S]*Do not start over as a new Work on your own/],
+          ['D538', '사람 확인 항목: 묻지 않고 판정 불가와 볼 곳', /do not ask\. Check what you can yourself, judge the item 판정 불가[\s\S]*사람 확인 필요:/],
+        ]
+      : [
+          ['D229', '반영할 지적을 물음: 차단·권장만 / 모두 / 반영하지 않음, by: human', /차단·권장만 반영 \/ 모두 반영 \/ 반영하지 않음[\s\S]*`by: human`/],
+          ['D61', '실패·판정 불가 → 여기서 고침 / 이대로 / 새 Work', /Fix it here[\s\S]*Go to the completion screen as is[\s\S]*Start over as a new Work/],
+        ]),
     ['D165', '반영 뒤 리뷰를 다시 요청하지 않음', /Do not request the review again/],
     ['D499', '판정표 이의마다 답함: 받아들이면 고치고 아니면 근거에 까닭', /`## 판정표 이의`[\s\S]*accept it[\s\S]*add why/],
     ['D500', 'pr.md와 지식을 쓰고 awaiting_approval로 마무리', /Write `pr\.md`[\s\S]*`### 지식 남기기`[\s\S]*`status: awaiting_approval`/],
-    ['D61', '실패·판정 불가 → 여기서 고침 / 이대로 / 새 Work', /Fix it here[\s\S]*Go to the completion screen as is[\s\S]*Start over as a new Work/],
   ];
   for (const [ref, desc, re] of finalItems) check(re.test(fin), `_final.md·${t}: ${desc} (${ref})`);
   check(/^# Finder$/m.test(rev) && /^# Checker$/m.test(rev), `_review.md·${t}: \`# Finder\`와 \`# Checker\`가 있음 (앱이 잘라 씀)`);
@@ -686,6 +715,8 @@ for (const t of TYPES) {
   // 테스트 파일 변경 판정과 약화 질문은 옛 verify에만 있다 (D504)
   check(!/테스트 파일 변경|약화|weaken/.test(fin + rev), `_final.md·_review.md·${t}: 테스트 파일 변경 판정과 약화 질문이 없음 (D504)`);
   if (t === 'custom') check(/This Work type's review points/.test(rev), '_review.md·custom: 유형의 리뷰 관점을 봄 (D456, D495)');
+  // 사람이 진행에 끼는 유형에는 자율의 마무리 글이 없다 (D538)
+  if (t !== 'auto') check(!/runs without the human|decide yourself\. Apply every/.test(fin), `_final.md·${t}: 자율의 마무리 글이 없음 (D538)`);
 }
 
 // 단계는 레포의 테스트 명령을 스스로 찾고, 약화 금지 문구는 옛 verify에만 남는다 (D503, D505)
@@ -698,10 +729,10 @@ console.log('\n[7] 기본 유형 폴더 (5.6.15, D506~D514)');
 const d506 = ['D506', 'D507', 'D508', 'D509', 'D510', 'D511', 'D512', 'D513', 'D514', 'D515'].filter((d) => !design.includes(`\n| ${d} |`));
 check(d506.length === 0, `design.md: 결정 D506~D515${d506.length ? ` (빠짐: ${d506.join(', ')})` : ''}`);
 const typeDirs = readdirSync(join(here, 'types'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-check(sameSet(typeDirs, BUILTIN), `skills/types/의 폴더 = 기본 유형 다섯 (${typeDirs.join(', ')})`);
+check(sameSet(typeDirs, BUILTIN), `skills/types/의 폴더 = 기본 유형 여섯 (${typeDirs.join(', ')})`);
 // 앱이 쓰는 파일과, 커스텀 단계로 옮길 때 이름을 바꾸는 기본 유형 산출물 (core/custom-type referenceWarnings, BUILTIN_ARTIFACT_NAMES)
 const APP_FILES = ['request.md', 'intent.md', 'intent.draft.md', 'context.md', 'handoff.md', 'decisions.md', 'instructions.md', 'verification.md', 'pr.md', 'independent-review.md', 'response.md', 'replies.md'];
-const ARTIFACT_NAME = { execute: 'execution.md' };
+const ARTIFACT_NAME = { execute: 'execution.md', orchestrate: 'plan.md' };
 const NOTE_FILES = ['intake.md', 'verify.md', 'finish.md', 'pr-template.md'];
 for (const type of BUILTIN) {
   const dir = `skills/types/${type}`;
@@ -715,7 +746,7 @@ for (const type of BUILTIN) {
   check(def.schema_version === 2, `${type}: schema_version 2`);
   check(typeof def.name === 'string' && def.name && typeof def.description === 'string' && def.description, `${type}: 이름과 설명`);
   check(typeof def.check_method === 'boolean' && ['code', 'document'].includes(def.target), `${type}: check_method와 target (D509, D510)`);
-  check(def.check_method === (type === 'general'), `${type}: 확인 방법은 일반만 켬 (D509)`);
+  check(def.check_method === CHECK_METHOD_TYPES.includes(type), `${type}: 확인 방법은 일반과 자율만 켬 (D509, D533)`);
   check(def.target === (type === 'spec' ? 'document' : 'code'), `${type}: 설계만 document (D510)`);
   const ids = def.steps.map((s) => s.id);
   check(sameSet(ids, STEPS[type]) && ids.every((id, i) => id === STEPS[type][i]), `${type}: 단계 = 파이프라인의 노드 (${ids.join(', ')})`);

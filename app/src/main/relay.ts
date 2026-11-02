@@ -147,6 +147,7 @@ import {
   type ProjectEnv,
 } from './projects'
 import { SessionRunner, type SessionContext } from './session'
+import { ChildService } from './children'
 import { McpService } from './mcp'
 import type { Actor } from '../core/driver'
 import { WorkRunner, workTitle, type RunnerContext } from './work'
@@ -209,6 +210,16 @@ function inheritedIssue(
   return { work_id: original.work.work_id, linked: from.linked, number: from.number, url: from.url }
 }
 
+/**
+ * Work를 맡긴 쪽 (D519, D543): relay MCP 호출자(driver: caller)와 질문 처리, 자식 Work면 부모 Work·task와 부모가 쓴 의도다.
+ * 비면 사람이다
+ */
+export interface WorkCaller {
+  driver?: 'caller'
+  callerQuestions?: CallerQuestions
+  parent?: { workId: string; taskId: string; intent: string; files?: readonly string[] }
+}
+
 export class Relay {
   private readonly projects = new Map<string, ProjectState>()
   private readonly works = new Map<string, WorkRunner>()
@@ -241,6 +252,8 @@ export class Relay {
 
   /** relay MCP의 도구 호출 (D516). 훅 서버의 /control로 받는다 */
   readonly mcp: McpService
+  /** 자식 Work 도구 (D543~D548) */
+  readonly children: ChildService
   /** Work 스냅샷을 창과 relay MCP(wait, D525)에 함께 보낸다 */
   private readonly ui: UiPort
   /** 이번 실행의 relay MCP 토큰 (D517). mcp.json에 쓴다 */
@@ -249,6 +262,7 @@ export class Relay {
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
     this.mcp = new McpService(this)
+    this.children = new ChildService(this)
     // 받은 UiPort는 클래스일 수 있어(시험의 FakeUi) 펼치지 않고 메서드마다 넘긴다
     const ui = o.ui
     this.ui = {
@@ -427,6 +441,9 @@ export class Relay {
       config: () => this.config,
       at: () => this.at(),
       size: () => this.size,
+      children: (parentKey, taskId, tool, args, signal) =>
+        this.children.call(parentKey, taskId, tool, args, signal),
+      openChildren: (parentKey) => this.children.openChildren(parentKey),
       ghBin: this.ghBin(),
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
@@ -543,6 +560,11 @@ export class Relay {
 
   private at(): string {
     return localIso(this.o.now ? this.o.now() : new Date())
+  }
+
+  /** 지금 앱 설정 (D73) */
+  appConfig(): AppConfig {
+    return this.config
   }
 
   // ---------- 스냅샷 (I14) ----------
@@ -1162,7 +1184,7 @@ export class Relay {
   async createWork(
     projectId: string,
     input: NewWorkInput,
-    caller: { driver?: 'caller'; callerQuestions?: CallerQuestions } = {},
+    caller: WorkCaller = {},
   ): Promise<CreateWorkResult> {
     const project = this.projects.get(projectId)
     if (!project) return { ok: false, error: '프로젝트가 없습니다' }
@@ -1263,7 +1285,7 @@ export class Relay {
     settings: WorkSettingsPatch,
     original?: WorkState,
     inherited?: InheritedIssue,
-    caller: { driver?: 'caller'; callerQuestions?: CallerQuestions } = {},
+    caller: WorkCaller = {},
   ): Promise<CreateWorkResult> {
     // 커스텀 유형은 이 프로젝트에서 고를 수 있는 것(레포 먼저, D451)에서 찾고, 깨졌으면 만들지 않는다 (D460).
     // 한 번에 하나씩 만드는 보호(creating) 안에서 찾는다: 기다리는 사이에 다른 생성이 끼어들지 않는다
@@ -1406,7 +1428,8 @@ export class Relay {
 
     const requestHash = await files.writeRequest(input.request)
     const created = createWork({
-      agent: resolveAgent(this.config, NODE_INFO.intake.skill),
+      // 자식 Work는 의도 정리 없이 자율 진행부터다 (D543)
+      agent: resolveAgent(this.config, NODE_INFO[caller.parent ? 'orchestrate' : 'intake'].skill),
       workId,
       type: input.type,
       ...(customType ? { customType } : {}),
@@ -1419,8 +1442,9 @@ export class Relay {
       ...(input.editMain === false ? { mainFixed: true } : {}),
       settings,
       requestHash,
-      // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96)
-      ...(issueLogOn(project)
+      // 이슈 기록은 Work를 만들 때 프로젝트 설정으로 정한다 (I96). 자식 Work는 부모의 PR에 들어가거나 부모가 PR로 내므로 쓰지
+      // 않는다 (D543)
+      ...(issueLogOn(project) && !caller.parent
         ? {
             issue: {
               linked: input.issueNumber ?? null,
@@ -1432,6 +1456,7 @@ export class Relay {
       ...(original ? { fromWork: original.work_id } : {}),
       ...(caller.driver ? { driver: caller.driver } : {}),
       ...(caller.callerQuestions ? { callerQuestions: caller.callerQuestions } : {}),
+      ...(caller.parent ? { parent: caller.parent } : {}),
       at,
     })
     const runner = this.runner(project, files, created.work, workTitle(input.request))

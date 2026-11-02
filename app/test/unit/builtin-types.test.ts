@@ -69,8 +69,9 @@ describe('기본 유형의 정의 (D506)', () => {
       ['refactor'],
       ['spec'],
       ['execute'],
+      ['orchestrate'],
     ])
-    expect(WORK_TYPES.filter((t) => checkMethodOn({ type: t }))).toEqual(['general'])
+    expect(WORK_TYPES.filter((t) => checkMethodOn({ type: t }))).toEqual(['general', 'auto'])
     expect(WORK_TYPES.filter((t) => typeTarget({ type: t }) === 'document')).toEqual(['spec'])
     expect(BRANCH_TYPE).toEqual({
       bugfix: 'fix',
@@ -78,6 +79,7 @@ describe('기본 유형의 정의 (D506)', () => {
       refactor: 'refactor',
       spec: 'spec',
       general: 'chore',
+      auto: 'work',
       custom: 'custom',
     })
   })
@@ -88,20 +90,44 @@ describe('유형 설정 (D509~D511)', () => {
     expect(typeDefOf({ type: 'bugfix' })).toBe(BUILTIN_TYPES.bugfix)
     expect(typeDefOf({ type: 'custom', custom_type: CUSTOM })).toBe(CUSTOM)
     expect(typeDefOf({ type: 'custom' })).toBeNull()
-    expect(assemblyFlags({ type: 'bugfix' })).toEqual(['code', 'no-check-method', 'builtin'])
-    expect(assemblyFlags({ type: 'spec' })).toEqual(['document', 'no-check-method', 'builtin'])
-    expect(assemblyFlags({ type: 'general' })).toEqual(['code', 'check-method', 'builtin'])
+    expect(assemblyFlags({ type: 'bugfix' })).toEqual([
+      'code',
+      'no-check-method',
+      'builtin',
+      'guided',
+    ])
+    expect(assemblyFlags({ type: 'spec' })).toEqual([
+      'document',
+      'no-check-method',
+      'builtin',
+      'guided',
+    ])
+    expect(assemblyFlags({ type: 'general' })).toEqual([
+      'code',
+      'check-method',
+      'builtin',
+      'guided',
+    ])
+    // 자율만 사람에게 묻지 않고 마무리한다 (D538)
+    expect(assemblyFlags({ type: 'auto' })).toEqual([
+      'code',
+      'check-method',
+      'builtin',
+      'autonomous',
+    ])
     expect(assemblyFlags({ type: 'custom', custom_type: CUSTOM })).toEqual([
       'document',
       'no-check-method',
       'custom',
+      'guided',
     ])
     expect(assemblyFlags({ type: 'custom', custom_type: OLD })).toEqual([
       'code',
       'check-method',
       'custom',
+      'guided',
     ])
-    expect(assemblyFlags({ type: 'custom' })).toEqual(['code', 'check-method', 'custom'])
+    expect(assemblyFlags({ type: 'custom' })).toEqual(['code', 'check-method', 'custom', 'guided'])
   })
 
   it('작업 브랜치의 {type}은 정의의 브랜치 접두사, 비었으면 유형 id다 (D511)', () => {

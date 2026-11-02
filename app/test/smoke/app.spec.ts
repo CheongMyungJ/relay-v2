@@ -222,8 +222,8 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   const types = win.getByRole('radiogroup', { name: '업무 유형' })
   await expect(types.getByRole('radio', { name: '버그 수정' })).not.toBeChecked()
   await expect(types.getByRole('radio', { name: '기능 추가·변경' })).not.toBeChecked()
-  // 유형은 다섯이다: 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 (D261, D303, D353, D429)
-  await expect(types.getByRole('radio')).toHaveCount(5)
+  // 유형은 여섯이다: 버그 수정 / 기능 추가·변경 / 리팩터링 / 설계 / 일반 / 자율 (D261, D303, D353, D429, D533)
+  await expect(types.getByRole('radio')).toHaveCount(6)
   await expect(types.getByRole('radio', { name: '설계' })).not.toBeChecked()
   await expect(types.getByRole('radio', { name: '리팩터링' })).not.toBeChecked()
   await expect(types.getByRole('radio', { name: '일반' })).not.toBeChecked()
@@ -240,6 +240,10 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
   await expect(win.locator('.work-type-hint')).toHaveText(
     '새 동작을 더하거나 지금 동작을 바꾸거나 없애는 일',
   )
+  // 자율을 고르면 의도만 정하고 나머지는 맡긴다는 설명과 자율의 요청 예시 문구가 보인다 (D533)
+  await types.getByRole('radio', { name: '자율' }).click()
+  await expect(win.locator('.work-type-hint')).toContainText('진행 방식은 에이전트가 고르고')
+  await expect(win.getByLabel('요청')).toHaveAttribute('placeholder', /relay가 고릅니다/)
   await types.getByRole('radio', { name: '버그 수정' }).click()
   await expect(types.getByRole('radio', { name: '버그 수정' })).toBeChecked()
   await expect(win.locator('.work-type-hint')).toHaveCount(0)
@@ -397,6 +401,7 @@ test('가짜 claude로 [의도 승인], [즉시 중단]과 [재개], 설정 화�
     refactor: true,
     spec: true,
     execute: true,
+    orchestrate: true,
     respond: false,
   })
   expect(config().auto_approve_countdown_sec).toBe(600)

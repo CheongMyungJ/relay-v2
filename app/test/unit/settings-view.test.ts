@@ -275,6 +275,6 @@ describe('Work 설정의 줄', () => {
     ])
     // 유형을 고르기 전에는 모든 유형의 줄이다. 곁 세션과 기본 세션은 없다
     expect(workStepRows(null).map((r) => r.skill)).not.toContain('side')
-    expect(workStepRows(null)).toHaveLength(9)
+    expect(workStepRows(null)).toHaveLength(10)
   })
 })

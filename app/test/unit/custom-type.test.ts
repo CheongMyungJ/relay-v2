@@ -86,6 +86,7 @@ const MANUAL: AppConfig = {
     refactor: false,
     spec: false,
     execute: false,
+    orchestrate: false,
     respond: false,
   },
 }

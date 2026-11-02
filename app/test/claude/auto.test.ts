@@ -41,6 +41,7 @@ const CONFIG: Partial<AppConfig> = {
     refactor: true,
     spec: true,
     execute: true,
+    orchestrate: true,
     respond: false,
   },
   auto_approve_countdown_sec: 5,

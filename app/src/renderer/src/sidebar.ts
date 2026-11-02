@@ -29,7 +29,28 @@ export function sidebarGroups(works: readonly WorkView[]): SidebarGroups {
     list.push(w)
     byProject.set(w.projectId, list)
   }
+  for (const [id, list] of byProject) byProject.set(id, nestChildren(list))
   return { byProject, archive }
+}
+
+/**
+ * 자식 Work를 부모 바로 아래에 둔다 (D549): 부모는 지금 차례대로, 자식은 그 부모 아래에 만든 차례대로. 부모가 이 목록에 없으면
+ * (아카이브로 옮겼거나 지웠으면) 제자리에 둔다
+ */
+export function nestChildren(list: readonly WorkView[]): WorkView[] {
+  const keys = new Set(list.map((w) => w.key))
+  const children = new Map<string, WorkView[]>()
+  for (const w of list) {
+    const parent = w.parent?.key
+    if (parent && keys.has(parent)) children.set(parent, [...(children.get(parent) ?? []), w])
+  }
+  const out: WorkView[] = []
+  for (const w of list) {
+    if (w.parent && keys.has(w.parent.key)) continue
+    out.push(w)
+    out.push(...(children.get(w.key) ?? []).sort((a, b) => a.workId.localeCompare(b.workId)))
+  }
+  return out
 }
 
 /** 그룹 하나를 접거나 편 집합 */

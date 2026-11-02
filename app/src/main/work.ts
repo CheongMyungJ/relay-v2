@@ -49,6 +49,7 @@ import {
   type GhRepoOptions,
 } from '../adapters/gh'
 import {
+  commitFiles,
   addWorktree,
   changedPaths,
   checkedOutSubmodules,
@@ -351,6 +352,7 @@ import {
   type TaskCheck,
   type TaskCheckInput,
 } from '../core/validate'
+import { PLAN_FILE, planView, type AutonomyFacts } from '../core/autonomy'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import {
   EMPTY_PR_ITEMS,
@@ -541,7 +543,20 @@ export interface RunnerContext {
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
   size(): { cols: number; rows: number }
+  /** 자식 Work 도구의 호출 (D544, main/children) */
+  children(
+    parentKey: string,
+    taskId: string,
+    tool: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<unknown>
+  /** 정하지 않은 자식 Work의 key (D548) */
+  openChildren(parentKey: string): string[]
 }
+
+/** 서브에이전트를 띄우는 도구 이름 (D542). Claude Code는 Agent로 바꿨고 옛 판은 Task다 */
+const SUBAGENT_TOOLS: readonly string[] = ['Agent', 'Task']
 
 interface LiveSession {
   question?: PendingHumanQuestion
@@ -565,6 +580,11 @@ interface LiveSession {
   /** 진행 표시 (D216): 이번 턴이 시작한 때(UserPromptSubmit)와 마지막 도구. 기록하지 않고 살아 있는 동안만 둔다 */
   turnStartedAt: number | null
   tool: (ToolActivityView & { id?: string; name: string }) | null
+  /**
+   * 돌고 있는 서브에이전트 (D542): 바깥 대화의 서브에이전트 도구(PreToolUse ~ PostToolUse)를 tool_use_id로 둔다. 기록하지
+   * 않고 살아 있는 동안만 둔다
+   */
+  agents: Map<string, { label: string; startedAt: number }>
 }
 
 interface PendingHumanQuestion {
@@ -1083,6 +1103,9 @@ export class WorkRunner {
         await this.ownedWritten('decisions.md', written)
         return
       }
+      case 'writeIntent':
+        await this.writeParentIntent(e.text, e.version)
+        return
       case 'confirmIntent':
         await this.confirmIntent(e.taskId, e.version)
         return
@@ -1138,6 +1161,7 @@ export class WorkRunner {
     files: Readonly<Record<string, string>>,
     knowledge?: KnowledgeCheck,
     bundleDrafts?: TaskCheckInput['bundleDrafts'],
+    autonomy?: AutonomyFacts,
   ): TaskCheck {
     const step = customStep(this.work, task)
     return checkTask({
@@ -1154,6 +1178,8 @@ export class WorkRunner {
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
+      ...(autonomy ? { autonomy } : {}),
+      ...(task.node === 'orchestrate' ? { openChildren: this.ctx.openChildren(this.key) } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
         ? { finishing: { requested: task.review !== undefined } }
@@ -1195,7 +1221,25 @@ export class WorkRunner {
       f,
       await this.knowledgeCheck(task, f, opts),
       await this.bundleDrafts(task),
+      await this.autonomyFacts(task),
     )
+  }
+
+  /**
+   * 자율 진행 task의 커밋 (D536, D537): 기준 커밋 뒤의 커밋과 커밋마다 바뀐 파일. 관문이 plan.md의 방식과 시험을 커밋으로
+   * 본다. 자율 진행이 아니거나 git이 실패하면 undefined다(관문을 건너뛰고 독립 리뷰가 본다)
+   */
+  private async autonomyFacts(task: TaskRecord): Promise<AutonomyFacts | undefined> {
+    if (task.node !== 'orchestrate') return undefined
+    try {
+      return {
+        commits: await commitFiles(this.worktree, this.work.base_commit, 'HEAD', {
+          env: this.ctx.env,
+        }),
+      }
+    } catch {
+      return undefined
+    }
   }
 
   /**
@@ -1896,7 +1940,7 @@ export class WorkRunner {
         ...this.typeSource(task),
         finishing: finishesWork(this.work, task),
         askViaMcp: ask,
-        callerAnswers: caller,
+        callerAnswers: caller && this.work.parent ? 'parent' : caller,
       })
       const version = await driver.version(bin, env)
 
@@ -1909,6 +1953,8 @@ export class WorkRunner {
       const sessionId = driver.engine === 'claude' ? randomUUID() : ''
       const token = randomBytes(32).toString('hex')
       const claudeAsk = ask && driver.engine === 'claude'
+      // 자율 Work의 자율 진행은 자식 Work 도구를 받는다 (D544). 사람이 진행하면 질문은 지금처럼 터미널에서 묻는다
+      const children = this.spawnsChildren(task, driver.engine)
       const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1919,10 +1965,14 @@ export class WorkRunner {
         skill,
         contextPath,
         ...pinnedAgent(task),
-        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(claudeAsk || children
+          ? { mcpConfigPath: await this.writeMcpConfig(task, children, !claudeAsk) }
+          : {}),
+        ...(children && !claudeAsk ? { keepAskTool: true } : {}),
       })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task), {
         ask: claudeAsk,
+        children,
       })
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -1984,6 +2034,7 @@ export class WorkRunner {
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       // 시작할 때 relay MCP로 묻게 띄운 task는 재개도 같은 길이다 (D521)
       const claudeAsk = driver.engine === 'claude' && task.ask === 'mcp'
+      const children = this.spawnsChildren(task, driver.engine)
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1992,7 +2043,10 @@ export class WorkRunner {
         ...(instructionsPath ? { instructionsPath } : {}),
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
-        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(claudeAsk || children
+          ? { mcpConfigPath: await this.writeMcpConfig(task, children, !claudeAsk) }
+          : {}),
+        ...(children && !claudeAsk ? { keepAskTool: true } : {}),
       })
       const session = this.launch(
         task,
@@ -2001,7 +2055,7 @@ export class WorkRunner {
         args,
         await this.turnState(task, files),
         RESUME_MARK,
-        { ask: claudeAsk },
+        { ask: claudeAsk, children },
       )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -2038,7 +2092,8 @@ export class WorkRunner {
       ...this.typeSource(task),
       finishing: finishesWork(this.work, task),
       askViaMcp: task.ask === 'mcp',
-      callerAnswers: workDriver(this.work) === 'caller',
+      callerAnswers:
+        workDriver(this.work) === 'caller' ? (this.work.parent ? 'parent' : true) : false,
     })
     return deployed.file
   }
@@ -2047,7 +2102,7 @@ export class WorkRunner {
    * relay MCP로 묻는 Claude task의 MCP 설정 파일 (D521). 훅 서버의 포트가 바뀔 수 있어 띄울 때마다 새로 쓴다(I13과 같음).
    * 브리지는 Codex task와 같은 것이다
    */
-  private async writeMcpConfig(task: TaskRecord): Promise<string> {
+  private async writeMcpConfig(task: TaskRecord, children = false, noAsk = false): Promise<string> {
     const file = path.join(this.files.taskDir(task), MCP_CONFIG_FILE)
     await writeJson(
       file,
@@ -2056,9 +2111,42 @@ export class WorkRunner {
         bridge: codexBridgePath(),
         port: this.ctx.hooks.port,
         taskId: task.id,
+        ...(children ? { children: true } : {}),
+        ...(noAsk ? { noAsk: true } : {}),
       }),
     )
     return file
+  }
+
+  /**
+   * 자식 Work 도구를 받는 task인가 (D544, D545): 자식이 아닌 자율 Work의 자율 진행이고 Claude다. 자식 Work는 받지 않아 깊이가
+   * 1이다. Codex는 서브에이전트와 MCP 설정 길이 달라 아직 받지 않는다
+   */
+  private spawnsChildren(task: TaskRecord, engine: string): boolean {
+    return (
+      engine === 'claude' &&
+      task.node === 'orchestrate' &&
+      workType(this.work) === 'auto' &&
+      this.work.parent === undefined
+    )
+  }
+
+  /** 자식 Work 도구의 호출 (D544): 처리 줄 밖에서 Relay의 ChildService로 넘긴다. wait_children가 오래 기다린다 */
+  private async childCall(
+    taskId: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    const tool = typeof body['tool'] === 'string' ? body['tool'] : ''
+    const raw = body['args']
+    const args =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    return (await this.ctx.children(this.key, taskId, tool, args, signal)) as Record<
+      string,
+      unknown
+    >
   }
 
   /**
@@ -2436,7 +2524,7 @@ export class WorkRunner {
     args: string[],
     turnFiles: string,
     mark?: string,
-    opts: { ask?: boolean } = {},
+    opts: { ask?: boolean; children?: boolean } = {},
   ): LiveSession {
     const { cols, rows } = this.ctx.size()
     const pty = startPty({
@@ -2446,8 +2534,9 @@ export class WorkRunner {
       env: {
         ...this.agentEnv(),
         ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
-        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521)
-        ...(opts.ask ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
+        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521). 자식을 기다리는
+        // wait_children도 길다 (D546)
+        ...(opts.ask || opts.children ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
       },
       cols,
       rows,
@@ -2475,6 +2564,7 @@ export class WorkRunner {
       sawHook: false,
       turnStartedAt: null,
       tool: null,
+      agents: new Map(),
     }
     const write = (data: string) => {
       log.write(data)
@@ -2504,9 +2594,14 @@ export class WorkRunner {
             failClosed: true,
             question: (body, signal) => this.askHuman(task.id, session, body, signal),
           }
-        : opts.ask
-          ? { question: (body, signal) => this.askHuman(task.id, session, body, signal) }
-          : {},
+        : {
+            ...(opts.ask
+              ? { question: (body, signal) => this.askHuman(task.id, session, body, signal) }
+              : {}),
+            ...(opts.children
+              ? { child: (body, signal) => this.childCall(task.id, body, signal) }
+              : {}),
+          },
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -2702,6 +2797,7 @@ export class WorkRunner {
     if (req.event === 'UserPromptSubmit' && str(b['agent_id']) === undefined) {
       session.turnStartedAt = now
       session.tool = null
+      session.agents.clear()
     }
     if (TOOL_HOOKS.includes(req.event)) {
       const task = this.task(taskId)
@@ -2712,6 +2808,16 @@ export class WorkRunner {
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
       const before = session.tool
+      // 바깥 대화의 서브에이전트 도구는 끝날 때까지 따로 센다 (D542): 여럿을 나란히 띄우면 마지막 도구만으로는 보이지 않는다
+      const agentsBefore = session.agents.size
+      if (str(b['agent_id']) === undefined && SUBAGENT_TOOLS.includes(name) && id) {
+        if (req.event === 'PreToolUse' && !denial)
+          session.agents.set(id, {
+            label: toolLabel(name, b['tool_input'], str(b['cwd'])),
+            startedAt: now,
+          })
+        else if (req.event !== 'PreToolUse') session.agents.delete(id)
+      }
       // 서브에이전트 안의 도구(agent_id가 있음)는 바깥 도구(Task 등)가 도는 동안이다. 바깥 도구를 덮지 않는다
       if (str(b['agent_id']) === undefined) {
         if (req.event === 'PreToolUse') {
@@ -2731,7 +2837,10 @@ export class WorkRunner {
         }
       }
       if (name !== ASK_TOOL) {
-        if (session.tool !== before && this.live.get(taskId) === session) {
+        if (
+          (session.tool !== before || session.agents.size !== agentsBefore) &&
+          this.live.get(taskId) === session
+        ) {
           const task = this.task(taskId)
           if (task)
             this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
@@ -2958,6 +3067,15 @@ export class WorkRunner {
     if (draft === null) throw new Error('intent 초안이 없음')
     const written = await this.files.writeIntent(
       confirmedIntent(draft, { version, type: workType(this.work) }),
+      version,
+    )
+    await this.ownedWritten('intent.md', written)
+  }
+
+  /** 부모가 쓴 의도를 intent.md로 쓴다 (D543): 의도 정리 없이 만든 자식 Work */
+  private async writeParentIntent(text: string, version: number): Promise<void> {
+    const written = await this.files.writeIntent(
+      confirmedIntent(text, { version, type: workType(this.work) }),
       version,
     )
     await this.ownedWritten('intent.md', written)
@@ -5012,6 +5130,9 @@ export class WorkRunner {
       autoApprove: autoApproveNote(this.work, task, this.ctx.config()),
       completion,
       respond: respond?.view ?? null,
+      ...(task.node === 'orchestrate' && files[PLAN_FILE] !== undefined
+        ? { plan: planView(files[PLAN_FILE]) }
+        : {}),
     }
   }
 
@@ -6988,6 +7109,15 @@ export class WorkRunner {
         : null,
       title: this.title,
       driver: workDriver(w),
+      ...(w.parent
+        ? {
+            parent: {
+              key: `${this.project.project_id}/${w.parent.work_id}`,
+              taskId: w.parent.task_id,
+              files: w.parent.files ?? [],
+            },
+          }
+        : {}),
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
@@ -7140,10 +7270,12 @@ export class WorkRunner {
     const session = this.live.get(t.id)
     const turn = session?.turnStartedAt ?? null
     const tool = session?.tool ?? null
+    const agents = [...(session?.agents.values() ?? [])]
     return {
       turn: turn !== null,
       since: turn ?? this.launchedAt.get(t.id) ?? Date.parse(t.created_at),
       tool: tool ? { label: tool.label, startedAt: tool.startedAt, endedAt: tool.endedAt } : null,
+      ...(agents.length ? { agents } : {}),
     }
   }
 }

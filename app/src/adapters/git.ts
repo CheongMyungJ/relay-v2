@@ -868,6 +868,30 @@ export async function commitsWithParents(
   })
 }
 
+/**
+ * from에서 닿지 않고 to에서 닿는 커밋과 커밋마다 바뀐 파일 (git log --reverse --name-only from..to). 오래된 것이 먼저다.
+ * 병합 커밋은 바뀐 파일을 내지 않는다. 자율 진행의 관문(D536)이 시험 커밋의 차례를 본다
+ */
+export async function commitFiles(
+  dir: string,
+  from: string,
+  to: string,
+  opts?: GitOptions,
+): Promise<{ commit: string; files: string[] }[]> {
+  const out = await git(
+    dir,
+    ['log', '--reverse', '--no-renames', '--name-only', '--format=%x00%H', `${from}..${to}`],
+    opts,
+  )
+  return out
+    .split('\0')
+    .filter((chunk) => chunk.trim() !== '')
+    .map((chunk) => {
+      const [commit = '', ...files] = lines(chunk)
+      return { commit: commit.trim(), files: files.map((f) => f.trim()).filter(Boolean) }
+    })
+}
+
 /** 원격에 브랜치가 있는가 (git ls-remote --heads). 원격에 닿지 못하면 GitError (D178 정리 창) */
 export async function remoteBranchExists(
   repo: string,
