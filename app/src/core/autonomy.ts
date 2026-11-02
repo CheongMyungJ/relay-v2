@@ -73,7 +73,14 @@ export function readStrategy(plan: string): StrategyRead {
   const names = line
     .replace(/^\s*-\s*방식\s*:/, '')
     .split('+')
-    .map((n) => n.trim().replace(/^`|`$/g, ''))
+    // 이름 뒤의 괄호 설명(예: `TDD(자식 안에서)`)은 뗀다
+    .map((n) =>
+      n
+        .trim()
+        .replace(/\s*[(（][^)）]*[)）]\s*$/, '')
+        .replace(/^`|`$/g, '')
+        .trim(),
+    )
     .filter(Boolean)
   if (names.length === 0) return { ok: false, reason: 'missing' }
   const unknown = names.filter((n) => !(STRATEGIES as readonly string[]).includes(n))

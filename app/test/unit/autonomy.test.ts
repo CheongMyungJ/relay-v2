@@ -37,6 +37,13 @@ describe('[단위] 방식 줄 (D535)', () => {
     })
   })
 
+  it('이름 뒤의 괄호 설명은 떼고 읽는다', () => {
+    expect(readStrategy(plan('바로 고침 + TDD(자식 안에서)'))).toEqual({
+      ok: true,
+      strategies: ['바로 고침', 'TDD'],
+    })
+  })
+
   it('줄이 없거나 모르는 이름이면 plan.md의 `## 전략` 오류다', () => {
     expect(readStrategy('## 전략\n- 본 신호: 없음\n')).toEqual({ ok: false, reason: 'missing' })
     expect(readStrategy(plan('빠르게'))).toEqual({

@@ -1,0 +1,60 @@
+diff --git a/src/inventory.js b/src/inventory.js
+index 3639879..ebf767d 100644
+--- a/src/inventory.js
++++ b/src/inventory.js
+@@ -3,3 +3,10 @@
+ export function find(items, sku) {
+   return items.find((i) => i.sku === sku) ?? null
+ }
++
++// 재고가 기준 이하인 품목. 수량 오름차순, 같으면 이름 차례. 입력은 바꾸지 않는다
++export function lowStock(items, threshold = 5) {
++  return items
++    .filter((i) => i.qty <= threshold)
++    .sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name, 'ko'))
++}
+diff --git a/src/members.js b/src/members.js
+index 44447c0..fd055ca 100644
+--- a/src/members.js
++++ b/src/members.js
+@@ -3,3 +3,20 @@
+ export function byId(members, id) {
+   return members.find((m) => m.id === id) ?? null
+ }
++
++function cell(value) {
++  const text = String(value ?? '')
++  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
++}
++
++// 이메일은 개인정보라 앞 한 글자만 보인다: kim@example.com → k***@example.com
++function maskEmail(email) {
++  const [local, domain] = email.split('@')
++  return `${local.slice(0, 1)}***@${domain}`
++}
++
++// 회원 목록 CSV (id, name, email). 이메일은 가린다
++export function exportMembers(members) {
++  const rows = members.map((m) => [m.id, m.name, maskEmail(m.email)].map(cell).join(','))
++  return ['id,name,email', ...rows].join('\n')
++}
+diff --git a/src/sales.js b/src/sales.js
+index 5c87a14..ebea9c4 100644
+--- a/src/sales.js
++++ b/src/sales.js
+@@ -3,3 +3,15 @@
+ export function total(sales) {
+   return sales.reduce((sum, s) => sum + s.amount, 0)
+ }
++
++// 달(YYYY-MM)마다 합계. 환불(음수)도 그 달에서 뺀다. 판매가 있는 달만, 달 오름차순
++export function monthlyTotals(sales) {
++  const byMonth = new Map()
++  for (const s of sales) {
++    const month = s.date.slice(0, 7)
++    byMonth.set(month, (byMonth.get(month) ?? 0) + s.amount)
++  }
++  return [...byMonth.entries()]
++    .sort(([a], [b]) => a.localeCompare(b))
++    .map(([month, total]) => ({ month, total }))
++}

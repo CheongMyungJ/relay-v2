@@ -42,6 +42,7 @@ Each piece has a goal, how it runs, the files it owns, and when it is done. Pick
 | `자식 Work` | Only if you have the relay child tools (`spawn_child` and the others, below). A code change that can run in parallel with the rest, owns files no other running piece touches, and is worth its own branch and review: a separate module, an independent fix, a change that could be its own PR |
 
 - One piece is fine. Small work has one `직접` piece and a short plan: do not split for the sake of it.
+- **Separate branches or PRs per part:** if the intent asks for a separate branch or PR for each part, give each part its own child Work when you have the relay child tools, even if the parts are small: a child keeps its own branch, and `decide_child` with `pr` or `merge` delivers it. Without the tools, make the branches yourself.
 - Split only when the cost of splitting (a fresh context reading the code again, merging results) is clearly smaller than doing it in one go.
 - Subagents do not change code in this Work. Code changes happen in this session or in child Works, so the commits stay in an order you control.
 

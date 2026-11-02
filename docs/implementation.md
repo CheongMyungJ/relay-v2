@@ -218,6 +218,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I202 | 자식 도구(D544~D547)는 `main/children.ChildService`가 받는다. 브리지(`scripts/codex-bridge.mjs`)는 `RELAY_CHILD_TOOLS=1`이면 다섯 도구를 내놓고 `/child/<task>`로 `{ tool, args }`를 보낸다(`RELAY_NO_ASK=1`이면 ask_human을 빼고). 훅 서버는 그 task의 경로에 `child` 처리가 있을 때만 받는다(`HookRouteOptions.child`). `WorkRunner.spawnsChildren`(자식이 아닌 자율 Work의 Claude 자율 진행)이 MCP 설정(`relayMcpConfig`의 `children`·`noAsk`)과 `keepAskTool`(사람이 진행하면 `--disallowedTools`를 주지 않음)을 정한다. 자식의 답·승인·전달·고칠 점·포기는 `McpService.call`을 부르고, 기다림은 0.5초마다 자식 스냅샷의 state_key를 본다 | 처리를 relay MCP와 같이 써 caller Work의 막기(사람 승인 막기, 질문을 호출자에게)가 그대로 자식에 붙는다. 기다림은 메모리의 스냅샷을 보므로 가볍다 | |
 | I203 | 부모 마무리의 관문(D548)은 `TaskCheckInput.openChildren`(`RunnerContext.openChildren` → `ChildService.openChildren`, `core/children.isOpenChild`)이다. 자식의 절차 끝 안내는 `CHILD_ASK_NOTE`(`deploySkill`의 `callerAnswers: 'parent'`)다 | 관문은 형식 오류와 같은 길(D541)이다 | |
 | I204 | 화면(D549)은 `WorkView.parent`(부모 key, task, 맡는 파일)로 정한다: `sidebar.nestChildren`이 자식을 부모 아래에 두고, 사이드바 항목은 `child-work`로 들여 쓰며 "자식" 표시를 붙이고, `CallerBand`와 승인 자리의 글을 바꾼다. 가짜 claude는 `mcpCall` 단계(결과를 vars에 두고 until로 다시 부름)와 자식 task의 `<스킬>#child` 시나리오 키(자식 안내로 앎), `git` 단계의 vars 채우기를 더했다 | 녹화본에 없는 필드를 지어내지 않는다: MCP 도구 호출은 claude의 훅 모양을 바꾸지 않는다 | |
+| I205 | 방식 줄(D535)은 이름 뒤의 괄호 설명(`TDD(자식 안에서)`, 전각 괄호 포함)을 떼고 읽는다 | 평가 40에서 부모가 괄호 설명을 붙여 형식 오류로 되돌려졌다. 이름을 고르는 규칙은 그대로이고 설명만 받는다 | |
 
 ## 3. 확인한 사실
 
@@ -1656,6 +1657,10 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 제안의 A3·A6 중 첫 평가. 평가 도구에 `relay@auto` 쪽을 더하고(`eval/lib/kind.mjs`의 낱말, `guides/relay.md`, `relay-eval` 스킬의 "자율 비교", `eval/test/measure.test.mjs`), 01·07을 relay·relay@auto·맨 CLI로 한 번씩 돌렸다(`app/eval/reports/2026-11-02-auto-01-07.md`). 07에서 자율의 의도 정리가 요청 옆의 틀린 동작을 묻지 않고 비목표에 넣어 실패해, 묻게 고치고(D550, `skills/types/auto/intake.md`, `skills/check.mjs`) 07을 relay@auto로 두 번 다시 돌렸다(`app/eval/reports/2026-11-02-auto-07-recheck.md`, 2/2 통과).
 
 - 넣지 않은 것: 자식 Work가 나올 시나리오, 회차를 늘린 비교(`docs/autonomous-work.md` 15.1).
+
+### M46. 자식 Work 시나리오와 나누기 보완 (D551)
+
+평가 시나리오 39(`39-three-modules`)와 40(`40-three-libraries`)을 더하고(`check-scenario.mjs` 통과, 정답 패치와 함정 패치) relay·relay@auto·맨 CLI로 두 번씩 돌렸다. 40에서 의도 정리가 요청을 Work 셋으로 쪼개 의도 정리가 쪼개지 않고 자율 진행이 부분마다 자식 Work를 두게 고치고(D551, `skills/types/auto/intake.md`, `orchestrate.md`, `skills/check.mjs`), 방식 줄의 괄호 설명을 받게 했다(I205, `test/unit/autonomy.test.ts`). 고친 뒤 40을 relay@auto로 두 번 다시 돌려 자식 Work 셋이 나란히 돌고 합쳐지는 것을 봤다. 보고서는 `app/eval/reports/2026-11-02-auto-39.md`, `-40.md`, `-40-recheck.md`, `docs/autonomous-work.md` 15.2.
 
 ## 8. 테스트 전략
 

@@ -1,0 +1,40 @@
+{
+  "id": "40-three-libraries",
+  "type": "feature",
+  "repoName": "office-utils",
+  "title": "서로 독립된 중간 크기 기능 셋을 한 요청으로, 모듈마다 브랜치를 따로",
+  "purpose": "한 요청 안에 서로 다른 파일을 고치고 규칙이 여럿인 중간 크기 기능 셋(CSV 읽기, 원화 쓰기·읽기, 근무일 계산)이 있고 모듈마다 브랜치를 따로 두고 싶을 때, 자율 유형(relay D533)이 조각을 자식 Work(D543)로 나란히 맡기는지, 그렇게 했을 때 시간, 사람의 수고, 결과, 브랜치 나눔이 전용 유형(기능 추가)과 맨 CLI에 견줘 어떤지 본다. 39보다 조각이 커서 나누는 비용을 넘을 수 있다.",
+  "report": "공용 도구 세 개를 이번에 같이 만들어 주세요. 서로 관계없는 모듈입니다. (1) src/csv.js에 parseCsv(text): CSV 글을 칸 목록의 목록으로 읽는다. 큰따옴표로 감싼 칸(안의 쉼표, 줄바꿈, \"\"는 따옴표 하나), LF와 CRLF를 받고, 빈 칸은 빈 글로 남긴다. toCsv로 쓴 것을 읽으면 그대로여야 한다. (2) src/money.js에 formatKrw(amount)와 parseKrw(text): ₩1,234,567 꼴로 쓰고 읽는다. 음수는 -₩1,500처럼 기호 앞에 -. parseKrw는 기호와 쉼표, 앞뒤 공백을 받고 읽지 못하면 null. (3) src/workdays.js에 workdaysBetween(start, end, holidays = [])와 addWorkdays(date, n, holidays = []): 날짜는 'YYYY-MM-DD' 글이고, 주말과 공휴일(holidays 목록)을 뺀 근무일을 센다/더한다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "workdaysBetween은 시작일과 끝날을 모두 센다(양 끝 포함). 시작이 끝보다 뒤면 0이다."
+    },
+    {
+      "share": "on_ask",
+      "text": "formatKrw에서 원 미만(소수)은 0 쪽으로 버린다. 1999.9는 ₩1,999, -1999.9는 -₩1,999."
+    },
+    {
+      "share": "on_ask",
+      "text": "addWorkdays(date, 0)은 그날을 그대로 돌려준다."
+    }
+  ],
+  "preferences": [
+    "세 가지를 새 Work 하나(또는 요청 하나)로 한 번에 맡기고 싶다. 어떻게 나눌지는 도구가 정하면 좋겠다.",
+    "세 모듈은 리뷰하는 사람이 달라서 모듈마다 브랜치를 따로 두고 싶다. PR은 내가 그 브랜치로 낸다.",
+    "셋 다 이번에 끝내고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/csv.js", "src/money.js", "src/workdays.js", "test/**"],
+  "checks": [
+    { "name": "CSV 읽기", "file": "csv.test.js", "bug": "csv" },
+    { "name": "원화 쓰기·읽기", "file": "money.test.js", "bug": "money" },
+    { "name": "근무일", "file": "workdays.test.js", "bug": "workdays" },
+    { "name": "기존 함수 그대로", "file": "existing.test.js", "guard": true }
+  ],
+  "limits": {
+    "minutes": 75,
+    "turns": 100
+  }
+}
