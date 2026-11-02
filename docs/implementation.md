@@ -220,6 +220,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I204 | 화면(D549)은 `WorkView.parent`(부모 key, task, 맡는 파일)로 정한다: `sidebar.nestChildren`이 자식을 부모 아래에 두고, 사이드바 항목은 `child-work`로 들여 쓰며 "자식" 표시를 붙이고, `CallerBand`와 승인 자리의 글을 바꾼다. 가짜 claude는 `mcpCall` 단계(결과를 vars에 두고 until로 다시 부름)와 자식 task의 `<스킬>#child` 시나리오 키(자식 안내로 앎), `git` 단계의 vars 채우기를 더했다 | 녹화본에 없는 필드를 지어내지 않는다: MCP 도구 호출은 claude의 훅 모양을 바꾸지 않는다 | |
 | I205 | 방식 줄(D535)은 이름 뒤의 괄호 설명(`TDD(자식 안에서)`, 전각 괄호 포함)을 떼고 읽는다 | 평가 40에서 부모가 괄호 설명을 붙여 형식 오류로 되돌려졌다. 이름을 고르는 규칙은 그대로이고 설명만 받는다 | |
 | I206 | 자식 세션(D552)은 `deploySkill`의 `childRules`(`core/children.childRules`)로 시스템 프롬프트를, `childContext`로 context.md를 쓴다. 부모의 지시는 intent.md 본문에 둔다(`createWork`의 `parent.intent`). `finishesWork`가 자식 Work면 거짓이고 `TaskCheckInput.child`가 필수 산출물과 plan.md 관문을 끈다. 부모 세션의 폴더는 `RunnerContext.workInfo`로 찾는다. PR 전 리뷰(D554)는 `runReview`의 `standalone`(상태를 바꾸지 않고 결과를 돌려줌)을 `WorkRunner.reviewChildForPr`이 부르고, `writeChildPr`이 pr.md를 쓴 뒤 relay MCP의 deliver를 부른다. 자식의 첫 task 엔진은 Claude다(`claudeAgent`). 가짜 claude는 자식을 연결 규칙의 첫 줄(`# relay: child session`)로 안다 | 독립 리뷰의 호출과 결과 글은 마무리와 같은 것을 쓰고, 세션을 다시 여는 상태 전이만 뺀다 | |
+| I207 | 끝 신호(D555): `core/children.childRules`의 끝 절은 SendMessage로 부모에게 말하고 턴을 끝내라는 것이고 handoff 예시가 없다. `childTurnEnded`(대기, 승인 대기, 세션 끝남)이면 `decide_child`를 받고, merge·pr 전에 `WorkRunner.writeChildHandoff`가 `childHandoff`(형식 검사를 통과하는 기록용 handoff)를 쓴 뒤 relay MCP의 approve·deliver를 부른다. `wait_children`는 브리지와 `ChildService`에서 뺐다. [흐름] 시험의 가짜 부모는 `list_children`를 자식이 대기가 될 때까지 다시 부른다(가짜 claude는 SendMessage를 흉내 내지 않음) | 쉬는 세션의 상태(대기)는 relay가 Stop 훅으로 이미 안다. 승인 경로를 새로 만들지 않고 기록만 채운다 | |
 
 ## 3. 확인한 사실
 
@@ -1678,6 +1679,15 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[단위]** `test/unit/children.test.ts`: 연결 규칙(어디서, push 금지, 부모 폴더, SendMessage, ask_human, handoff, 절차 없음), 자식 컨텍스트, 자식 Work의 마무리 아님과 handoff만 보는 검사.
 - **[흐름]** `test/flow/children.test.ts`: 자식이 연결 규칙과 지시만 받고 plan.md·독립 리뷰·pr.md가 없음, merge, pr(앱이 독립 리뷰를 돌린 뒤 PR), 부모 변경 위 자식의 pr 거절, 정하지 않은 자식의 되돌림, 깊이 1.
 - **[실제]** 세션 간 메시지는 가짜 claude가 흉내 내지 않는다. 평가 40으로 실제 claude에서 본다.
+
+### M48. 자식의 끝 신호도 직접 (D555)
+
+사람이 자식의 끝 신호를 앱이 중계하게 한 까닭을 묻고, 둘이 직접 하게 바꾸라고 했다. 자식은 끝나면 부모에게 SendMessage로 말하고 턴을 끝내며, 부모는 기다리는 도구 없이 턴을 끝내고 쉰다. `decide_child`는 턴을 끝낸 자식을 받고 앱이 기록용 handoff를 쓴다. `wait_children`를 없앴다.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 연결 규칙(끝나면 부모에게 말함, handoff 없음), 기록용 handoff가 형식 검사를 통과함, 턴이 끝난 상태.
+- **[흐름]** `test/flow/children.test.ts`: 자식이 handoff 없이 턴을 끝내면 부모가 merge하고 앱이 기록용 handoff를 남김, pr, 부모 변경 위 자식의 pr 거절, discard, 깊이 1.
 
 ## 8. 테스트 전략
 

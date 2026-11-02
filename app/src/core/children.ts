@@ -49,18 +49,16 @@ export interface ChildLink {
   /** 이 자식의 worktree와 브랜치 */
   tree: string
   branch: string
-  /** 이 task의 디렉터리. handoff.md를 쓴다 */
+  /** 이 task의 디렉터리 */
   taskDir: string
   /** 부모가 정한 맡는 파일 */
   files: readonly string[]
 }
 
-/** 자식 세션이 부모에게 묻는 도구 (relay_task의 ask_human) */
-const ASK_PARENT = 'mcp__relay_task__ask_human'
-
 /**
- * 자식 세션의 시스템 프롬프트 (D552, D553): 절차는 없고 연결 규칙만이다. 무엇을 할지는 부모의 지시(context.md)가 정한다.
- * 어디서 일하는지, 커밋과 push 금지, 부모와 말하는 법(SendMessage, 막히면 ask_human), 끝났다는 신호(handoff)
+ * 자식 세션의 시스템 프롬프트 (D552, D553, D555): 절차는 없고 연결 규칙만이다. 무엇을 할지는 부모의 지시(context.md)가
+ * 정한다. 어디서 일하는지, 커밋과 push 금지, 부모와 말하는 법(ListAgents, SendMessage), 끝나면 부모에게 직접 말하고 턴을
+ * 끝냄. relay는 끝 신호를 거치지 않는다
  */
 export function childRules(c: ChildLink): string {
   return [
@@ -75,32 +73,16 @@ export function childRules(c: ChildLink): string {
     '',
     '## Talking with the parent',
     '',
-    `- The parent session works in \`${c.parentTree}\`. Find it with your \`ListAgents\` tool (the session whose working directory is that folder) and message it with \`SendMessage\`: progress, a finding the parent should know, a question that can wait. Messages from the parent arrive between your tool calls; read them and adjust.`,
-    `- If you cannot go on without an answer, ask with \`${ASK_PARENT}\` and wait. The parent cannot see your terminal, so put everything it needs into the question.`,
-    '- The human may also type in your terminal. A human instruction comes first; tell the parent what changed with `SendMessage`.',
+    `- The parent session works in \`${c.parentTree}\`. Find it with your \`ListAgents\` tool (the session whose working directory is that folder) and message it with \`SendMessage\`. The parent cannot see your terminal: put everything it needs into the message.`,
+    '- Tell the parent what it should know while you work: a finding that affects other pieces, a change of plan, a question. Messages from the parent arrive between your tool calls, or start your next turn if you are idle; read them and adjust.',
+    '- If you cannot go on without an answer, send the question and end your turn. The answer starts your next turn.',
+    '- The human may also type in your terminal. A human instruction comes first; tell the parent what changed.',
     '',
     '## When you are done',
     '',
-    `Write \`handoff.md\` in \`${c.taskDir}\` and end your turn. relay tells the parent you are done when it sees it. If you cannot finish, use \`status: blocked\` and say what is missing in \`blocked_reason\`.`,
+    'Commit everything, then send the parent one message: that you are done, what you did, the commits, and the tests you ran with their result. Then end your turn. Always send this message: the parent waits for it. If you stop because you are stuck, say that instead, and what you need.',
     '',
-    '```yaml',
-    '---',
-    'status: awaiting_approval',
-    'blocked_reason:',
-    'decisions: []',
-    'assumptions: []',
-    'rejected: []',
-    'open_questions: []',
-    'intent_deviation: null',
-    'risks: []',
-    '---',
-    '## 요약',
-    '(무엇을 했는지, 커밋, 돌린 시험과 결과)',
-    '## 다음 task가 알아야 할 것',
-    '(부모가 합칠 때 알아야 할 것)',
-    '```',
-    '',
-    'Put every text value in double quotes. If relay sends back a format error, fix `handoff.md` and end your turn again. Write in Korean.',
+    'Write in Korean.',
     '',
   ].join('\n')
 }
@@ -121,4 +103,37 @@ export function childContext(c: ChildLink & { brief: string }): string {
     c.brief.trim(),
     '',
   ].join('\n')
+}
+
+/**
+ * 부모가 자식을 정할 때 앱이 자식 task에 남기는 기록용 handoff (D555): 자식은 handoff를 쓰지 않고 부모에게 직접 말하므로,
+ * 승인 기록(D3)과 Work 완료가 같은 길을 지나게 앱이 대신 쓴다
+ */
+export function childHandoff(decision: 'merge' | 'pr'): string {
+  const what = decision === 'merge' ? '부모가 merge로 정함' : '부모가 따로 PR로 정함'
+  return [
+    '---',
+    'status: awaiting_approval',
+    'blocked_reason:',
+    'decisions:',
+    `  - what: "${what}"`,
+    '    why: "자식 세션이 부모에게 끝났다고 알림"',
+    '    by: ai',
+    'assumptions: []',
+    'rejected: []',
+    'open_questions: []',
+    'intent_deviation: null',
+    'risks: []',
+    '---',
+    '## 요약',
+    `${what}. 자식이 한 일은 부모 세션과 주고받은 메시지와 이 브랜치의 커밋에 있다.`,
+    '## 다음 task가 알아야 할 것',
+    '- 없음',
+    '',
+  ].join('\n')
+}
+
+/** 자식 세션이 턴을 끝내 정할 수 있는 상태인가 (D555): 일하는 중이거나 대기열이 아니다 */
+export function childTurnEnded(status: string): boolean {
+  return status === 'idle' || status === 'awaiting_approval' || status === 'session_ended'
 }

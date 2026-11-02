@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_CHILDREN,
   childContext,
+  childHandoff,
   childOverlap,
   childRules,
+  childTurnEnded,
   isOpenChild,
   openChildrenIssue,
 } from '../../src/core/children'
@@ -167,7 +169,7 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
     files: ['src/csv.js'],
   }
 
-  it('연결 규칙: 어디서 일하는지, push 금지, 부모 세션의 폴더와 SendMessage, 막히면 ask_human, handoff로 끝남. 단계 절차는 없다', () => {
+  it('연결 규칙: 어디서 일하는지, push 금지, 부모 세션의 폴더와 SendMessage, 끝나면 부모에게 직접 말하고 턴을 끝냄. 단계 절차와 handoff는 없다', () => {
     const rules = childRules(link)
     expect(rules).toMatch(/^# relay: child session$/m)
     for (const s of [
@@ -178,12 +180,11 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
       '/wt/w-1',
       '`SendMessage`',
       '`ListAgents`',
-      'mcp__relay_task__ask_human',
-      'status: awaiting_approval',
-      '/works/w-2/tasks/01-orchestrate',
+      'send the parent one message',
     ])
       expect(rules, s).toContain(s)
     expect(rules).not.toContain('plan.md')
+    expect(rules).not.toContain('handoff')
     expect(rules).not.toContain('독립 리뷰')
   })
 
@@ -192,6 +193,22 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
     expect(ctx).toContain('## 부모의 지시\n\nparseCsv를 만든다\n')
     expect(ctx).toContain('부모 세션의 폴더: `/wt/w-1`')
     expect(ctx).not.toContain('팀 지식')
+  })
+
+  it('부모가 정할 때 앱이 쓰는 기록용 handoff는 형식 검사를 통과한다 (D555)', () => {
+    for (const d of ['merge', 'pr'] as const) {
+      const errors = checkTask({
+        node: 'orchestrate',
+        type: 'auto',
+        files: { 'handoff.md': childHandoff(d) },
+        config: DEFAULT_CONFIG,
+        child: true,
+      }).errors
+      expect(errors, d).toEqual([])
+    }
+    expect(childTurnEnded('idle')).toBe(true)
+    expect(childTurnEnded('working')).toBe(false)
+    expect(childTurnEnded('queued')).toBe(false)
   })
 
   it('자식 Work의 자율 진행은 마무리 단계가 아니고, 형식 검사는 handoff만 본다', () => {

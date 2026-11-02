@@ -117,19 +117,14 @@ const events = (dir: string): LifecycleEvent[] =>
     .filter(Boolean)
     .map((l) => JSON.parse(l) as LifecycleEvent)
 
-/** 자식 세션 (D552): 지시대로 시험과 구현을 커밋하고 handoff만 쓴다. 마무리 절차(독립 리뷰, pr.md)는 없다 */
+/**
+ * 자식 세션 (D552, D555): 지시대로 시험과 구현을 커밋하고 턴을 끝낸다. handoff는 쓰지 않는다(끝났다는 말은 SendMessage로 부모에게
+ * 직접 하므로 가짜 claude는 흉내 내지 않는다)
+ */
 const CHILD_STEPS: Step[] = [
   { do: 'prompt' },
   { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
   { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
-  {
-    do: 'write',
-    file: 'handoff.md',
-    text: handoff({
-      decisions: [{ what: '지시대로 함', why: '부모의 지시', by: 'ai' }],
-      summary: 'median과 시험을 커밋했다.',
-    }),
-  },
   { do: 'stop' },
 ]
 
@@ -149,15 +144,14 @@ const SPAWN: Step = {
 }
 
 describe('[흐름] 자식 Work (M44)', () => {
-  it('부모가 spawn_child로 자식을 만들고 wait_children로 기다려 merge로 합친다. 자식은 자율 진행부터 하고 부모가 승인한다 (D543~D547)', async () => {
+  it('부모가 spawn_child로 자식을 만들고, 턴을 끝낸 자식을 merge로 합친다. 자식은 handoff 없이 끝나고 앱이 기록용 handoff를 남긴다 (D543~D547, D555)', async () => {
     const s = await setup(
       childScenario([
         SPAWN,
         {
           do: 'mcpCall',
-          tool: 'wait_children',
-          args: { timeout_sec: 2 },
-          until: '"state":"awaiting_approval"',
+          tool: 'list_children',
+          until: '"state":"idle"',
           tries: 150,
           pause: 100,
         },
@@ -209,6 +203,8 @@ describe('[흐름] 자식 Work (M44)', () => {
     const ctx = read(path.join(childTask, 'context.md'))
     expect(ctx).toContain(`## 부모의 지시\n\n${BRIEF}`)
     expect(ctx).not.toContain('## 팀 지식')
+    // 자식은 handoff를 쓰지 않았고, 부모가 merge로 정할 때 앱이 기록용으로 썼다 (D555)
+    expect(read(path.join(childTask, 'handoff.md'))).toContain('부모가 merge로 정함')
     for (const f of ['plan.md', 'verification.md', 'pr.md', 'independent-review.md'])
       expect(fs.existsSync(path.join(childTask, f)), f).toBe(false)
     expect(read(path.join(childTask, 'task.mcp.json'))).not.toContain('RELAY_CHILD_TOOLS')
@@ -289,9 +285,8 @@ describe('[흐름] 자식 Work (M44)', () => {
         SPAWN,
         {
           do: 'mcpCall',
-          tool: 'wait_children',
-          args: { timeout_sec: 2 },
-          until: '"state":"awaiting_approval"',
+          tool: 'list_children',
+          until: '"state":"idle"',
           tries: 150,
           pause: 100,
         },
@@ -324,9 +319,8 @@ describe('[흐름] 자식 Work (M44)', () => {
         SPAWN,
         {
           do: 'mcpCall',
-          tool: 'wait_children',
-          args: { timeout_sec: 2 },
-          until: '"state":"awaiting_approval"',
+          tool: 'list_children',
+          until: '"state":"idle"',
           tries: 150,
           pause: 100,
         },

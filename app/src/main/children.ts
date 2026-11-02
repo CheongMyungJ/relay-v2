@@ -1,8 +1,14 @@
 // 자식 Work의 도구 (D543~D548). 자율 Work의 자율 진행 task가 task용 relay MCP(relay_task)로 부른 도구를 받아, 그 Work의
 // 자식 Work를 만들고 진행한다. 바깥 호출자용 relay MCP(D516)와 도구는 다르고, 자식의 질문 답·승인·전달은 같은 처리
 // (McpService의 answer, approve, deliver, revise, abandon)를 부모의 이름으로 부른다. Electron을 import하지 않는다
-import { MAX_CHILDREN, childOverlap, isOpenChild } from '../core/children'
-import { currentTaskView, finished, stateKey } from '../core/mcp'
+import {
+  MAX_CHILDREN,
+  childHandoff,
+  childOverlap,
+  childTurnEnded,
+  isOpenChild,
+} from '../core/children'
+import { currentTaskView, stateKey } from '../core/mcp'
 import { workBranch } from '../core/records'
 import type { WorkView } from '../shared/views'
 import type { McpResult } from './mcp'
@@ -11,21 +17,7 @@ import type { Relay } from './relay'
 type Args = Record<string, unknown>
 
 /** 자식 도구의 이름 (D544). 브리지(scripts/codex-bridge.mjs)의 도구 정의와 같다 */
-export const CHILD_TOOLS = [
-  'spawn_child',
-  'list_children',
-  'wait_children',
-  'answer_child',
-  'decide_child',
-] as const
-
-/**
- * wait_children의 기본·최대 기다림 (초). 기다리는 동안 자식의 SendMessage는 도구가 끝나야 읽히므로(D553) 기본을 짧게 둔다
- */
-const WAIT_DEFAULT_SEC = 120
-const WAIT_MAX_SEC = 1800
-/** wait_children가 자식의 상태를 다시 보는 간격 */
-const POLL_MS = 500
+export const CHILD_TOOLS = ['spawn_child', 'list_children', 'answer_child', 'decide_child'] as const
 
 class ArgError extends Error {}
 
@@ -48,10 +40,7 @@ function strings(args: Args, key: string): string[] {
 }
 
 export class ChildService {
-  constructor(
-    private readonly relay: Relay,
-    private readonly now: () => number = () => Date.now(),
-  ) {}
+  constructor(private readonly relay: Relay) {}
 
   /** 부모 task의 도구 호출 하나. 부모는 브리지를 띄운 task의 훅 토큰으로 정해진다(남의 Work를 부를 수 없다) */
   async call(
@@ -67,15 +56,13 @@ export class ChildService {
           return await this.spawn(parentKey, parentTaskId, args)
         case 'list_children':
           return { ok: true, result: await this.summaries(parentKey) }
-        case 'wait_children':
-          return await this.wait(parentKey, args, signal)
         case 'answer_child':
           return await this.relay.mcp.call('answer', {
             ...args,
             work: this.child(parentKey, args).key,
           })
         case 'decide_child':
-          return await this.decide(parentKey, args)
+          return await this.decide(parentKey, args, signal)
         default:
           return { ok: false, error: `모르는 자식 도구입니다: ${tool}` }
       }
@@ -192,57 +179,23 @@ export class ChildService {
   }
 
   /**
-   * wait_children (D546): 자식 하나라도 상태가 바뀔 때까지 기다린다. seen은 자식 key → 지난번 state_key다. 이미 다르거나 seen에
-   * 없는 자식이 있으면 바로 돌려준다. 끝난 자식은 바뀐 것으로 보지 않는다
-   */
-  private async wait(parentKey: string, args: Args, signal?: AbortSignal): Promise<McpResult> {
-    const raw = args['timeout_sec']
-    if (raw !== undefined && (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0))
-      throw new ArgError('timeout_sec는 0 이상의 수여야 합니다')
-    const seenRaw = args['seen']
-    if (
-      seenRaw !== undefined &&
-      seenRaw !== null &&
-      (typeof seenRaw !== 'object' || Array.isArray(seenRaw))
-    )
-      throw new ArgError('seen은 자식 work → state_key 객체여야 합니다')
-    const seen = (seenRaw ?? {}) as Record<string, unknown>
-    const deadline = this.now() + Math.min(raw ?? WAIT_DEFAULT_SEC, WAIT_MAX_SEC) * 1000
-    const changed = () =>
-      this.childrenOf(parentKey).some(
-        (w) => seen[w.key] !== stateKey(w) && !(finished(w) && seen[w.key] !== undefined),
-      )
-    while (!changed()) {
-      if (signal?.aborted || this.now() >= deadline || this.openChildren(parentKey).length === 0)
-        return { ok: true, result: { children: await this.summaries(parentKey), timed_out: true } }
-      await new Promise((r) => setTimeout(r, POLL_MS))
-    }
-    return { ok: true, result: { children: await this.summaries(parentKey), timed_out: false } }
-  }
-
-  /**
    * decide_child (D547): 마친 자식(Work 완료 화면)을 정한다. merge는 전달 없이 완료하고 부모가 자기 worktree에서 그 브랜치를
    * 합친다. pr은 따로 PR을 만든다(부모의 변경 위에서 시작한 자식은 막음). revise는 고칠 점과 함께 다시 열고, discard는 포기한다
    */
-  private async decide(parentKey: string, args: Args): Promise<McpResult> {
+  private async decide(parentKey: string, args: Args, signal?: AbortSignal): Promise<McpResult> {
     const child = this.child(parentKey, args)
     const decision = text(args, 'decision') ?? ''
-    // 자식은 자율 Work라 자율 진행이 마무리 단계다: 그 승인 대기가 Work 완료 화면이다 (D493)
+    // 자식 세션이 턴을 끝냈으면 정할 수 있다 (D555): 끝났는지는 자식이 부모에게 직접 말한다
     const atCompletion = () => {
       const task = currentTaskView(child)
-      return (
-        child.status === 'active' &&
-        task?.node === 'orchestrate' &&
-        task.status === 'awaiting_approval'
-      )
+      return child.status === 'active' && !!task && childTurnEnded(task.status)
     }
+    const runner = this.relay.work(child.key)
+    const busy = '자식 세션이 아직 일하는 중입니다. 자식이 끝났다고 말하면 정하세요'
     switch (decision) {
       case 'merge': {
-        if (!atCompletion())
-          return {
-            ok: false,
-            error: '자식이 아직 Work 완료 화면이 아닙니다. wait_children로 기다리세요',
-          }
+        if (!atCompletion() || !runner) return { ok: false, error: busy }
+        await runner.writeChildHandoff(childHandoff('merge'))
         const r = await this.relay.mcp.call('approve', { work: child.key })
         if (!r.ok) return r
         return {
@@ -257,13 +210,8 @@ export class ChildService {
       case 'pr': {
         if (!text(args, 'pr_title', false))
           throw new ArgError('pr에는 pr_title(PR 제목)이 필요합니다. 본문은 pr_body')
-        if (!atCompletion())
-          return {
-            ok: false,
-            error: '자식이 아직 Work 완료 화면이 아닙니다. wait_children로 기다리세요',
-          }
+        if (!atCompletion()) return { ok: false, error: busy }
         const parent = this.relay.work(parentKey)?.work
-        const runner = this.relay.work(child.key)
         if (!parent || !runner) return { ok: false, error: 'Work가 없습니다' }
         if (runner.work.base_commit !== parent.base_commit)
           return {
@@ -274,7 +222,7 @@ export class ChildService {
         const title = (text(args, 'pr_title') ?? '').replace(/\s+/g, ' ').trim()
         const body = text(args, 'pr_body', false) ?? ''
         // 따로 나가는 PR은 부모의 마지막 리뷰를 지나지 않으므로 앱이 먼저 독립 리뷰를 돌린다 (D554)
-        const review = await runner.reviewChildForPr()
+        const review = await runner.reviewChildForPr(signal)
         if (!review) return { ok: false, error: '자식의 지금 task가 없습니다' }
         const blocking = review.findings.filter((f) => f.severity === '차단')
         if (blocking.length)
@@ -298,6 +246,7 @@ export class ChildService {
             '',
           ].join('\n'),
         )
+        await runner.writeChildHandoff(childHandoff('pr'))
         return await this.relay.mcp.call('deliver', { work: child.key, choice: 'pr' })
       }
       case 'revise':

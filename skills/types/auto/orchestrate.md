@@ -52,10 +52,10 @@ A child session works on one piece in its own worktree and branch, as its own Wo
 
 1. **Commit first.** A child starts from the current commit of your branch. Uncommitted changes are not in it.
 2. **Spawn** with `spawn_child`: a one-line `title`, the `brief`, and the `files` it owns. A good brief says the goal, the files it may touch, what not to do, how to know it is done, and which tests to add and run. Give each child files no other running piece touches. Write the child's work id in the piece's `결과`.
-3. **Talk while it works.** Find the child with your `ListAgents` tool (the session whose working directory is the `tree` that `spawn_child` returned) and message it with `SendMessage`. The child can message you the same way; its messages arrive between your tool calls.
-4. **Wait** with `wait_children`, passing the `state_key` of each child you have seen as `seen`. Keep `timeout_sec` short while you expect messages: a message waits until the call returns.
-5. **Answer** a child that is blocked on a question with `answer_child`. If only the human knows the answer, ask the human first, then pass it on.
-6. **Decide** each child when it is done, with `decide_child`:
+3. **Talk directly.** Find a child with your `ListAgents` tool (the session whose working directory is the `tree` that `spawn_child` returned) and message it with `SendMessage`. A child messages you the same way: findings, questions, and a message when it is done. relay does not relay these messages.
+4. **Wait by ending your turn.** When you have nothing else to do, end your turn: a child's message starts your next turn. `list_children` shows each child's state when you want to check.
+5. **Answer** a child's question with `SendMessage`. If only the human knows the answer, ask the human first. (`answer_child` answers a child that asked with relay's question tool.)
+6. **Decide** each child after it tells you it is done (its session has ended its turn), with `decide_child`:
    - `merge`: the child completes without delivery; then run `git merge --no-ff <its branch>` in your worktree, resolve conflicts yourself, and run the tests again. Your own finishing reviews the merged result.
    - `pr` with `pr_title` and `pr_body`: relay runs an independent review of the child first and opens its own PR only if there is no 차단 finding. Only for a child that started from your base commit (`on_parent_changes: false`).
    - `revise` with a `message`: what to fix. The child reopens and goes on.

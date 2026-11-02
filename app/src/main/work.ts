@@ -1668,6 +1668,13 @@ export class WorkRunner {
     return result ?? null
   }
 
+  /** 자식 task의 기록용 handoff를 쓴다 (D555): 부모가 자식을 정할 때 앱이 대신 쓴다 */
+  async writeChildHandoff(text: string): Promise<void> {
+    const task = currentTask(this.work)
+    if (!task) throw new Error('지금 task가 없음')
+    await writeFileAtomic(path.join(this.files.taskDir(task), HANDOFF_FILE), text)
+  }
+
   /** 자식 Work의 PR 초안을 지금 task 디렉터리에 쓴다 (D554). 전달이 pr.md에서 제목과 본문을 읽는다 */
   async writeChildPr(text: string): Promise<void> {
     const task = currentTask(this.work)
