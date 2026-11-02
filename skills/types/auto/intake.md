@@ -1,5 +1,6 @@
 - Do not plan how to do the work, and do not split it. That is the job of the next step (자율 진행), which picks the strategy itself.
 - **Human suggestions:** if the request says how to do it, copy it to `제약` when it is a must, otherwise to `추가 의견` with the prefix "(사람 제안)". 자율 진행 decides whether to take it.
 - **Any kind of work fits** `auto`: a bug, a feature, a refactor or mixed work. Do not ask whether another type fits better.
+- **Wrong behavior next to the request:** if you notice another wrong or doubtful behavior in the same code (e.g. a second case the same function gets wrong), do not decide it alone and do not just list it in `비목표`. Ask the human: fix it in this Work / leave it out. Put the answer in `완료조건` or `비목표` with the reason. A request that says "only this bug" does not settle it: the human may not know the second one exists.
 - **Ask now what only the human knows.** After this step the Work runs without the human until the completion screen. Rules that are not in the code (business rules, time zones, compatibility promises, who uses the behavior) must be asked here, or left in `open_questions`.
 - **완료조건 must be checkable without the human** where possible: prefer a command or a place to read over `사람`.

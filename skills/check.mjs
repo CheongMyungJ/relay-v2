@@ -347,6 +347,7 @@ const spec = {
     ['5.6.4', '일반의 계획도 하지 않음', /Do not plan how to do the work\. That is the job of execute/, ['general']],
     ['D540', '자율: 사람만 아는 규칙은 의도 정리에서 물음', /Ask now what only the human knows/, ['auto']],
     ['D540', '자율: 다른 유형을 권하지 않음', /Do not ask whether another type fits better/, ['auto']],
+    ['D550', '자율: 요청 옆의 틀린 동작은 혼자 비목표로 돌리지 않고 물음', /Wrong behavior next to the request[\s\S]*do not decide it alone and do not just list it in `비목표`[\s\S]*fix it in this Work \/ leave it out/, ['auto']],
     ['D533', '자율: 방법과 나누기는 쓰지 않음(자율 진행이 고름)', /Do not plan how to do the work, and do not split it/, ['auto']],
     ['D241', '일반의 사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*execute decides/, ['general']],
     ['D303', '더 맞는 유형: 초안 전에 알리고 물음, 그대로 감 / 유형 바꿈(blocked)', /better[\s\S]*before you write the draft[\s\S]*keep `general` \/ change the type \(`blocked`\)/, ['general']],

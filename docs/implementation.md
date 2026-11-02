@@ -1651,6 +1651,12 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 - **[단위]** `test/unit/children.test.ts`: 상한, 정하지 않은 자식, 겹침, 자식 Work 만들기의 전이(첫 task, intent, 효과 차례), 부모 마무리의 관문, 사이드바의 자리.
 - **[흐름]** `test/flow/children.test.ts`: spawn → wait → merge와 `git merge`(자식은 자율 진행 하나, 부모가 승인, 전달 없음, 자식 안내, 자식 도구 없음, 부모는 AskUserQuestion을 남김), 정하지 않은 자식이 부모 리뷰 요청을 되돌리고 discard 뒤 이어 감, 부모 기준 커밋에서 시작한 자식의 pr(가짜 gh), 부모가 커밋한 뒤의 자식은 pr 거절, 깊이 1.
 
+### M45. 자율 유형의 첫 평가와 의도 정리 보완 (D550)
+
+제안의 A3·A6 중 첫 평가. 평가 도구에 `relay@auto` 쪽을 더하고(`eval/lib/kind.mjs`의 낱말, `guides/relay.md`, `relay-eval` 스킬의 "자율 비교", `eval/test/measure.test.mjs`), 01·07을 relay·relay@auto·맨 CLI로 한 번씩 돌렸다(`app/eval/reports/2026-11-02-auto-01-07.md`). 07에서 자율의 의도 정리가 요청 옆의 틀린 동작을 묻지 않고 비목표에 넣어 실패해, 묻게 고치고(D550, `skills/types/auto/intake.md`, `skills/check.mjs`) 07을 relay@auto로 두 번 다시 돌렸다(`app/eval/reports/2026-11-02-auto-07-recheck.md`, 2/2 통과).
+
+- 넣지 않은 것: 자식 Work가 나올 시나리오, 회차를 늘린 비교(`docs/autonomous-work.md` 15.1).
+
 ## 8. 테스트 전략
 
 ### 8.1 시험의 층
