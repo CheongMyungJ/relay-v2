@@ -353,6 +353,7 @@ import {
   type TaskCheckInput,
 } from '../core/validate'
 import { PLAN_FILE, planView, type AutonomyFacts } from '../core/autonomy'
+import { childContext, childRules, type ChildLink } from '../core/children'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import {
   EMPTY_PR_ITEMS,
@@ -553,6 +554,8 @@ export interface RunnerContext {
   ): Promise<unknown>
   /** 정하지 않은 자식 Work의 key (D548) */
   openChildren(parentKey: string): string[]
+  /** 같은 프로젝트의 다른 Work의 제목과 worktree (D553: 자식이 부모 세션을 찾는다). 없으면 null */
+  workInfo(projectId: string, workId: string): { title: string; tree: string } | null
 }
 
 /** 서브에이전트를 띄우는 도구 이름 (D542). Claude Code는 Agent로 바꿨고 옛 판은 Task다 */
@@ -1180,6 +1183,7 @@ export class WorkRunner {
       ...(bundleDrafts ? { bundleDrafts } : {}),
       ...(autonomy ? { autonomy } : {}),
       ...(task.node === 'orchestrate' ? { openChildren: this.ctx.openChildren(this.key) } : {}),
+      ...(this.work.parent ? { child: true } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
         ? { finishing: { requested: task.review !== undefined } }
@@ -1403,7 +1407,7 @@ export class WorkRunner {
       .then(() =>
         controller.signal.aborted
           ? undefined
-          : this.runReview(taskId, codeReview, controller.signal),
+          : this.runReview(taskId, codeReview, controller.signal).then(() => undefined),
       )
       .catch(async (e: unknown) => {
         // 리뷰를 돌리지 못해도(지침을 읽지 못함, 변경 파일을 쓰지 못함 등) 끝난 것으로 넣는다: 독립 리뷰 중에 머물지 않고
@@ -1496,9 +1500,14 @@ export class WorkRunner {
    * 독립 리뷰 (D495): 변경 파일을 만들고, 찾기(codeReview일 때)와 확인을 차례로 부르고, 결과 글과 기록을 쓴 뒤
    * review.finished를 넣는다. 호출이 실패해도 결과 글에 까닭을 적고 이어 간다. [Work 포기]로 끊기면 아무것도 넣지 않는다
    */
-  private async runReview(taskId: string, codeReview: boolean, signal: AbortSignal): Promise<void> {
+  private async runReview(
+    taskId: string,
+    codeReview: boolean,
+    signal: AbortSignal,
+    standalone = false,
+  ): Promise<ReviewResult | undefined> {
     const task = this.task(taskId)
-    if (!task) return
+    if (!task) return undefined
     const started = Date.now()
     const { env } = this.ctx
     const dir = this.files.taskDir(task)
@@ -1604,7 +1613,7 @@ export class WorkRunner {
       const last = calls[calls.length - 1]
       if (last) last.count = found?.candidates.length ?? 0
     }
-    if (signal.aborted) return
+    if (signal.aborted) return undefined
     const candidates = found?.candidates ?? []
     const verification = path.join(dir, VERIFICATION_FILE)
     const verificationText = (await readText(verification)) ?? ''
@@ -1616,7 +1625,7 @@ export class WorkRunner {
       }),
       CHECK_SCHEMA,
     )
-    if (signal.aborted) return
+    if (signal.aborted) return undefined
     const checked = r.error ? null : readCheck(r.data, candidates)
     const checkError = r.error ?? (checked ? null : '구조화된 출력을 읽지 못함')
     const last = calls[calls.length - 1]
@@ -1637,6 +1646,7 @@ export class WorkRunner {
       path.join(dir, REVIEW_RECORD_FILE),
       `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
     )
+    if (standalone) return result
     const error = reviewError(result)
     await this.feedReviewFinished(taskId, signal, {
       ...(error ? { error } : {}),
@@ -1644,6 +1654,25 @@ export class WorkRunner {
       objections: result.objections.length,
       ms: Date.now() - started,
     })
+    return result
+  }
+
+  /**
+   * 자식 Work를 따로 PR로 내기 전의 독립 리뷰 (D554): 마무리 단계의 리뷰와 같은 찾기·확인을 부르고 결과 글을 쓴다. 상태는
+   * 바꾸지 않고 결과를 돌려준다(세션을 다시 열지 않는다). 지금 task가 없으면 null이다
+   */
+  async reviewChildForPr(signal?: AbortSignal): Promise<ReviewResult | null> {
+    const task = currentTask(this.work)
+    if (!task) return null
+    const result = await this.runReview(task.id, true, signal ?? new AbortController().signal, true)
+    return result ?? null
+  }
+
+  /** 자식 Work의 PR 초안을 지금 task 디렉터리에 쓴다 (D554). 전달이 pr.md에서 제목과 본문을 읽는다 */
+  async writeChildPr(text: string): Promise<void> {
+    const task = currentTask(this.work)
+    if (!task) throw new Error('지금 task가 없음')
+    await writeFileAtomic(path.join(this.files.taskDir(task), PR_FILE), text)
   }
 
   /**
@@ -1930,6 +1959,8 @@ export class WorkRunner {
       // relay MCP 호출자가 진행하는 Work의 Claude task는 relay MCP로 묻는다 (D521). 시작할 때 정해 task에 남긴다
       const caller = workDriver(this.work) === 'caller'
       const ask = asksViaMcp({ ask: caller ? 'mcp' : undefined }, driver.engine)
+      // 자식 세션은 단계 절차 대신 연결 규칙만 받고, context.md는 부모의 지시뿐이다 (D552)
+      const link = this.work.parent ? this.childLink(dir) : null
       const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
@@ -1941,13 +1972,19 @@ export class WorkRunner {
         finishing: finishesWork(this.work, task),
         askViaMcp: ask,
         callerAnswers: caller && this.work.parent ? 'parent' : caller,
+        ...(link ? { childRules: childRules(link) } : {}),
       })
       const version = await driver.version(bin, env)
 
       // Work 완료 화면이 되는 task의 마무리 안내 문구(D104)와 전달 버튼이 쓸 점검을 새로 한다 (D118, D500)
       if (completesWork(this.work, task)) await this.recheckProject()
       const settingsPath = await this.writeSettings(task)
-      await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
+      await writeFileAtomic(
+        contextPath,
+        link
+          ? childContext({ ...link, brief: await this.parentBrief() })
+          : await this.context(task, dir, this.approvedBefore(task)),
+      )
 
       // Codex의 id는 SessionStart/턴 훅에서 받는다. 임의의 UUID로 재개하지 않는다.
       const sessionId = driver.engine === 'claude' ? randomUUID() : ''
@@ -2094,6 +2131,7 @@ export class WorkRunner {
       askViaMcp: task.ask === 'mcp',
       callerAnswers:
         workDriver(this.work) === 'caller' ? (this.work.parent ? 'parent' : true) : false,
+      ...(this.work.parent ? { childRules: childRules(this.childLink(dir)) } : {}),
     })
     return deployed.file
   }
@@ -3070,6 +3108,27 @@ export class WorkRunner {
       version,
     )
     await this.ownedWritten('intent.md', written)
+  }
+
+  /** 자식 세션의 연결 정보 (D552, D553): 부모 Work와 그 세션의 폴더, 이 worktree와 브랜치, 맡는 파일 */
+  private childLink(taskDir: string): ChildLink {
+    const parent = this.work.parent
+    const info = parent ? this.ctx.workInfo(this.project.project_id, parent.work_id) : null
+    return {
+      parentWorkId: parent?.work_id ?? '',
+      parentTitle: info?.title ?? '',
+      parentTree: info?.tree ?? '',
+      tree: this.worktree,
+      branch: workBranch(this.work),
+      taskDir,
+      files: parent?.files ?? [],
+    }
+  }
+
+  /** 부모의 지시 (D552): intent.md의 본문이다 */
+  private async parentBrief(): Promise<string> {
+    const intent = await this.files.readOwned('intent.md')
+    return intent ? parseFrontMatter(intent.text).body : ''
   }
 
   /** 부모가 쓴 의도를 intent.md로 쓴다 (D543): 의도 정리 없이 만든 자식 Work */

@@ -104,11 +104,11 @@ const childTools = [
   {
     name: 'spawn_child',
     description:
-      '이 Work의 조각 하나를 자식 Work로 맡깁니다. 자식은 자기 worktree와 브랜치에서 의도 정리 없이 자율 진행부터 일하고, 질문과 승인은 이 세션(부모)이 합니다. 기준은 부모 브랜치의 지금 커밋이니 먼저 커밋하세요. 나란히 코드를 바꿀 조각, 따로 검토하거나 PR로 낼 만한 조각에만 쓰세요.',
+      '이 Work의 조각 하나를 자식 세션에 맡깁니다. 자식은 자기 worktree와 브랜치에서 brief(당신이 쓴 지시)대로만 일합니다. relay는 절차를 더하지 않으니 목표, 맡는 파일, 하지 말 것, 끝났다고 볼 조건, 시험을 brief에 쓰세요. 기준은 부모 브랜치의 지금 커밋이니 먼저 커밋하세요. 일하는 중인 자식과는 ListAgents(결과의 tree 폴더)와 SendMessage로 말합니다.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
-      required: ['title', 'intent'],
+      required: ['title', 'brief'],
       properties: {
         title: {
           type: 'string',
@@ -116,11 +116,11 @@ const childTools = [
           maxLength: 120,
           description: '자식 Work의 제목 한 줄',
         },
-        intent: {
+        brief: {
           type: 'string',
           minLength: 1,
           description:
-            'intent.draft.md 본문: ## 목표, ## 비목표, ## 원하는 결과, ## 완료조건(줄마다 "- [ ] … — 확인: <방법>"), 선택으로 ## 제약',
+            '자식에게 줄 지시(자유 글): 할 일, 맡는 파일, 하지 말 것, 끝났다고 볼 조건, 돌릴 시험',
         },
         files: {
           type: 'array',
@@ -138,7 +138,7 @@ const childTools = [
   {
     name: 'wait_children',
     description:
-      '자식 하나라도 상태가 바뀔 때까지 기다립니다(질문, Work 완료 화면, 끝남 등). seen에 지난번 결과의 work → state_key를 주세요.',
+      '자식 하나라도 상태가 바뀔 때까지 기다립니다(질문, 끝남 등). seen에 지난번 결과의 work → state_key를 주세요. 기다리는 동안 자식의 SendMessage는 이 도구가 끝나야 읽히니 timeout_sec는 짧게(기본 120초) 두세요.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -170,7 +170,7 @@ const childTools = [
   {
     name: 'decide_child',
     description:
-      'Work 완료 화면이 된 자식을 정합니다. merge: 전달 없이 완료하고 이 worktree에서 그 브랜치를 git merge합니다. pr: 따로 PR을 만듭니다(부모 변경 위에서 시작한 자식은 안 됨). revise: message로 고칠 점을 주고 다시 엽니다. discard: 포기합니다.',
+      '끝난 자식을 정합니다. merge: 전달 없이 완료하고 이 worktree에서 그 브랜치를 git merge합니다. pr: relay가 독립 리뷰를 돌리고 차단 지적이 없으면 pr_title·pr_body로 따로 PR을 만듭니다(부모 변경 위에서 시작한 자식은 안 됨). revise: message로 고칠 점을 주고 다시 엽니다. discard: 포기합니다.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -179,6 +179,8 @@ const childTools = [
         work,
         decision: { type: 'string', enum: ['merge', 'pr', 'revise', 'discard'] },
         message: { type: 'string' },
+        pr_title: { type: 'string' },
+        pr_body: { type: 'string' },
       },
     },
   },
@@ -211,7 +213,7 @@ async function rpc(message) {
           : process.env.RELAY_HOOK_TASK === 'cleanup'
             ? '정리 세션입니다. push/PR 및 앱 소유 파일 수정은 앱이 합니다. 질문은 ask_human을 사용하세요.'
             : withChildren
-              ? 'relay 자율 진행의 도구입니다. 나란히 코드를 바꿀 조각은 spawn_child로 자식 Work에 맡기고 wait_children로 기다리세요. 자식의 질문은 answer_child로 답하고, 마친 자식은 decide_child로 정하세요.'
+              ? 'relay 자율 진행의 도구입니다. 맡길 조각은 spawn_child로 자식 세션에 brief와 함께 맡기고, 일하는 중에는 ListAgents와 SendMessage로 말하고, wait_children로 기다리세요. 막힌 자식의 질문은 answer_child로 답하고, 끝난 자식은 decide_child로 정하세요.'
               : 'relay task의 질문 도구입니다. 사람에게 물을 것은 ask_human으로 묻고 답을 기다리세요.'
         return respond({
           protocolVersion: '2024-11-05',

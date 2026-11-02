@@ -39,3 +39,86 @@ export function childOverlap(
 export function openChildrenIssue(open: readonly string[]): string {
   return `정하지 않은 자식 Work가 있음: ${open.join(', ')}. decide_child로 merge, pr, discard 가운데 하나를 정한 뒤 마무리하세요 (D548)`
 }
+
+/** 자식 세션이 받는 연결 규칙의 재료 (D552) */
+export interface ChildLink {
+  parentWorkId: string
+  parentTitle: string
+  /** 부모 세션이 일하는 폴더. ListAgents에서 이 폴더의 세션이 부모다 (D553) */
+  parentTree: string
+  /** 이 자식의 worktree와 브랜치 */
+  tree: string
+  branch: string
+  /** 이 task의 디렉터리. handoff.md를 쓴다 */
+  taskDir: string
+  /** 부모가 정한 맡는 파일 */
+  files: readonly string[]
+}
+
+/** 자식 세션이 부모에게 묻는 도구 (relay_task의 ask_human) */
+const ASK_PARENT = 'mcp__relay_task__ask_human'
+
+/**
+ * 자식 세션의 시스템 프롬프트 (D552, D553): 절차는 없고 연결 규칙만이다. 무엇을 할지는 부모의 지시(context.md)가 정한다.
+ * 어디서 일하는지, 커밋과 push 금지, 부모와 말하는 법(SendMessage, 막히면 ask_human), 끝났다는 신호(handoff)
+ */
+export function childRules(c: ChildLink): string {
+  return [
+    '# relay: child session',
+    '',
+    `You are a child session of the relay Work ${c.parentWorkId} ("${c.parentTitle}"). The parent session gave you one piece of its work. What to do is in the parent's brief in \`context.md\` (path at the end). Follow it; the brief decides how you work.`,
+    '',
+    '## Where you work',
+    '',
+    `- Work only in this worktree: \`${c.tree}\` (branch \`${c.branch}\`).${c.files.length ? ` The parent gave you these files: ${c.files.map((f) => `\`${f}\``).join(', ')}. Touch other files only if the brief allows it.` : ''}`,
+    '- Commit your changes before you finish. Do not push and do not open PRs: the parent merges your branch or delivers it.',
+    '',
+    '## Talking with the parent',
+    '',
+    `- The parent session works in \`${c.parentTree}\`. Find it with your \`ListAgents\` tool (the session whose working directory is that folder) and message it with \`SendMessage\`: progress, a finding the parent should know, a question that can wait. Messages from the parent arrive between your tool calls; read them and adjust.`,
+    `- If you cannot go on without an answer, ask with \`${ASK_PARENT}\` and wait. The parent cannot see your terminal, so put everything it needs into the question.`,
+    '- The human may also type in your terminal. A human instruction comes first; tell the parent what changed with `SendMessage`.',
+    '',
+    '## When you are done',
+    '',
+    `Write \`handoff.md\` in \`${c.taskDir}\` and end your turn. relay tells the parent you are done when it sees it. If you cannot finish, use \`status: blocked\` and say what is missing in \`blocked_reason\`.`,
+    '',
+    '```yaml',
+    '---',
+    'status: awaiting_approval',
+    'blocked_reason:',
+    'decisions: []',
+    'assumptions: []',
+    'rejected: []',
+    'open_questions: []',
+    'intent_deviation: null',
+    'risks: []',
+    '---',
+    '## 요약',
+    '(무엇을 했는지, 커밋, 돌린 시험과 결과)',
+    '## 다음 task가 알아야 할 것',
+    '(부모가 합칠 때 알아야 할 것)',
+    '```',
+    '',
+    'Put every text value in double quotes. If relay sends back a format error, fix `handoff.md` and end your turn again. Write in Korean.',
+    '',
+  ].join('\n')
+}
+
+/** 자식 세션의 context.md (D552): 부모의 지시와 연결 정보뿐이다. 팀 지식과 결정 로그는 부모가 맡는다 */
+export function childContext(c: ChildLink & { brief: string }): string {
+  return [
+    '# relay 자식 세션 컨텍스트',
+    '',
+    `- 부모 Work: ${c.parentWorkId} (${c.parentTitle})`,
+    `- 부모 세션의 폴더: \`${c.parentTree}\``,
+    `- 이 worktree: \`${c.tree}\``,
+    `- 브랜치: \`${c.branch}\``,
+    ...(c.files.length ? [`- 맡는 파일: ${c.files.map((f) => `\`${f}\``).join(', ')}`] : []),
+    '',
+    '## 부모의 지시',
+    '',
+    c.brief.trim(),
+    '',
+  ].join('\n')
+}

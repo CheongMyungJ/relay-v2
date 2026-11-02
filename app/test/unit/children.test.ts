@@ -1,7 +1,15 @@
 // [단위] 자식 Work의 판정 (docs/design.md D543~D549): 상한, 정하지 않은 자식, 맡는 파일의 겹침, 자식 Work 만들기의 전이,
 // 부모 마무리의 관문, 사이드바의 자리
 import { describe, expect, it } from 'vitest'
-import { MAX_CHILDREN, childOverlap, isOpenChild, openChildrenIssue } from '../../src/core/children'
+import {
+  MAX_CHILDREN,
+  childContext,
+  childOverlap,
+  childRules,
+  isOpenChild,
+  openChildrenIssue,
+} from '../../src/core/children'
+import { finishesWork } from '../../src/core/pipeline'
 import { createWork } from '../../src/core/machine'
 import { checkTask } from '../../src/core/validate'
 import { nestChildren } from '../../src/renderer/src/sidebar'
@@ -145,5 +153,76 @@ describe('[단위] 사이드바의 자식 Work 자리 (D549)', () => {
       'p/w-003',
       'p/w-000',
     ])
+  })
+})
+
+describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)', () => {
+  const link = {
+    parentWorkId: 'w-1',
+    parentTitle: '세 모듈',
+    parentTree: '/wt/w-1',
+    tree: '/wt/w-2',
+    branch: 'relay/w-2',
+    taskDir: '/works/w-2/tasks/01-orchestrate',
+    files: ['src/csv.js'],
+  }
+
+  it('연결 규칙: 어디서 일하는지, push 금지, 부모 세션의 폴더와 SendMessage, 막히면 ask_human, handoff로 끝남. 단계 절차는 없다', () => {
+    const rules = childRules(link)
+    expect(rules).toMatch(/^# relay: child session$/m)
+    for (const s of [
+      '/wt/w-2',
+      'relay/w-2',
+      '`src/csv.js`',
+      'Do not push',
+      '/wt/w-1',
+      '`SendMessage`',
+      '`ListAgents`',
+      'mcp__relay_task__ask_human',
+      'status: awaiting_approval',
+      '/works/w-2/tasks/01-orchestrate',
+    ])
+      expect(rules, s).toContain(s)
+    expect(rules).not.toContain('plan.md')
+    expect(rules).not.toContain('독립 리뷰')
+  })
+
+  it('컨텍스트는 부모의 지시와 연결 정보뿐이다', () => {
+    const ctx = childContext({ ...link, brief: '  parseCsv를 만든다  ' })
+    expect(ctx).toContain('## 부모의 지시\n\nparseCsv를 만든다\n')
+    expect(ctx).toContain('부모 세션의 폴더: `/wt/w-1`')
+    expect(ctx).not.toContain('팀 지식')
+  })
+
+  it('자식 Work의 자율 진행은 마무리 단계가 아니고, 형식 검사는 handoff만 본다', () => {
+    const work = { type: 'auto' as const, pipeline: 2 as const }
+    const task = { node: 'orchestrate' as const }
+    expect(finishesWork(work, task)).toBe(true)
+    expect(finishesWork({ ...work, parent: { work_id: 'w-1', task_id: 't-02' } }, task)).toBe(false)
+    const handoff = [
+      '---',
+      'status: awaiting_approval',
+      'blocked_reason:',
+      'decisions: []',
+      'assumptions: []',
+      'rejected: []',
+      'open_questions: []',
+      'intent_deviation: null',
+      'risks: []',
+      '---',
+      '## 요약',
+      '요약',
+      '## 다음 task가 알아야 할 것',
+      '- 없음',
+      '',
+    ].join('\n')
+    const errors = checkTask({
+      node: 'orchestrate',
+      type: 'auto',
+      files: { 'handoff.md': handoff },
+      config: DEFAULT_CONFIG,
+      child: true,
+    }).errors
+    expect(errors).toEqual([])
   })
 })

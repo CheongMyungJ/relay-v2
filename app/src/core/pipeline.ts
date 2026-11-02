@@ -201,7 +201,9 @@ export const stageOf = (task: Pick<TaskRecord, 'node' | 'step'>): Stage | null =
     ? { node: task.node, ...(task.step !== undefined ? { step: task.step } : {}) }
     : null
 
-type PipelineWork = Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>
+type PipelineWork = Pick<WorkState, 'type' | 'custom_type' | 'pipeline'> & {
+  parent?: WorkState['parent']
+}
 
 /**
  * 승인 화면이 Work 완료 화면인 task인가 (시나리오 7-3): 다음 자리가 Work 완료인 파이프라인 task. 새 Work는 마무리 단계이고
@@ -221,7 +223,13 @@ export function completesWork(
  * (5.6.14). 옛 Work의 verify와 깨진 기록이 보낸 verify는 아니다
  */
 export function finishesWork(work: PipelineWork, task: Pick<TaskRecord, 'node' | 'step'>): boolean {
-  return !legacyPipeline(work) && task.node !== 'verify' && completesWork(work, task)
+  // 자식 Work(D543)는 부모의 지시만 하고 마무리 절차(독립 리뷰, pr.md)를 하지 않는다 (D552). 부모의 마무리가 합친 것을 본다
+  return (
+    !legacyPipeline(work) &&
+    task.node !== 'verify' &&
+    work.parent === undefined &&
+    completesWork(work, task)
+  )
 }
 
 /** 커스텀 단계 task의 단계 정의. 커스텀 단계가 아니거나 정의에 없으면 undefined다 */

@@ -716,7 +716,7 @@ async function run() {
   if (opts.resume && opts.prompt !== null) await steps([{ do: 'prompt' }], ctx, vars)
   // 자식 Work(D543)의 task는 같은 스킬의 부모 task와 가르려고 '<스킬>#child' 키를 먼저 본다. 자식은 부모가 답한다는 안내를 받는다
   const childKey =
-    opts.guide !== null && /This Work is a child Work/.test(fs.readFileSync(opts.guide, 'utf8'))
+    opts.guide !== null && /^# relay: child session$/m.test(fs.readFileSync(opts.guide, 'utf8'))
       ? `${ctx.skill}#child`
       : null
   const pick = (map) =>

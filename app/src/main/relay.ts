@@ -84,7 +84,7 @@ import {
 } from '../core/branch'
 import { localIso, nextSessionId, nextWorkId, targetBranch, workBranch } from '../core/records'
 import { recordedProcesses, type RecordedProcess } from '../core/recovery'
-import { resolveAgent } from '../shared/agent'
+import { resolveAgent, type ResolvedAgent } from '../shared/agent'
 import { DEFAULT_CONFIG, type AppConfig, type WorkSettingsPatch } from '../shared/config'
 import { issueLogOn, projectName, type ProjectChecks, type ProjectState } from '../shared/project'
 import type { DraftRef, SessionRecord } from '../shared/session'
@@ -218,6 +218,11 @@ export interface WorkCaller {
   driver?: 'caller'
   callerQuestions?: CallerQuestions
   parent?: { workId: string; taskId: string; intent: string; files?: readonly string[] }
+}
+
+/** Claude로 돌 엔진 설정: 이미 Claude면 그대로, 아니면 모델과 추론 수준 없이 Claude다 (D553) */
+function claudeAgent(agent: ResolvedAgent): ResolvedAgent {
+  return agent.engine === 'claude' ? agent : { engine: 'claude' }
 }
 
 export class Relay {
@@ -444,6 +449,10 @@ export class Relay {
       children: (parentKey, taskId, tool, args, signal) =>
         this.children.call(parentKey, taskId, tool, args, signal),
       openChildren: (parentKey) => this.children.openChildren(parentKey),
+      workInfo: (projectId, workId) => {
+        const w = this.works.get(`${projectId}/${workId}`)
+        return w ? { title: w.view().title, tree: w.worktree } : null
+      },
       ghBin: this.ghBin(),
       checks: (projectId) => this.projects.get(projectId)?.checks,
       project: (projectId) => this.projects.get(projectId),
@@ -1428,8 +1437,10 @@ export class Relay {
 
     const requestHash = await files.writeRequest(input.request)
     const created = createWork({
-      // 자식 Work는 의도 정리 없이 자율 진행부터다 (D543)
-      agent: resolveAgent(this.config, NODE_INFO[caller.parent ? 'orchestrate' : 'intake'].skill),
+      // 자식 Work는 의도 정리 없이 자율 진행부터이고, 연결 규칙과 세션 간 메시지가 Claude Code의 것이라 Claude로 돈다 (D543, D553)
+      agent: caller.parent
+        ? claudeAgent(resolveAgent(this.config, NODE_INFO.orchestrate.skill))
+        : resolveAgent(this.config, NODE_INFO.intake.skill),
       workId,
       type: input.type,
       ...(customType ? { customType } : {}),

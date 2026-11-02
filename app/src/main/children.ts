@@ -1,7 +1,6 @@
 // 자식 Work의 도구 (D543~D548). 자율 Work의 자율 진행 task가 task용 relay MCP(relay_task)로 부른 도구를 받아, 그 Work의
 // 자식 Work를 만들고 진행한다. 바깥 호출자용 relay MCP(D516)와 도구는 다르고, 자식의 질문 답·승인·전달은 같은 처리
 // (McpService의 answer, approve, deliver, revise, abandon)를 부모의 이름으로 부른다. Electron을 import하지 않는다
-import { checkIntentDraft } from '../core/validate'
 import { MAX_CHILDREN, childOverlap, isOpenChild } from '../core/children'
 import { currentTaskView, finished, stateKey } from '../core/mcp'
 import { workBranch } from '../core/records'
@@ -20,8 +19,10 @@ export const CHILD_TOOLS = [
   'decide_child',
 ] as const
 
-/** wait_children의 기본·최대 기다림 (초) */
-const WAIT_DEFAULT_SEC = 600
+/**
+ * wait_children의 기본·최대 기다림 (초). 기다리는 동안 자식의 SendMessage는 도구가 끝나야 읽히므로(D553) 기본을 짧게 둔다
+ */
+const WAIT_DEFAULT_SEC = 120
 const WAIT_MAX_SEC = 1800
 /** wait_children가 자식의 상태를 다시 보는 간격 */
 const POLL_MS = 500
@@ -126,30 +127,22 @@ export class ChildService {
         error: `이 Work의 자식은 ${MAX_CHILDREN}개까지입니다 (D545). 남은 일은 직접 하세요`,
       }
     const title = (text(args, 'title') ?? '').replace(/\s+/g, ' ').trim()
-    const intent = text(args, 'intent') ?? ''
+    // 부모의 지시는 자유 글이다 (D552): 형식을 보지 않는다
+    const brief = (text(args, 'brief') ?? '').trim()
     const files = strings(args, 'files')
-    const check = checkIntentDraft(intent, {
-      warnChars: this.relay.appConfig().intent_warn_chars,
-      type: 'auto',
-    })
-    if (check.errors.length)
-      return {
-        ok: false,
-        error: `의도의 형식이 틀림: ${check.errors.map((e) => e.message).join('; ')}`,
-      }
     const branch = workBranch(work)
     const target = work.target_branch ?? work.base_branch
     const r = await this.relay.createWork(
       parent.project.project_id,
       {
-        request: `${title}\n\n${intent.trim()}\n${files.length ? `\n맡는 파일: ${files.join(', ')}\n` : ''}`,
+        request: `${title}\n\n${brief}\n${files.length ? `\n맡는 파일: ${files.join(', ')}\n` : ''}`,
         type: 'auto',
         baseBranch: branch,
         baseLocation: 'local',
         targetBranch: target,
       },
       {
-        parent: { workId: work.work_id, taskId: parentTaskId, intent: intent.trim(), files },
+        parent: { workId: work.work_id, taskId: parentTaskId, intent: brief, files },
       },
     )
     if (!r.ok) return r
@@ -159,18 +152,21 @@ export class ChildService {
         .filter((w) => w.key !== r.workKey && isOpenChild(w.status))
         .map((w) => ({ work: w.key, files: w.parent?.files ?? [] })),
     )
-    const view = this.relay.work(r.workKey)?.view()
+    const child = this.relay.work(r.workKey)
+    const view = child?.view()
     return {
       ok: true,
       result: {
         work: r.workKey,
         branch: view?.branch ?? null,
+        // 자식 세션이 일하는 폴더: ListAgents에서 이 폴더의 세션에 SendMessage로 말한다 (D553)
+        tree: child?.worktree ?? null,
         ...(overlap.length
           ? {
               warning: `나란히 도는 자식과 맡는 파일이 겹침: ${overlap.map((o) => `${o.work}(${o.files.join(', ')})`).join('; ')}. 합칠 때 충돌할 수 있습니다`,
             }
           : {}),
-        note: '자식의 기준은 부모 브랜치의 지금 커밋입니다. 커밋하지 않은 부모의 변경은 자식에 없습니다',
+        note: '자식의 기준은 부모 브랜치의 지금 커밋입니다. 커밋하지 않은 부모의 변경은 자식에 없습니다. 일하는 중인 자식에게는 ListAgents로 tree 폴더의 세션을 찾아 SendMessage로 말하세요',
       },
     }
   }
@@ -185,6 +181,7 @@ export class ChildService {
       out.push({
         ...(got.ok ? (got.result as object) : { work: w.key, error: got.error }),
         branch: w.branch,
+        tree: runner?.worktree ?? null,
         files: w.parent?.files ?? [],
         // 부모 브랜치의 변경 위에서 시작했는가: 그런 자식은 PR로 따로 낼 수 없다 (D547)
         on_parent_changes: runner ? runner.work.base_commit !== parentBase : null,
@@ -258,6 +255,8 @@ export class ChildService {
         }
       }
       case 'pr': {
+        if (!text(args, 'pr_title', false))
+          throw new ArgError('pr에는 pr_title(PR 제목)이 필요합니다. 본문은 pr_body')
         if (!atCompletion())
           return {
             ok: false,
@@ -272,6 +271,33 @@ export class ChildService {
             error:
               '부모 브랜치의 변경 위에서 시작한 자식은 PR로 따로 내지 않습니다 (D547). merge로 부모에 합치세요',
           }
+        const title = (text(args, 'pr_title') ?? '').replace(/\s+/g, ' ').trim()
+        const body = text(args, 'pr_body', false) ?? ''
+        // 따로 나가는 PR은 부모의 마지막 리뷰를 지나지 않으므로 앱이 먼저 독립 리뷰를 돌린다 (D554)
+        const review = await runner.reviewChildForPr()
+        if (!review) return { ok: false, error: '자식의 지금 task가 없습니다' }
+        const blocking = review.findings.filter((f) => f.severity === '차단')
+        if (blocking.length)
+          return {
+            ok: false,
+            error: `독립 리뷰에 차단 지적이 있어 PR을 만들지 않았습니다. 자식에게 고치게 한 뒤(SendMessage나 revise) 다시 pr로 정하세요: ${blocking
+              .map((f) => `${f.file}${f.line ? `:${f.line}` : ''} ${f.summary}`)
+              .join('; ')}`,
+          }
+        const notes = review.findings.map(
+          (f) => `- [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.summary}`,
+        )
+        await runner.writeChildPr(
+          [
+            `# ${title}`,
+            '',
+            body.trim(),
+            '',
+            '## 독립 리뷰',
+            notes.length ? notes.join('\n') : '- 지적 없음',
+            '',
+          ].join('\n'),
+        )
         return await this.relay.mcp.call('deliver', { work: child.key, choice: 'pr' })
       }
       case 'revise':

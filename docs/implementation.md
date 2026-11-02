@@ -219,6 +219,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I203 | 부모 마무리의 관문(D548)은 `TaskCheckInput.openChildren`(`RunnerContext.openChildren` → `ChildService.openChildren`, `core/children.isOpenChild`)이다. 자식의 절차 끝 안내는 `CHILD_ASK_NOTE`(`deploySkill`의 `callerAnswers: 'parent'`)다 | 관문은 형식 오류와 같은 길(D541)이다 | |
 | I204 | 화면(D549)은 `WorkView.parent`(부모 key, task, 맡는 파일)로 정한다: `sidebar.nestChildren`이 자식을 부모 아래에 두고, 사이드바 항목은 `child-work`로 들여 쓰며 "자식" 표시를 붙이고, `CallerBand`와 승인 자리의 글을 바꾼다. 가짜 claude는 `mcpCall` 단계(결과를 vars에 두고 until로 다시 부름)와 자식 task의 `<스킬>#child` 시나리오 키(자식 안내로 앎), `git` 단계의 vars 채우기를 더했다 | 녹화본에 없는 필드를 지어내지 않는다: MCP 도구 호출은 claude의 훅 모양을 바꾸지 않는다 | |
 | I205 | 방식 줄(D535)은 이름 뒤의 괄호 설명(`TDD(자식 안에서)`, 전각 괄호 포함)을 떼고 읽는다 | 평가 40에서 부모가 괄호 설명을 붙여 형식 오류로 되돌려졌다. 이름을 고르는 규칙은 그대로이고 설명만 받는다 | |
+| I206 | 자식 세션(D552)은 `deploySkill`의 `childRules`(`core/children.childRules`)로 시스템 프롬프트를, `childContext`로 context.md를 쓴다. 부모의 지시는 intent.md 본문에 둔다(`createWork`의 `parent.intent`). `finishesWork`가 자식 Work면 거짓이고 `TaskCheckInput.child`가 필수 산출물과 plan.md 관문을 끈다. 부모 세션의 폴더는 `RunnerContext.workInfo`로 찾는다. PR 전 리뷰(D554)는 `runReview`의 `standalone`(상태를 바꾸지 않고 결과를 돌려줌)을 `WorkRunner.reviewChildForPr`이 부르고, `writeChildPr`이 pr.md를 쓴 뒤 relay MCP의 deliver를 부른다. 자식의 첫 task 엔진은 Claude다(`claudeAgent`). 가짜 claude는 자식을 연결 규칙의 첫 줄(`# relay: child session`)로 안다 | 독립 리뷰의 호출과 결과 글은 마무리와 같은 것을 쓰고, 세션을 다시 여는 상태 전이만 뺀다 | |
 
 ## 3. 확인한 사실
 
@@ -1661,6 +1662,22 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 ### M46. 자식 Work 시나리오와 나누기 보완 (D551)
 
 평가 시나리오 39(`39-three-modules`)와 40(`40-three-libraries`)을 더하고(`check-scenario.mjs` 통과, 정답 패치와 함정 패치) relay·relay@auto·맨 CLI로 두 번씩 돌렸다. 40에서 의도 정리가 요청을 Work 셋으로 쪼개 의도 정리가 쪼개지 않고 자율 진행이 부분마다 자식 Work를 두게 고치고(D551, `skills/types/auto/intake.md`, `orchestrate.md`, `skills/check.mjs`), 방식 줄의 괄호 설명을 받게 했다(I205, `test/unit/autonomy.test.ts`). 고친 뒤 40을 relay@auto로 두 번 다시 돌려 자식 Work 셋이 나란히 돌고 합쳐지는 것을 봤다. 보고서는 `app/eval/reports/2026-11-02-auto-39.md`, `-40.md`, `-40-recheck.md`, `docs/autonomous-work.md` 15.2.
+
+### M47. 지시만 받는 자식 세션과 세션 간 메시지 (D552~D554)
+
+사람이 자식 세션을 쓸지와 넘길 것을 주 세션이 정하고, 일하는 도중에 둘이 대화하기를 바랐고, 대화 길로 Claude Code 내장 메시지를 골랐다.
+
+- core: `children.childRules`·`childContext`, `pipeline.finishesWork`의 자식, `validate`의 `child`.
+- 어댑터: `claude.deploySkill`의 `childRules`.
+- 앱: `WorkRunner.childLink`·`parentBrief`·`reviewChildForPr`·`writeChildPr`, `runReview`의 `standalone`, `RunnerContext.workInfo`, `ChildService`의 `brief`·`tree`·`pr_title`·`pr_body`와 PR 전 리뷰, `wait_children` 기본 120초. 브리지의 도구 설명.
+- 스킬: orchestrate.md의 `## Child sessions`.
+- 넣지 않은 것: relay 자체 메시지와 그 화면(사람이 고르지 않음), 받기 정책 바꾸기(`crossSessionInbound`는 Claude Code 기본).
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 연결 규칙(어디서, push 금지, 부모 폴더, SendMessage, ask_human, handoff, 절차 없음), 자식 컨텍스트, 자식 Work의 마무리 아님과 handoff만 보는 검사.
+- **[흐름]** `test/flow/children.test.ts`: 자식이 연결 규칙과 지시만 받고 plan.md·독립 리뷰·pr.md가 없음, merge, pr(앱이 독립 리뷰를 돌린 뒤 PR), 부모 변경 위 자식의 pr 거절, 정하지 않은 자식의 되돌림, 깊이 1.
+- **[실제]** 세션 간 메시지는 가짜 claude가 흉내 내지 않는다. 평가 40으로 실제 claude에서 본다.
 
 ## 8. 테스트 전략
 

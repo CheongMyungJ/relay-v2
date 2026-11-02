@@ -13,9 +13,10 @@ import {
   AUTO_PR,
   AUTO_REQUEST,
   AUTO_VERDICTS,
+  FEATURE_FILES,
+  FEATURE_TEST_FILES,
   REPO_FILES,
   REVIEW_NONE,
-  autoIntentDraft,
   autoPlan,
   autoScenario,
   finishingSteps,
@@ -80,11 +81,10 @@ function childScenario(parent: Step[]): Scenario {
     AUTO_VERDICTS,
     after,
   )
-  const child = finishingSteps(steps('orchestrate'), AUTO_VERDICTS, after)
   return {
     ...base,
-    tasks: { ...base.tasks, orchestrate: own.own, 'orchestrate#child': child.own },
-    reviewed: { ...base.reviewed, orchestrate: own.reviewed, 'orchestrate#child': child.reviewed },
+    tasks: { ...base.tasks, orchestrate: own.own, 'orchestrate#child': CHILD_STEPS },
+    reviewed: { ...base.reviewed, orchestrate: own.reviewed },
   }
 }
 
@@ -117,12 +117,32 @@ const events = (dir: string): LifecycleEvent[] =>
     .filter(Boolean)
     .map((l) => JSON.parse(l) as LifecycleEvent)
 
+/** 자식 세션 (D552): 지시대로 시험과 구현을 커밋하고 handoff만 쓴다. 마무리 절차(독립 리뷰, pr.md)는 없다 */
+const CHILD_STEPS: Step[] = [
+  { do: 'prompt' },
+  { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
+  { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
+  {
+    do: 'write',
+    file: 'handoff.md',
+    text: handoff({
+      decisions: [{ what: '지시대로 함', why: '부모의 지시', by: 'ai' }],
+      summary: 'median과 시험을 커밋했다.',
+    }),
+  },
+  { do: 'stop' },
+]
+
+/** 부모의 지시 (D552): 자유 글 */
+const BRIEF =
+  'src/avg.js에 median(xs)을 더한다. 빈 배열은 0. test/median.test.js에 시험을 더하고 npm test로 확인한다.'
+
 const SPAWN: Step = {
   do: 'mcpCall',
   tool: 'spawn_child',
   args: {
     title: 'median 추가',
-    intent: autoIntentDraft(),
+    brief: BRIEF,
     files: ['src/avg.js', 'test/median.test.js'],
   },
   save: 'child',
@@ -172,14 +192,25 @@ describe('[흐름] 자식 Work (M44)', () => {
     ])
     const intent = parseFrontMatter(read(path.join(childDir, 'intent.md')))
     expect(intent.ok && intent.data).toMatchObject({ version: 1, type: 'auto' })
-    expect(intent.body.trim()).toBe(autoIntentDraft().trim())
+    expect(intent.body.trim()).toBe(BRIEF)
     expect(events(childDir).find((e) => e.type === 'work.completed')?.payload).toMatchObject({
       delivery: 'none',
     })
     // 자식은 부모 브랜치에서 뻗고, 부모가 답한다는 안내를 받고, 자식 도구를 받지 않는다 (깊이 1)
     expect(child.base_branch).toBe(work(s.dir(key)).branch ?? `relay/${key.split('/')[1]}`)
     const childTask = path.join(childDir, 'tasks', '01-orchestrate')
-    expect(read(path.join(childTask, 'instructions.md'))).toContain('This Work is a child Work')
+    // 자식은 단계 절차 없이 연결 규칙만 받고(D552), context.md는 부모의 지시와 부모 세션의 폴더뿐이다(D553)
+    const rules = read(path.join(childTask, 'instructions.md'))
+    expect(rules).toContain('# relay: child session')
+    expect(rules).toContain('`SendMessage`')
+    expect(rules).toContain(s.tree(key))
+    expect(rules).not.toContain('# relay: orchestrate')
+    expect(rules).not.toContain('## Finishing the Work')
+    const ctx = read(path.join(childTask, 'context.md'))
+    expect(ctx).toContain(`## 부모의 지시\n\n${BRIEF}`)
+    expect(ctx).not.toContain('## 팀 지식')
+    for (const f of ['plan.md', 'verification.md', 'pr.md', 'independent-review.md'])
+      expect(fs.existsSync(path.join(childTask, f)), f).toBe(false)
     expect(read(path.join(childTask, 'task.mcp.json'))).not.toContain('RELAY_CHILD_TOOLS')
 
     // 부모: 자식 도구를 받고 질문은 터미널에서 묻는다(AskUserQuestion을 빼지 않음). 자식 브랜치를 합쳤다
@@ -264,7 +295,11 @@ describe('[흐름] 자식 Work (M44)', () => {
           tries: 150,
           pause: 100,
         },
-        { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'pr' } },
+        {
+          do: 'mcpCall',
+          tool: 'decide_child',
+          args: { work: '{child}', decision: 'pr', pr_title: 'median 추가', pr_body: '요약' },
+        },
       ]),
     )
     const gh = new FakeGitHub(path.join(s.h.root, 'record'), '', path.join(s.h.root, 'outside'))
@@ -295,7 +330,11 @@ describe('[흐름] 자식 Work (M44)', () => {
           tries: 150,
           pause: 100,
         },
-        { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'pr' } },
+        {
+          do: 'mcpCall',
+          tool: 'decide_child',
+          args: { work: '{child}', decision: 'pr', pr_title: 'median 추가' },
+        },
         { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'discard' } },
       ]),
     )
@@ -329,7 +368,7 @@ describe('[흐름] 자식 Work (M44)', () => {
     const childTask = childView.tasks[0]?.id ?? ''
     const r = await s.h.relay.children.call(childView.key, childTask, 'spawn_child', {
       title: '손주',
-      intent: autoIntentDraft(),
+      brief: BRIEF,
     })
     expect(r).toMatchObject({ ok: false, error: expect.stringContaining('깊이 1') })
     // 의도 정리 task에는 자식 도구가 없다

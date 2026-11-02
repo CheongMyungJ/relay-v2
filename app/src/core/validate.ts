@@ -740,6 +740,8 @@ export interface TaskCheckInput {
   autonomy?: AutonomyFacts
   /** 자율 진행의 정하지 않은 자식 Work (D548). 리뷰 요청과 마무리 때 남아 있으면 오류다. 없거나 비면 없다 */
   openChildren?: readonly string[]
+  /** 자식 Work의 task (D552): 필수 산출물과 plan.md 관문이 없고 handoff만 본다 */
+  child?: boolean
 }
 
 /**
@@ -820,7 +822,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   // 마무리 단계와 옛 Work의 verify가 Work 완료 화면의 판정표와 PR 초안을 쓴다 (D493, D500)
   const completing = node === 'verify' || finishing !== undefined
   const bundle = completing ? input.bundleDrafts : undefined
-  const own = step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
+  const own = input.child ? [] : step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
   const required = [
     ...own,
     ...(finishing && !own.includes(VERIFICATION_FILE) ? [VERIFICATION_FILE, PR_FILE] : []),
@@ -891,7 +893,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   }
   errors.push(...(draft?.errors ?? []))
   // 자율 진행의 관문 (D535~D537): plan.md의 방식 줄은 파일이 있으면 늘 보고, 커밋은 리뷰 요청과 마무리 때 본다
-  const plan = node === 'orchestrate' ? files[PLAN_FILE] : undefined
+  const plan = node === 'orchestrate' && !input.child ? files[PLAN_FILE] : undefined
   if (plan !== undefined) {
     errors.push(...planIssues(plan))
     if (status === 'review_requested' || status === 'awaiting_approval') {
