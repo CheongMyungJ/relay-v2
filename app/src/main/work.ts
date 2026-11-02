@@ -49,7 +49,6 @@ import {
   type GhRepoOptions,
 } from '../adapters/gh'
 import {
-  commitFiles,
   addWorktree,
   changedPaths,
   checkedOutSubmodules,
@@ -79,6 +78,7 @@ import {
   refCommit,
   refNames,
   remoteBranchExists,
+  remoteBranchesAfter,
   remoteUrl,
   removeWorktree,
   repairSubmoduleWorktree,
@@ -166,6 +166,7 @@ import {
   customSections,
   customStep,
   finishesWork,
+  sessionDriven,
   isPipelineNode,
   isStepNode,
   nodeTitle,
@@ -352,8 +353,16 @@ import {
   type TaskCheck,
   type TaskCheckInput,
 } from '../core/validate'
-import { PLAN_FILE, planView, type AutonomyFacts } from '../core/autonomy'
-import { childContext, childRules, type ChildLink } from '../core/children'
+import { PLAN_FILE, planView } from '../core/autonomy'
+import { riskyGitCommand } from '../core/git-guard'
+import { SESSION_AUTO_REVIEWS, SESSION_REVIEWS_FILE } from '../core/session-driven'
+import {
+  childContext,
+  childRules,
+  childTurnEnded,
+  sessionHandoff,
+  type ChildLink,
+} from '../core/children'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import {
   EMPTY_PR_ITEMS,
@@ -415,6 +424,8 @@ import type {
   RespondReview,
   RespondStartInput,
   ReviewView,
+  SessionFactsView,
+  SessionReviewView,
   TaskView,
   TerminalBacklog,
   ToolActivityView,
@@ -554,6 +565,8 @@ export interface RunnerContext {
   ): Promise<unknown>
   /** 부모 브랜치에 합쳐진 자식 Work를 닫는다 (D556) */
   closeMergedChildren(parentKey: string): Promise<void>
+  /** 끝나지 않은 자식 Work의 key (D561) */
+  openChildren(parentKey: string): string[]
   /** 같은 프로젝트의 다른 Work의 제목과 worktree (D553: 자식이 부모 세션을 찾는다). 없으면 null */
   workInfo(projectId: string, workId: string): { title: string; tree: string } | null
 }
@@ -651,6 +664,22 @@ const TOOL_HOOKS: readonly string[] = ['PreToolUse', 'PostToolUse', 'PostToolUse
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+
+/** 훅 본문의 셸 명령 (Claude의 Bash, Codex의 명령). 셸 도구가 아니면 undefined */
+function bashCommand(body: Record<string, unknown>): string | undefined {
+  const input = body['tool_input']
+  if (typeof input !== 'object' || input === null) return undefined
+  const command = (input as Record<string, unknown>)['command']
+  if (typeof command === 'string') return command
+  if (Array.isArray(command) && command.every((c) => typeof c === 'string'))
+    return command.join(' ')
+  return undefined
+}
+
+/** git push를 부른 셸 명령인가 (D559). 낱말만 본다 */
+function pushCommand(body: Record<string, unknown>): boolean {
+  return /\bgit\b[^;&|\n]*\bpush\b/.test(bashCommand(body) ?? '')
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const exists = (p: string) =>
   fsp.stat(p).then(
@@ -1164,7 +1193,6 @@ export class WorkRunner {
     files: Readonly<Record<string, string>>,
     knowledge?: KnowledgeCheck,
     bundleDrafts?: TaskCheckInput['bundleDrafts'],
-    autonomy?: AutonomyFacts,
   ): TaskCheck {
     const step = customStep(this.work, task)
     return checkTask({
@@ -1181,8 +1209,7 @@ export class WorkRunner {
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
-      ...(autonomy ? { autonomy } : {}),
-      ...(this.work.parent ? { child: true } : {}),
+      ...(sessionDriven(this.work) ? { sessionDriven: true } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
         ? { finishing: { requested: task.review !== undefined } }
@@ -1227,25 +1254,7 @@ export class WorkRunner {
       f,
       await this.knowledgeCheck(task, f, opts),
       await this.bundleDrafts(task),
-      await this.autonomyFacts(task),
     )
-  }
-
-  /**
-   * 자율 진행 task의 커밋 (D536, D537): 기준 커밋 뒤의 커밋과 커밋마다 바뀐 파일. 관문이 plan.md의 방식과 시험을 커밋으로
-   * 본다. 자율 진행이 아니거나 git이 실패하면 undefined다(관문을 건너뛰고 독립 리뷰가 본다)
-   */
-  private async autonomyFacts(task: TaskRecord): Promise<AutonomyFacts | undefined> {
-    if (task.node !== 'orchestrate') return undefined
-    try {
-      return {
-        commits: await commitFiles(this.worktree, this.work.base_commit, 'HEAD', {
-          env: this.ctx.env,
-        }),
-      }
-    } catch {
-      return undefined
-    }
   }
 
   /**
@@ -1506,6 +1515,7 @@ export class WorkRunner {
     taskId: string,
     codeReview: boolean,
     signal: AbortSignal,
+    detached = false,
   ): Promise<ReviewResult | undefined> {
     const task = this.task(taskId)
     if (!task) return undefined
@@ -1647,6 +1657,8 @@ export class WorkRunner {
       path.join(dir, REVIEW_RECORD_FILE),
       `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
     )
+    // 세션이 하는 Work의 리뷰(D559)는 상태를 바꾸지 않고 결과만 돌려준다
+    if (detached) return result
     const error = reviewError(result)
     await this.feedReviewFinished(taskId, signal, {
       ...(error ? { error } : {}),
@@ -1961,7 +1973,7 @@ export class WorkRunner {
         finishing: finishesWork(this.work, task),
         askViaMcp: ask,
         callerAnswers: caller && this.work.parent ? 'parent' : caller,
-        ...(link ? { childRules: childRules(link) } : {}),
+        ...(await this.bareRules(task, dir)),
       })
       const version = await driver.version(bin, env)
 
@@ -2120,7 +2132,7 @@ export class WorkRunner {
       askViaMcp: task.ask === 'mcp',
       callerAnswers:
         workDriver(this.work) === 'caller' ? (this.work.parent ? 'parent' : true) : false,
-      ...(this.work.parent ? { childRules: childRules(this.childLink(dir)) } : {}),
+      ...(await this.bareRules(task, dir)),
     })
     return deployed.file
   }
@@ -2218,6 +2230,8 @@ export class WorkRunner {
         skill: NODE_INFO[task.node].skill,
         workDir: this.files.dir,
         previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
+        // 세션이 하는 Work의 자율 진행은 push와 PR을 직접 한다. 위험한 것만 훅이 막는다 (D557, D558)
+        ...(this.pushesItself(task) ? { allowPush: true } : {}),
         ...pinnedAgent(task),
       }),
     )
@@ -2777,6 +2791,195 @@ export class WorkRunner {
     )
   }
 
+  /** 세션이 push와 PR을 직접 하는 task인가 (D557): 세션이 하는 Work의 자율 진행 */
+  private pushesItself(task: Pick<TaskRecord, 'node'>): boolean {
+    return sessionDriven(this.work) && task.node === 'orchestrate'
+  }
+
+  /** 막을 git·gh 명령이면 PreToolUse 거절 (D558): 지킬 브랜치는 머지 대상과 기준 브랜치다 */
+  private gitGuardReply(req: HookRequest, task?: TaskRecord): HookReply {
+    if (!task || !this.pushesItself(task)) return null
+    const command = bashCommand(req.body)
+    if (command === undefined) return null
+    const reason = riskyGitCommand(
+      command,
+      [this.work.target_branch, this.work.base_branch].filter((b): b is string => !!b),
+    )
+    return reason
+      ? {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: reason,
+          },
+        }
+      : null
+  }
+
+  /** 세션이 하는 Work의 독립 리뷰가 도는 중 (D559) */
+  private sessionReviewing = false
+  /** push한 브랜치마다 찾은 열린 PR (D560). gh가 없거나 실패하면 null. 메모리에만 둔다 */
+  private sessionPrs = new Map<string, { number: number; url: string } | null>()
+
+  /** push 뒤의 처리를 줄 밖에서 한다 (D559, D560) */
+  private afterPushSoon(taskId: string): void {
+    void this.afterPush(taskId).catch((e: unknown) =>
+      console.error(`[${this.key}] push 뒤 처리 실패: ${message(e)}`),
+    )
+  }
+
+  /**
+   * 세션이 push한 뒤 (D559, D560): push한 브랜치의 PR을 다시 찾고, Work 브랜치의 원격 끝이 아직 리뷰하지 않은 커밋이면 자동
+   * 리뷰를 돌린다(Work당 SESSION_AUTO_REVIEWS번까지). 자식 Work는 자동 리뷰하지 않는다
+   */
+  private async afterPush(taskId: string): Promise<void> {
+    const task = this.task(taskId)
+    if (!task || !this.pushesItself(task)) return
+    await this.refreshSessionPrs()
+    this.changed()
+    if (this.work.parent) return
+    const env = { env: this.ctx.env }
+    const remote = await refCommit(
+      this.worktree,
+      `refs/remotes/origin/${workBranch(this.work)}`,
+      env,
+    )
+    if (!remote || remote === this.work.base_commit) return
+    const log = await this.sessionReviews(task)
+    if (log.some((r) => r.commit === remote)) return
+    if (log.filter((r) => r.auto).length >= SESSION_AUTO_REVIEWS) return
+    await this.sessionReview(taskId, true)
+  }
+
+  /** push한 브랜치마다 열린 PR을 gh로 찾는다 (D560). 실패하면 null로 둔다 */
+  private async refreshSessionPrs(): Promise<void> {
+    const env = this.ctx.env
+    const branches = await this.pushedBranches()
+    const origin = await remoteUrl(this.worktree, 'origin', { env }).catch(() => null)
+    for (const b of branches) {
+      try {
+        if (!origin) throw new Error('origin 원격이 없음')
+        const open = await ghOpenPr(this.ctx.ghBin, {
+          repo: ghRepo(origin),
+          cwd: this.worktree,
+          env,
+          head: b.name,
+        })
+        this.sessionPrs.set(b.name, open ? { number: open.number, url: open.url } : null)
+      } catch {
+        this.sessionPrs.set(b.name, null)
+      }
+    }
+  }
+
+  /** 세션이 push한 브랜치 (D560): 기준 커밋 뒤에 커밋이 있는 원격 브랜치 가운데 머지 대상·기준과 다른 Work의 브랜치가 아닌 것 */
+  private async pushedBranches(): Promise<{ name: string; commit: string }[]> {
+    const own = workBranch(this.work)
+    const others = this.ctx.workBranches(this.project.project_id).filter((b) => b !== own)
+    const skip = new Set([this.work.target_branch, this.work.base_branch, ...others])
+    try {
+      return (
+        await remoteBranchesAfter(this.worktree, this.work.base_commit, 'origin', {
+          env: this.ctx.env,
+        })
+      ).filter((b) => !skip.has(b.name))
+    } catch {
+      return []
+    }
+  }
+
+  /** 앱이 돌린 독립 리뷰의 기록 (D559): task 디렉터리의 session-reviews.json */
+  private async sessionReviews(task: TaskRecord): Promise<SessionReviewView[]> {
+    const text = await readText(path.join(this.files.taskDir(task), SESSION_REVIEWS_FILE))
+    if (!text) return []
+    try {
+      const v: unknown = JSON.parse(text)
+      return Array.isArray(v) ? (v as SessionReviewView[]) : []
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * 세션이 하는 Work의 독립 리뷰 (D559): 마무리 단계와 같은 찾기·확인을 기준 커밋부터 지금 worktree까지에 돌리고, 기록을 남기고,
+   * 결과 글의 경로를 세션에 보낸다. 막지 않는다. 이미 도는 중이면 하지 않는다
+   */
+  async sessionReview(taskId: string, auto = false): Promise<CommandResult> {
+    const task = this.task(taskId)
+    if (!task || !this.pushesItself(task))
+      return { ok: false, error: '세션이 하는 Work의 자율 진행이 아닙니다' }
+    if (this.sessionReviewing) return { ok: false, error: '독립 리뷰가 이미 도는 중입니다' }
+    this.sessionReviewing = true
+    this.changed()
+    try {
+      const commit = await headCommit(this.worktree, { env: this.ctx.env })
+      const result = await this.runReview(taskId, true, new AbortController().signal, true)
+      if (!result) return { ok: false, error: '독립 리뷰를 돌리지 못했습니다' }
+      const file = path.join(this.files.taskDir(task), REVIEW_RESULT_FILE)
+      const count = (sev: string) => result.findings.filter((f) => f.severity === sev).length
+      const entry: SessionReviewView = {
+        commit,
+        at: this.ctx.at(),
+        auto,
+        counts: { 차단: count('차단'), 권장: count('권장'), 사소: count('사소') },
+        file,
+      }
+      await writeJson(path.join(this.files.taskDir(task), SESSION_REVIEWS_FILE), [
+        ...(await this.sessionReviews(task)),
+        entry,
+      ])
+      // 세션이 살아 있으면 알린다: 일하는 중이면 Claude Code가 입력을 받아 두었다가 읽는다
+      this.sayToSession(
+        taskId,
+        `relay: 독립 리뷰가 끝났습니다(커밋 ${commit.slice(0, 7)}, 차단 ${entry.counts.차단} · 권장 ${entry.counts.권장} · 사소 ${entry.counts.사소}). ${file}를 읽고 반영할지 정하세요.`,
+      )
+      return { ok: true }
+    } finally {
+      this.sessionReviewing = false
+      this.changed()
+    }
+  }
+
+  /** 살아 있는 세션의 터미널에 한 줄을 넣고 보낸다 (D559) */
+  private sayToSession(taskId: string, text: string): void {
+    const pty = this.live.get(taskId)?.pty
+    if (!pty) return
+    pty.write(text)
+    setTimeout(() => pty.write('\r'), 300)
+  }
+
+  /**
+   * [Work 완료] (D561): 세션이 하는 Work의 자율 진행을 사람이 끝낸다. 세션이 일하는 중이면 거절한다. 앱이 기록용 handoff를 쓰고
+   * 사람의 승인으로 Work를 전달 없이 완료한다
+   */
+  async completeSession(taskId: string): Promise<CommandResult> {
+    const task = this.task(taskId)
+    if (!task || !this.pushesItself(task) || this.work.status !== 'active')
+      return { ok: false, error: '세션이 하는 Work의 자율 진행이 아닙니다' }
+    if (!childTurnEnded(task.status))
+      return { ok: false, error: '세션이 일하는 중입니다. 턴이 끝난 뒤에 끝내세요' }
+    await writeFileAtomic(path.join(this.files.taskDir(task), HANDOFF_FILE), sessionHandoff())
+    return this.approve(taskId, { by: 'human' })
+  }
+
+  /** 세션이 하는 Work의 자율 진행 칸 (D559~D561) */
+  private async sessionView(task: TaskRecord): Promise<SessionFactsView> {
+    const reviews = await this.sessionReviews(task)
+    return {
+      branches: (await this.pushedBranches()).map((b) => ({
+        ...b,
+        pr: this.sessionPrs.get(b.name) ?? null,
+      })),
+      reviews,
+      reviewing: this.sessionReviewing,
+      autoLeft: this.work.parent
+        ? 0
+        : Math.max(0, SESSION_AUTO_REVIEWS - reviews.filter((r) => r.auto).length),
+      canComplete: this.work.status === 'active' && childTurnEnded(task.status),
+      openChildren: this.ctx.openChildren(this.key),
+    }
+  }
+
   /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
   private codexToolReply(req: HookRequest, task?: TaskRecord, allowPush = false): HookReply {
     const b = req.body
@@ -2828,9 +3031,15 @@ export class WorkRunner {
     if (TOOL_HOOKS.includes(req.event)) {
       const task = this.task(taskId)
       const denial =
-        task?.engine === 'codex' && req.event === 'PreToolUse'
-          ? this.codexToolReply(req, task)
+        req.event === 'PreToolUse'
+          ? (this.gitGuardReply(req, task) ??
+            (task?.engine === 'codex'
+              ? this.codexToolReply(req, task, task ? this.pushesItself(task) : false)
+              : null))
           : null
+      // 세션이 Work 브랜치를 push하면 독립 리뷰를 돌린다 (D559)
+      if (req.event === 'PostToolUse' && task && this.pushesItself(task) && pushCommand(b))
+        this.afterPushSoon(task.id)
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
       const before = session.tool
@@ -3096,6 +3305,17 @@ export class WorkRunner {
       version,
     )
     await this.ownedWritten('intent.md', written)
+  }
+
+  /**
+   * 공용 규칙 없이 배포할 글 (D552, D557): 자식은 연결 규칙, 세션이 하는 Work의 자율 진행은 orchestrate.md 그대로다. 그 밖의
+   * task는 빈 객체다
+   */
+  private async bareRules(task: TaskRecord, dir: string): Promise<{ bareRules?: string }> {
+    if (this.work.parent) return { bareRules: childRules(this.childLink(dir)) }
+    if (!this.pushesItself(task)) return {}
+    const text = await readText(path.join(this.ctx.skills, 'types', 'auto', 'orchestrate.md'))
+    return text === null ? {} : { bareRules: text }
   }
 
   /** 자식 세션의 연결 정보 (D552, D553): 부모 Work와 그 세션의 폴더, 이 worktree와 브랜치, 맡는 파일 */
@@ -5180,6 +5400,7 @@ export class WorkRunner {
       ...(task.node === 'orchestrate' && files[PLAN_FILE] !== undefined
         ? { plan: planView(files[PLAN_FILE]) }
         : {}),
+      ...(this.pushesItself(task) ? { session: await this.sessionView(task) } : {}),
     }
   }
 

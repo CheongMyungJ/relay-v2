@@ -22,6 +22,7 @@ import type {
   RepoCompletion,
   RepoDiffView,
   PlanProgressView,
+  SessionFactsView,
   ReviewView,
   TaskView,
   WorkView,
@@ -473,6 +474,16 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         </section>
       ) : null}
       {review.plan ? <PlanProgress plan={review.plan} /> : null}
+      {review.session ? <SessionBox review={review} session={review.session} /> : null}
+      {review.session ? null : <ProgressFiles review={review} task={task} />}
+    </>
+  )
+}
+
+/** 진행 중의 handoff 상태, 형식 오류, 산출물. 세션이 하는 Work(D557)에는 없다 */
+function ProgressFiles({ review, task }: { review: ReviewView; task: TaskView }) {
+  return (
+    <>
       <section>
         <h3>handoff</h3>
         <div>
@@ -496,6 +507,102 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         )}
       </section>
     </>
+  )
+}
+
+/**
+ * 세션이 하는 Work의 자율 진행 칸 (D559~D561): 세션이 push한 브랜치와 PR, 앱이 돌린 독립 리뷰, [독립 리뷰], [Work 완료].
+ * 끝나지 않은 자식이 있으면 [Work 완료]를 한 번 더 눌러야 한다
+ */
+function SessionBox({ review, session }: { review: ReviewView; session: SessionFactsView }) {
+  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const last = session.reviews.at(-1)
+  const complete = async () => {
+    if (session.openChildren.length && !confirming) {
+      setConfirming(true)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.completeSession(review.workKey, review.taskId))
+    setBusy(false)
+    if (!r.ok) setError(r.error ?? '끝내지 못했습니다')
+  }
+  const reviewNow = async () => {
+    setError(null)
+    const r = await call(() => window.relay.sessionReview(review.workKey, review.taskId))
+    if (!r.ok) setError(r.error ?? '독립 리뷰를 시작하지 못했습니다')
+  }
+  return (
+    <section className="session-box" aria-label="내보낸 것과 독립 리뷰">
+      <h3>내보낸 것</h3>
+      {session.branches.length ? (
+        <ul className="session-branches">
+          {session.branches.map((b) => (
+            <li key={b.name}>
+              <code>{b.name}</code> <span className="dim">{b.commit.slice(0, 7)}</span>
+              {b.pr ? (
+                <>
+                  {' · '}
+                  <a
+                    href={b.pr.url}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void call(() => window.relay.openExternal(b.pr?.url ?? ''))
+                    }}
+                  >
+                    PR #{b.pr.number}
+                  </a>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="dim">
+          아직 push한 브랜치가 없습니다. 세션이 브랜치를 push하고 PR을 엽니다.
+        </div>
+      )}
+      <h3>독립 리뷰</h3>
+      {session.reviewing ? <div>독립 리뷰가 도는 중입니다…</div> : null}
+      {last ? (
+        <div>
+          커밋 {last.commit.slice(0, 7)}: 차단 {last.counts.차단} · 권장 {last.counts.권장} · 사소{' '}
+          {last.counts.사소}
+          <div className="dim" title={last.file}>
+            결과 글: {last.file.split(/[\\/]/).pop()} (task 디렉터리, [파일] 탭)
+          </div>
+        </div>
+      ) : session.reviewing ? null : (
+        <div className="dim">
+          아직 없음. 세션이 Work 브랜치를 push하면 relay가 돌립니다
+          {session.autoLeft ? ` (자동 ${session.autoLeft}번 남음)` : ''}.
+        </div>
+      )}
+      <div className="actions">
+        <button type="button" disabled={session.reviewing} onClick={() => void reviewNow()}>
+          독립 리뷰
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={!session.canComplete || busy}
+          title={session.canComplete ? undefined : '세션이 일하는 중입니다'}
+          onClick={() => void complete()}
+        >
+          {confirming ? '그래도 Work 완료' : 'Work 완료'}
+        </button>
+      </div>
+      {confirming ? (
+        <div className="notice">
+          끝나지 않은 자식 Work가 있습니다: {session.openChildren.join(', ')}. 그래도 끝내려면 다시
+          누르세요. 자식은 열린 채 남습니다.
+        </div>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
+    </section>
   )
 }
 

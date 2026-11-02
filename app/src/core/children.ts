@@ -85,18 +85,18 @@ export function childContext(c: ChildLink & { brief: string }): string {
 }
 
 /**
- * 자식 브랜치가 부모 브랜치에 합쳐져 앱이 자식을 닫을 때 자식 task에 남기는 기록용 handoff (D555, D556): 자식은 handoff를 쓰지
- * 않으므로 승인 기록(D3)과 Work 완료가 같은 길을 지나게 앱이 대신 쓴다
+ * 앱이 세션 대신 쓰는 기록용 handoff (D555~D557): 세션이 하는 Work의 세션은 handoff를 쓰지 않으므로, 앱이 닫을 때 승인
+ * 기록(D3)과 Work 완료가 같은 길을 지나게 대신 쓴다
  */
-export function childHandoff(): string {
+function recordHandoff(what: string, why: string, summary: string): string {
   return [
     '---',
     'status: awaiting_approval',
     'blocked_reason:',
     'decisions:',
-    '  - what: "자식 브랜치가 부모 브랜치에 합쳐짐"',
-    '    why: "부모 브랜치가 자식 브랜치의 커밋을 담음"',
-    '    by: ai',
+    `  - what: "${what}"`,
+    `    why: "${why}"`,
+    '    by: human',
     'assumptions: []',
     'rejected: []',
     'open_questions: []',
@@ -104,11 +104,29 @@ export function childHandoff(): string {
     'risks: []',
     '---',
     '## 요약',
-    '자식 브랜치가 부모 브랜치에 합쳐져 앱이 닫았다. 자식이 한 일은 두 세션이 주고받은 메시지와 이 브랜치의 커밋에 있다.',
+    summary,
     '## 다음 task가 알아야 할 것',
     '- 없음',
     '',
   ].join('\n')
+}
+
+/** 자식 브랜치가 부모 브랜치에 합쳐져 앱이 자식을 닫을 때의 기록 (D556) */
+export function childHandoff(): string {
+  return recordHandoff(
+    '자식 브랜치가 부모 브랜치에 합쳐짐',
+    '부모 브랜치가 자식 브랜치의 커밋을 담음',
+    '자식 브랜치가 부모 브랜치에 합쳐져 앱이 닫았다. 자식이 한 일은 두 세션이 주고받은 메시지와 이 브랜치의 커밋에 있다.',
+  ).replace('    by: human', '    by: ai')
+}
+
+/** 사람이 [Work 완료]를 눌러 세션이 하는 Work를 끝낼 때의 기록 (D561) */
+export function sessionHandoff(): string {
+  return recordHandoff(
+    '사람이 Work를 끝냄',
+    '사람이 [Work 완료]를 누름',
+    '사람이 [Work 완료]로 끝냈다. 세션이 한 일은 이 브랜치의 커밋, push한 브랜치와 PR, 세션의 대화에 있다.',
+  )
 }
 
 /**

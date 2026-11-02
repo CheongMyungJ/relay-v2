@@ -10,18 +10,8 @@
     {
       "id": "orchestrate",
       "title": "자율 진행",
-      "sections": [
-        "전략",
-        "조각",
-        "바뀐 계획",
-        "변경 요약",
-        "완료조건별 자체 확인",
-        "테스트 실행"
-      ],
-      "lead": [
-        "전략",
-        "조각"
-      ],
+      "sections": [],
+      "lead": [],
       "question_mode": "draft_first",
       "auto_approve": false,
       "step_base": false

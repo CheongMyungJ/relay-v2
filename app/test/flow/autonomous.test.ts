@@ -1,6 +1,6 @@
-// [흐름] 자율 유형 (docs/implementation.md M42, docs/design.md D533~D541). 가짜 claude로 자율 Work가
-// intake → orchestrate(마무리, D493) → Work 완료로 가고, 관문(D536)이 방식과 커밋이 어긋난 plan.md를 Stop에서 되돌리는지 본다.
-// 관문의 판정은 test/unit/autonomy.test.ts가 자세히 보고, 여기서는 앱이 커밋을 읽어 넘기는지만 본다.
+// [흐름] 자율 유형: 세션이 하고 앱은 보는 Work (docs/implementation.md M42, M50, docs/design.md D557~D561). 가짜 claude로
+// 자율 Work가 intake → orchestrate로 가고, 세션이 Work 브랜치를 push하면 앱이 독립 리뷰를 돌리며, 위험한 git 명령을 훅이 막고,
+// 사람의 [Work 완료]로 전달 없이 끝나는지 본다. git 명령 판정은 test/unit/git-guard.test.ts가 자세히 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -16,8 +16,8 @@ import {
   autoIntentDraft,
   autoPlan,
   autoScenario,
-  steps,
   type Scenario,
+  type Step,
 } from '../support/scenarios'
 
 let h: Harness | undefined
@@ -61,83 +61,117 @@ const events = (dir: string): LifecycleEvent[] =>
     .filter(Boolean)
     .map((l) => JSON.parse(l) as LifecycleEvent)
 
-describe('[흐름] 자율 유형 (M42)', () => {
-  it('intake → orchestrate(마무리) → [완료만]. plan.md, 시험 커밋 뒤 구현 커밋, 사람에게 묻지 않는 마무리 절차 (D533, D534, D538)', async () => {
-    const s = await setup(autoScenario())
+/** 세션의 자율 진행: 계획을 쓰고, 시험과 구현을 커밋하고, Work 브랜치를 push하고(뒤의 Bash 훅이 push를 알림), main에 push하려다 막힌다 */
+const SESSION_STEPS: Step[] = [
+  { do: 'prompt' },
+  { do: 'write', file: 'plan.md', text: autoPlan() },
+  { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
+  { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
+  { do: 'git', args: ['push', '-q', '-u', 'origin', 'HEAD'] },
+  { do: 'tool', name: 'Bash', input: { command: 'git push -u origin HEAD' }, ms: 50 },
+  { do: 'tool', name: 'Bash', input: { command: 'git push origin HEAD:main' }, ms: 50 },
+  { do: 'stop' },
+]
+
+function sessionScenario(): Scenario {
+  const base = autoScenario()
+  return { ...base, tasks: { ...base.tasks, orchestrate: SESSION_STEPS } }
+}
+
+describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
+  it('intake → orchestrate. push하면 앱이 독립 리뷰를 돌리고, main push는 훅이 막고, [Work 완료]로 전달 없이 끝난다 (D557~D561)', async () => {
+    const s = await setup(sessionScenario())
     const key = await s.create()
     const dir = s.dir(key)
     const base = git(s.repo, 'rev-parse', 'main')
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
-    expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
-      ['01 의도 정리', 0],
-      ['02 자율 진행', 0],
-    ])
+    const result = await drive(s.h.relay, s.h.ui, key, {
+      pauseAt: (t) => t.label.includes('자율 진행'),
+    })
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'paused' })
+    const task = path.join(dir, 'tasks', '02-orchestrate')
+    const taskId = work(dir).tasks[1]?.id ?? ''
 
+    // 앱이 독립 리뷰를 한 번 돌리고 기록을 남겼다 (D559)
+    await s.h.ui.until(
+      () => (fs.existsSync(path.join(task, 'session-reviews.json')) ? true : null),
+      '독립 리뷰 기록',
+      60_000,
+    )
+    const reviews = JSON.parse(read(path.join(task, 'session-reviews.json'))) as {
+      commit: string
+      auto: boolean
+    }[]
+    const tree = s.tree(key)
+    expect(reviews).toEqual([
+      expect.objectContaining({ commit: git(tree, 'rev-parse', 'HEAD'), auto: true }),
+    ])
+    expect(fs.existsSync(path.join(task, 'independent-review.md'))).toBe(true)
+
+    // 승인 화면: 내보낸 것(push한 Work 브랜치), 리뷰, [Work 완료]를 누를 수 있음, 계획
+    const view = await s.h.relay.review(key, taskId)
+    const branch = work(dir).branch ?? ''
+    expect(view?.session).toMatchObject({
+      branches: [{ name: branch, commit: git(tree, 'rev-parse', 'HEAD'), pr: null }],
+      reviewing: false,
+      autoLeft: 1,
+      canComplete: true,
+      openChildren: [],
+    })
+    expect(view?.plan?.pieces.length).toBe(2)
+
+    // main push는 PreToolUse에서 거절했다 (D558). 원격 main은 그대로다
+    const denied = s.h
+      .records()
+      .filter((r) => r['type'] === 'hook' && r['event'] === 'PreToolUse')
+      .map((r) => JSON.stringify(r['reply'] ?? r['response'] ?? ''))
+    expect(denied.some((r) => r.includes('deny') && r.includes('D558'))).toBe(true)
+    expect(git(s.repo, 'rev-parse', 'origin/main')).toBe(base)
+
+    // 배포한 절차: 공용 규칙과 마무리 절 없이 orchestrate.md 그대로. task 설정은 git push를 막지 않는다
+    const deployed = read(path.join(task, 'instructions.md'))
+    expect(deployed).toContain('# relay: orchestrate (자율 진행)')
+    expect(deployed).not.toContain('## Finishing the Work')
+    expect(deployed).not.toContain('# Common rules')
+    expect(read(path.join(task, 'task.settings.json'))).not.toContain('git push')
+
+    // [Work 완료]: 기록용 handoff를 쓰고 사람의 승인으로 전달 없이 끝낸다 (D561)
+    const done = await s.h.relay.completeSession(key, taskId)
+    expect(done).toMatchObject({ ok: true })
+    await settle(s.h, key)
     const w = work(dir)
     expect(w).toMatchObject({ type: 'auto', status: 'completed' })
-    expect(w.tasks.map((t) => [t.id, t.node, t.status])).toEqual([
-      ['t-01', 'intake', 'approved'],
-      ['t-02', 'orchestrate', 'approved'],
+    expect(w.tasks.map((t) => [t.node, t.status, t.approved_by])).toEqual([
+      ['intake', 'approved', 'human'],
+      ['orchestrate', 'approved', 'human'],
     ])
+    expect(read(path.join(task, 'handoff.md'))).toContain('사람이 Work를 끝냄')
+    expect(events(dir).find((e) => e.type === 'work.completed')?.payload).toMatchObject({
+      delivery: 'none',
+    })
+    for (const file of ['verification.md', 'pr.md'])
+      expect(fs.existsSync(path.join(task, file)), file).toBe(false)
     const intent = parseFrontMatter(read(path.join(dir, 'intent.md')))
-    expect(intent.ok && intent.data).toMatchObject({ type: 'auto' })
     expect(intent.body.trim()).toBe(autoIntentDraft().trim())
-
-    const tree = s.tree(key)
     expect(git(tree, 'log', '--reverse', '--format=%s', `${base}..HEAD`).split('\n')).toEqual([
       'test: median',
       'feat: median',
     ])
-    const task = path.join(dir, 'tasks', '02-orchestrate')
-    for (const file of ['plan.md', 'verification.md', 'pr.md', 'independent-review.md']) {
-      expect(fs.existsSync(path.join(task, file)), file).toBe(true)
-    }
-    expect(read(path.join(task, 'plan.md'))).toBe(autoPlan())
-
-    // context.md와 배포한 절차: 자율의 업무 유형과 마무리 절, 사람에게 묻지 않는 마무리 구간(D538)
-    expect(read(path.join(task, 'context.md'))).toContain('- 업무 유형: 자율 (`auto`)')
-    const deployed = read(path.join(task, 'instructions.md'))
-    expect(deployed).toContain('# relay: orchestrate (자율 진행)')
-    expect(deployed).toContain('## Finishing the Work')
-    expect(deployed).toContain('runs without the human until the completion screen')
-    expect(deployed).not.toContain('차단·권장만 반영 / 모두 반영 / 반영하지 않음')
-    expect(deployed).not.toContain('`execution.md`')
   })
 
-  it('방식이 TDD인데 구현을 시험보다 먼저 커밋하면 리뷰 요청에서 되돌린다. 방식을 고치면 이어 간다 (D536, D541)', async () => {
-    const own = steps('orchestrate')
-    const handoff = own.find((st) => st.do === 'write' && st.file === 'handoff.md')
-    if (!handoff) throw new Error('orchestrate의 handoff 단계가 없음')
-    const honest = autoPlan({
-      strategy:
-        '- 방식: 바로 고침\n- 본 신호: 함수 하나\n- 고려한 대안: 없음\n- 사람 제안 판정: 없음',
-    }).replace('## 바뀐 계획\n- 없음', '## 바뀐 계획\n- TDD → 바로 고침: 구현을 먼저 커밋함')
-    const s = await setup(
-      autoScenario({
-        orchestrate: [
-          { do: 'prompt' },
-          { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
-          { do: 'commit', files: FEATURE_TEST_FILES, message: 'test: median' },
-          { do: 'write', file: 'plan.md', text: autoPlan() },
-          handoff,
-          { do: 'stop', onBlock: [{ do: 'write', file: 'plan.md', text: honest }] },
-        ],
-      }),
-    )
+  it('세션이 일하는 중에는 [Work 완료]를 거절한다 (D561)', async () => {
+    const base = autoScenario()
+    const s = await setup({
+      ...base,
+      tasks: { ...base.tasks, orchestrate: [{ do: 'prompt' }, { do: 'wait' }] },
+    })
     const key = await s.create()
-    const dir = s.dir(key)
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
-      ['01 의도 정리', 0],
-      ['02 자율 진행', 1],
-    ])
-    const bounced = events(dir).filter((e) => e.type === 'task.bounced')
-    expect(bounced).toHaveLength(1)
-    expect(JSON.stringify(bounced[0])).toContain('시험 파일만 바꾼 커밋')
-    expect(read(path.join(dir, 'tasks', '02-orchestrate', 'plan.md'))).toBe(honest)
+    const result = await drive(s.h.relay, s.h.ui, key, {
+      pauseAt: (t) => t.label.includes('자율 진행'),
+      stepTimeoutMs: 5_000,
+    }).catch((e: unknown) => ({ status: 'timeout', reason: String(e) }))
+    expect(result.status).not.toBe('completed')
+    const taskId = work(s.dir(key)).tasks[1]?.id ?? ''
+    const r = await s.h.relay.completeSession(key, taskId)
+    expect(r).toMatchObject({ ok: false, error: expect.stringContaining('일하는 중') })
   })
 })

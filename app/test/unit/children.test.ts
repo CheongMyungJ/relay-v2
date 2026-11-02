@@ -11,7 +11,7 @@ import {
   childTurnEnded,
   isOpenChild,
 } from '../../src/core/children'
-import { finishesWork } from '../../src/core/pipeline'
+import { finishesWork, sessionDriven } from '../../src/core/pipeline'
 import { createWork } from '../../src/core/machine'
 import { checkTask } from '../../src/core/validate'
 import { nestChildren } from '../../src/renderer/src/sidebar'
@@ -154,7 +154,7 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
       type: 'auto',
       files: { 'handoff.md': childHandoff() },
       config: DEFAULT_CONFIG,
-      child: true,
+      sessionDriven: true,
     }).errors
     expect(errors).toEqual([])
     expect(childTurnEnded('idle')).toBe(true)
@@ -171,10 +171,12 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
     expect(childMerged({ ...c, head: 'c1' })).toBe(false)
   })
 
-  it('자식 Work의 자율 진행은 마무리 단계가 아니고, 형식 검사는 handoff만 본다', () => {
+  it('자율 Work의 자율 진행은 부모든 자식이든 마무리 단계가 아니고(세션이 하는 Work), 형식 검사는 handoff만 본다 (D557)', () => {
     const work = { type: 'auto' as const, pipeline: 2 as const }
     const task = { node: 'orchestrate' as const }
-    expect(finishesWork(work, task)).toBe(true)
+    expect(sessionDriven(work)).toBe(true)
+    expect(sessionDriven({ type: 'general', pipeline: 2 })).toBe(false)
+    expect(finishesWork(work, task)).toBe(false)
     expect(finishesWork({ ...work, parent: { work_id: 'w-1', task_id: 't-02' } }, task)).toBe(false)
     const handoff = [
       '---',
@@ -198,7 +200,7 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
       type: 'auto',
       files: { 'handoff.md': handoff },
       config: DEFAULT_CONFIG,
-      child: true,
+      sessionDriven: true,
     }).errors
     expect(errors).toEqual([])
   })

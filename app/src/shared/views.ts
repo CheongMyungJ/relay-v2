@@ -907,8 +907,42 @@ export interface ReviewView {
   completion: Completion | null
   /** 자율 진행의 계획 (D542): plan.md의 방식, 조각과 결과, 바뀐 계획. 자율 진행이 아니거나 plan.md가 없으면 없다 */
   plan?: PlanProgressView
+  /** 세션이 하는 Work의 자율 진행 (D560): 내보낸 것, 독립 리뷰, [Work 완료]. 그런 task가 아니면 없다 */
+  session?: SessionFactsView
   /** PR 대응 task의 승인 화면 (D172, D207). 대응 task가 아니면 null */
   respond: RespondReview | null
+}
+
+/** 세션이 push한 브랜치 하나 (D560). pr은 gh로 찾은 열린 PR이다(gh가 없거나 실패하면 null) */
+export interface PushedBranchView {
+  name: string
+  commit: string
+  pr: { number: number; url: string } | null
+}
+
+/** 앱이 돌린 독립 리뷰 하나 (D559) */
+export interface SessionReviewView {
+  commit: string
+  at: string
+  auto: boolean
+  /** 등급별 지적 수 */
+  counts: { 차단: number; 권장: number; 사소: number }
+  /** 결과 글(task 디렉터리의 independent-review.md)의 경로 */
+  file: string
+}
+
+/** 세션이 하는 Work의 자율 진행 칸 (D559~D561) */
+export interface SessionFactsView {
+  branches: PushedBranchView[]
+  reviews: SessionReviewView[]
+  /** 지금 독립 리뷰가 도는 중 */
+  reviewing: boolean
+  /** 남은 자동 리뷰 수 */
+  autoLeft: number
+  /** [Work 완료]를 누를 수 있나: 세션이 일하는 중이 아니다 */
+  canComplete: boolean
+  /** 끝나지 않은 자식 Work의 key */
+  openChildren: string[]
 }
 
 /**

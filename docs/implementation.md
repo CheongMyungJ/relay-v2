@@ -222,6 +222,9 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I206 | 자식 세션(D552)은 `deploySkill`의 `childRules`(`core/children.childRules`)로 시스템 프롬프트를, `childContext`로 context.md를 쓴다. 부모의 지시는 intent.md 본문에 둔다(`createWork`의 `parent.intent`). `finishesWork`가 자식 Work면 거짓이고 `TaskCheckInput.child`가 필수 산출물과 plan.md 관문을 끈다. 부모 세션의 폴더는 `RunnerContext.workInfo`로 찾는다. PR 전 리뷰(D554)는 `runReview`의 `standalone`(상태를 바꾸지 않고 결과를 돌려줌)을 `WorkRunner.reviewChildForPr`이 부르고, `writeChildPr`이 pr.md를 쓴 뒤 relay MCP의 deliver를 부른다. 자식의 첫 task 엔진은 Claude다(`claudeAgent`). 가짜 claude는 자식을 연결 규칙의 첫 줄(`# relay: child session`)로 안다 | 독립 리뷰의 호출과 결과 글은 마무리와 같은 것을 쓰고, 세션을 다시 여는 상태 전이만 뺀다 | |
 | I207 | 끝 신호(D555): `core/children.childRules`의 끝 절은 SendMessage로 부모에게 말하고 턴을 끝내라는 것이고 handoff 예시가 없다. `childTurnEnded`(대기, 승인 대기, 세션 끝남)이면 `decide_child`를 받고, merge·pr 전에 `WorkRunner.writeChildHandoff`가 `childHandoff`(형식 검사를 통과하는 기록용 handoff)를 쓴 뒤 relay MCP의 approve·deliver를 부른다. `wait_children`는 브리지와 `ChildService`에서 뺐다. [흐름] 시험의 가짜 부모는 `list_children`를 자식이 대기가 될 때까지 다시 부른다(가짜 claude는 SendMessage를 흉내 내지 않음) | 쉬는 세션의 상태(대기)는 relay가 Stop 훅으로 이미 안다. 승인 경로를 새로 만들지 않고 기록만 채운다 | |
 | I208 | 자식 닫기(D556)는 `ChildService.closeMerged`다: `active`인 자식마다 `childTurnEnded`(지금 task 상태), 자식 worktree의 `headCommit`, 기준 커밋, `isAncestor(부모 worktree, head, HEAD)`를 `core/children.childMerged`로 판정하고, 참이면 `writeChildHandoff(childHandoff())`와 `approve`로 닫는다. `RunnerContext.closeMergedChildren`을 부모 자율 진행의 `checkOf`가 Stop에서(`opts.stop`), `list_children`이 결과를 만들기 전에 부른다. 자식 하나의 실패는 건너뛴다. `TaskCheckInput.openChildren`(I203), `decide_child`, `reviewChildForPr`·`writeChildPr`, `runReview`의 `standalone`은 없앴다 | 부모가 합친 뒤 할 일이 없으면 턴을 끝내므로 Stop이 합친 직후에 온다. 커밋 없는 자식의 끝은 기준 커밋이라 늘 담기므로 기준과 같으면 닫지 않는다 |
+| I209 | 세션이 하는 Work(D557)는 `core/pipeline.sessionDriven`(자율이고 옛 파이프라인이 아님)이다. `finishesWork`가 거짓이고 `TaskCheckInput.sessionDriven`이면 필수 산출물과 plan.md 관문을 보지 않는다(`core/autonomy`의 관문 함수는 없앴고 `planView`·`readStrategy`만 남음). 배포는 `WorkRunner.bareRules`가 공용 규칙 없이 `skills/types/auto/orchestrate.md`(자식은 `childRules`)를 `deploySkill`의 `bareRules`로 넘긴다. 유형 정의의 단계 절과 [요약] 절은 비었다 | 자식과 부모가 같은 길(handoff 없음, 형식 없음)을 쓴다 |
+| I210 | git 보호(D558)는 `core/git-guard.riskyGitCommand(명령, 지킬 브랜치)`이고 `WorkRunner.gitGuardReply`가 PreToolUse의 셸 명령(Claude `Bash`의 `command`, Codex 명령)에 부른다. 지킬 브랜치는 머지 대상과 기준 브랜치에 main·master를 더한 것이다. task 설정은 `DenyInput.allowPush`로 `git push`·`gh pr` deny를 뺀다(Codex는 `codexToolDenial`의 `allowPush`) | 훅은 진행 표시의 빠른 응답 경로에서 답한다 |
+| I211 | push 뒤(D559, D560)는 PostToolUse의 셸 명령이 `git push`를 담으면 `afterPushSoon`이 줄 밖에서 `refreshSessionPrs`(브랜치마다 `ghOpenPr`)와 자동 리뷰를 한다. 리뷰는 `runReview(…, detached)`로 상태를 바꾸지 않고 결과를 돌려받아 `session-reviews.json`(`core/session-driven.SESSION_REVIEWS_FILE`)에 더하고 `sayToSession`이 PTY에 글과 Enter를 보낸다. push한 브랜치는 `adapters/git.remoteBranchesAfter(worktree, 기준 커밋)`에서 머지 대상·기준·다른 Work의 브랜치를 뺀 것이다. 화면은 `ReviewView.session`(`SessionFactsView`)이고 상태가 바뀌면 `changed()`로 revision을 올려 다시 읽게 한다. [Work 완료]는 `WorkRunner.completeSession`(턴이 끝났는지 `childTurnEnded`, `sessionHandoff`를 쓰고 `approve(by: human)`), [독립 리뷰]는 `sessionReview`이고 IPC `work:complete-session`·`work:session-review`다 | PR은 gh가 없거나 로그인하지 않았으면 비운다. PR 상태 변화(머지)는 아직 보지 않는다 |
 
 ## 3. 확인한 사실
 
@@ -1703,6 +1706,22 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 - **[단위]** `test/unit/children.test.ts`: 연결 규칙에 절차·커밋·push·PR 규칙이 없음, 기록용 handoff, 닫는 조건(턴 끝, 기준 뒤 커밋, 부모에 담김).
 - **[흐름]** `test/flow/children.test.ts`: 부모가 자식 브랜치를 합치고 턴을 끝내면 앱이 자식을 닫음, 합치지 않아도 부모가 마무리하고 자식은 열린 채 남음, 깊이 1.
+
+### M50. 세션이 하고 앱은 보는 자율 Work (D557~D561)
+
+사람이 "앱이 PR 등을 제어하는 컨셉이 제약을 만든다, 동작은 세션이 하고 앱은 감지하고 보여 주자"고 했다. 설계는 `docs/session-driven.md`. 자율 유형만 바꿨다.
+
+- core: `pipeline.sessionDriven`, `git-guard`, `session-driven`, `children.sessionHandoff`, `settings.DenyInput.allowPush`. `autonomy`의 관문과 `validate`의 plan.md 관문을 없앰.
+- 어댑터: `git.remoteBranchesAfter`, `claude.deploySkill`의 `bareRules`.
+- 앱: `WorkRunner`의 `gitGuardReply`, `afterPush`, `sessionReview`, `completeSession`, `sessionView`, `bareRules`. IPC 둘.
+- 화면: 진행 중 패널의 '내보낸 것'과 '독립 리뷰', [독립 리뷰], [Work 완료]. 세션이 하는 Work에는 handoff·산출물 칸을 보이지 않는다.
+- 스킬: `orchestrate.md`를 사실만으로 다시 씀, 유형 정의의 절을 비움, `skills/check.mjs`.
+- 평가 안내(`app/eval/guides/relay.md`)의 자율 줄.
+
+**시험**
+
+- **[단위]** `test/unit/git-guard.test.ts`(막지 않는 것, 지킬 브랜치, 강제 push·지우기·PR 머지, deny의 allowPush), `test/unit/autonomy.test.ts`(방식 줄과 계획 보기), `test/unit/children.test.ts`(세션이 하는 Work는 마무리가 아님).
+- **[흐름]** `test/flow/autonomous.test.ts`: push 뒤 앱의 독립 리뷰와 기록, '내보낸 것', main push 거절, 공용 규칙 없는 배포와 deny 없는 설정, [Work 완료]로 전달 없이 완료, 일하는 중의 [Work 완료] 거절.
 
 ## 8. 테스트 전략
 

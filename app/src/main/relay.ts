@@ -449,6 +449,7 @@ export class Relay {
       children: (parentKey, taskId, tool, args) =>
         this.children.call(parentKey, taskId, tool, args),
       closeMergedChildren: (parentKey) => this.children.closeMerged(parentKey),
+      openChildren: (parentKey) => this.children.openChildren(parentKey),
       workInfo: (projectId, workId) => {
         const w = this.works.get(`${projectId}/${workId}`)
         return w ? { title: w.view().title, tree: w.worktree } : null
@@ -1624,6 +1625,21 @@ export class Relay {
 
   async review(workKey: string, taskId: string): Promise<ReviewView | null> {
     return (await this.works.get(workKey)?.review(taskId)) ?? null
+  }
+
+  /** 세션이 하는 Work의 [Work 완료] (D561) */
+  completeSession(workKey: string, taskId: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.completeSession(taskId))
+  }
+
+  /** 세션이 하는 Work의 [독립 리뷰] (D559): 줄 밖에서 돌리고 바로 답한다 */
+  sessionReview(workKey: string, taskId: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => {
+      void w
+        .sessionReview(taskId)
+        .catch((e: unknown) => console.error(`독립 리뷰 실패: ${String(e)}`))
+      return Promise.resolve({ ok: true } as CommandResult)
+    })
   }
 
   /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */

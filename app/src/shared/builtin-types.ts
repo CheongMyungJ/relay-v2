@@ -135,8 +135,9 @@ export const BUILTIN_TYPES: Readonly<Record<BuiltinWorkType, CustomTypeDef>> = {
       step(
         'orchestrate',
         '자율 진행',
-        ['전략', '조각', '바뀐 계획', '변경 요약', '완료조건별 자체 확인', '테스트 실행'],
-        ['전략', '조각'],
+        // 세션이 하는 Work(D557)는 산출물 형식이 없다. plan.md는 있으면 보인다 (D560)
+        [],
+        [],
       ),
     ],
   },

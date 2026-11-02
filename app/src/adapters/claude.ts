@@ -346,13 +346,16 @@ export async function deploySkill(o: {
   askViaMcp?: boolean
   /** relay MCP 호출자가 답한다 (D521): 호출자가 터미널을 보지 못한다는 안내를 붙인다. parent면 부모 Work다 (D543) */
   callerAnswers?: boolean | 'parent'
-  /** 자식 세션의 연결 규칙 (D552). 있으면 단계 절차 대신 이 글만 배포한다 */
-  childRules?: string
+  /**
+   * 공용 규칙 없이 이 글만 배포한다: 자식 세션의 연결 규칙(D552)과 세션이 하는 Work의 자율 진행(D557). 둘 다 handoff와 단계
+   * 절차가 없다
+   */
+  bareRules?: string
 }): Promise<DeployedSkill> {
-  if (o.childRules !== undefined) {
+  if (o.bareRules !== undefined) {
     const file = path.join(o.taskDir, INSTRUCTIONS_FILE)
-    await writeFileAtomic(file, o.childRules + taskFooter(o.contextPath, o.taskDir))
-    return { file, hash: `sha256:${sha256(o.childRules)}` }
+    await writeFileAtomic(file, o.bareRules + taskFooter(o.contextPath, o.taskDir))
+    return { file, hash: `sha256:${sha256(o.bareRules)}` }
   }
   const original = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
   const asked = o.askViaMcp ? askViaRelay(original, CLAUDE_ASK_TOOL) : original

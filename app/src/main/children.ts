@@ -115,6 +115,13 @@ export class ChildService {
     }
   }
 
+  /** 끝나지 않은 자식의 key (D561) */
+  openChildren(parentKey: string): string[] {
+    return this.childrenOf(parentKey)
+      .filter((w) => isOpenChild(w.status))
+      .map((w) => w.key)
+  }
+
   /** 인자의 자식. 이 부모의 자식이 아니면 던진다 */
   private child(parentKey: string, args: Args): WorkView {
     const key = text(args, 'work') ?? ''

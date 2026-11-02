@@ -234,7 +234,6 @@ const templateSources = {
   refactor: ['#### 5.6.10'],
   spec: ['#### 5.6.12'],
   execute: ['#### 5.6.11'],
-  orchestrate: ['#### 5.6.16'],
   verify: ['#### 5.6.6'],
   'pr-respond': ['#### 5.6.7'],
 };
@@ -430,17 +429,14 @@ const spec = {
   ],
   orchestrate: [
     ['5.6.16', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
-    ['5.6.16', '순서: 읽기 → 방식과 조각(코드 전에 씀) → 조각과 커밋 → 계획 고침 → 자체 확인 → 테스트 명령', /\*\*Read\*\*[\s\S]*\*\*Pick the strategy\*\*[\s\S]*before you change code[\s\S]*\*\*Do the pieces\*\*[\s\S]*\*\*Change the plan when it is wrong\.\*\*[\s\S]*\*\*Self-check\.\*\*[\s\S]*test command at the end/],
-    ['D535', '방식 줄과 이름 여섯, +로 여럿', /`- 방식: <name>`[\s\S]*joined with ` \+ `[\s\S]*`바로 고침`[\s\S]*`재현 시험 먼저`[\s\S]*`안전망 먼저`[\s\S]*`TDD`[\s\S]*`설계 먼저`[\s\S]*`스파이크 먼저`/],
-    ['D536', '시험 먼저 방식은 앱이 커밋 차례로 봄', /relay checks the claim[\s\S]*a commit that changes only tests must come before the first commit that changes other code/],
-    ['D537', '동작 변경에 시험이 없으면 (테스트 못 더함) 줄, 앱이 봄', /`- \(테스트 못 더함\) 바꾼 동작 — 이유`[\s\S]*relay checks this/],
-    ['D534', '계획을 고치면 바뀐 계획에 무엇을 왜', /`## 바뀐 계획`: what changed and why/],
-    ['D539', '서브에이전트는 코드를 바꾸지 않음', /Subagents do not change code in this Work/],
+    ['D557', '하는 방법은 세션이 정함: 전략, 나누기, 서브에이전트, 자식, 시험, 커밋, 브랜치, push, PR', /How to do it is yours to decide[\s\S]*pushes and PRs/],
+    ['D558', '막는 것: 머지 대상·기준·main·master push, 강제 push, 원격 브랜치 지우기, gh pr merge. 머지는 사람', /blocks pushing to the merge target, the base branch, `main` or `master`, force pushes, deleting remote branches, and `gh pr merge`[\s\S]*The human merges PRs/],
+    ['D559', 'Work 브랜치를 push하면 앱이 독립 리뷰, 반영은 세션이 정함', /Each time you push this Work's branch, relay runs an independent review[\s\S]*You decide what to apply/],
+    ['D561', 'handoff 없이 끝나고 사람이 Work를 끝냄', /You do not write a handoff[\s\S]*end your turn/],
     ['D552', '자식은 부모에게 닿는 법만 받고 할 일은 brief가 정함', /relay tells the child only how to reach you[\s\S]*only your brief/],
     ['D553', '자식과 ListAgents와 SendMessage로 직접 말하고, 쉴 때 자식의 메시지가 다음 턴을 엶', /`ListAgents`[\s\S]*`SendMessage`[\s\S]*a child's message starts your next turn/],
-    ['D556', '부모 브랜치에 합쳐진 자식은 relay가 닫음, 합치기와 전달은 두 세션이 정함', /relay closes a child once its branch is merged into yours/],
-    ['5.6.16', '사람이 정할 결정: 사람만 아는 사실, 범위, 사람 제안', /only the human knows[\s\S]*widens the scope[\s\S]*human suggestion/],
-    ['5.6.16', '완료조건: 여섯 절과 실제 방식, 조각 결과, 확인 방법, 시험이나 까닭, 커밋, 테스트 명령', /## Done when[\s\S]*six template sections[\s\S]*really worked[\s\S]*`결과`[\s\S]*check method[\s\S]*`\(테스트 못 더함\)`[\s\S]*committed[\s\S]*test command/],
+    ['D556', '부모 브랜치에 합쳐진 자식은 relay가 닫음', /relay closes a child once its branch is merged into yours/],
+    ['5.6.16', '사람에게 묻는 때: 사람만 아는 사실, 범위·비목표·제약', /only the human knows[\s\S]*widen the scope or touch the intent's non-goals or constraints/],
   ],
   execute: [
     ['5.6.11', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
@@ -761,7 +757,7 @@ for (const type of BUILTIN) {
     const tpl = proc.split(/^## Artifact template: /m)[1] ?? '';
     const tplHeadings = (codeBlocks(tpl, 'markdown')[0] ?? '').split('\n').filter((l) => /^## /.test(l)).map((l) => l.slice(3).trim());
     check(JSON.stringify(tplHeadings) === JSON.stringify(s.sections), `${type}/${s.id}: sections = 산출물 템플릿의 절${JSON.stringify(tplHeadings) === JSON.stringify(s.sections) ? '' : ` (템플릿: ${tplHeadings.join(', ')})`}`);
-    check(s.lead.length > 0 && s.lead.every((x) => s.sections.includes(x)), `${type}/${s.id}: [요약]의 절이 sections 안에 있음 (D511)`);
+    check((s.lead.length > 0 || s.sections.length === 0) && s.lead.every((x) => s.sections.includes(x)), `${type}/${s.id}: [요약]의 절이 sections 안에 있음 (D511, 산출물 형식이 없는 자율은 비어 있음 D557)`);
     check(s.step_base === false && s.auto_approve === false, `${type}/${s.id}: 공통 바탕 끔(절차가 공통 규칙을 담음), 자동 승인 기본값 끔`);
     check(s.question_mode === (type === 'spec' ? null : 'draft_first'), `${type}/${s.id}: 질문 방식 (설계 문답만 없음, D358)`);
   }

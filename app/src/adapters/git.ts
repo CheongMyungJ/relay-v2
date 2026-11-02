@@ -921,3 +921,32 @@ export async function deleteRemoteBranch(
     timeoutMs: opts?.timeoutMs ?? 300_000,
   })
 }
+
+/**
+ * 원격 추적 참조(refs/remotes/<remote>/*) 가운데 commit을 담고 그 뒤에 커밋이 있는 브랜치와 끝 커밋 (D560). push는 원격 추적
+ * 참조를 고치므로 세션이 push한 브랜치가 여기에 보인다. <remote>/HEAD는 뺀다
+ */
+export async function remoteBranchesAfter(
+  dir: string,
+  commit: string,
+  remote = 'origin',
+  opts?: GitOptions,
+): Promise<{ name: string; commit: string }[]> {
+  const out = await git(
+    dir,
+    [
+      'for-each-ref',
+      '--contains',
+      commit,
+      '--format=%(refname:short)%00%(objectname)',
+      `refs/remotes/${remote}`,
+    ],
+    opts,
+  )
+  return lines(out)
+    .map((l) => {
+      const [ref = '', sha = ''] = l.split('\0')
+      return { name: ref.replace(new RegExp(`^${remote}/`), ''), commit: sha }
+    })
+    .filter((b) => b.name && b.name !== 'HEAD' && b.name !== remote && b.commit !== commit)
+}

@@ -9,18 +9,12 @@ import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
 import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
-  AUTO_PR,
   AUTO_REQUEST,
-  AUTO_VERDICTS,
   FEATURE_FILES,
   FEATURE_TEST_FILES,
   REPO_FILES,
-  REVIEW_NONE,
   autoPlan,
   autoScenario,
-  finishingSteps,
-  handoff,
-  steps,
   type Scenario,
   type Step,
 } from '../support/scenarios'
@@ -34,57 +28,42 @@ afterEach(async () => {
 
 const read = (file: string) => fs.readFileSync(file, 'utf8')
 
-/** 리뷰를 받은 뒤의 단계: 지적 없음, 자율의 판정과 pr.md */
-const after: Step[] = steps('verify').map((st) =>
-  st.do === 'write' && st.file === 'verification.md'
-    ? { ...st, text: REVIEW_NONE + AUTO_VERDICTS }
-    : st.do === 'write' && st.file === 'pr.md'
-      ? { ...st, text: AUTO_PR }
-      : st,
-)
-
 /** 부모의 plan.md: 조각 하나를 자식 Work로 맡겨 합쳤다 */
-const PARENT_PLAN = autoPlan({
-  strategy:
-    '- 방식: 바로 고침\n- 본 신호: 조각 하나를 나란히 맡김\n- 고려한 대안: 없음\n- 사람 제안 판정: 없음',
-}).replace(
-  /## 조각\n[\s\S]*?\n\n## 바뀐 계획/,
-  [
-    '## 조각',
-    '| id | 목표 | 실행 형태 | 맡는 파일 | 끝난 조건 | 결과 |',
-    '|---|---|---|---|---|---|',
-    '| p1 | median | 자식 Work | `src/avg.js`, `test/median.test.js` | 자식 완료 | 합침 |',
-    '',
-    '## 바뀐 계획',
-  ].join('\n'),
-)
+const PARENT_PLAN = autoPlan({ strategy: '- 방식: 자식 하나에 맡김' })
 
-const finishParent = (more: Step[] = []): Step[] => [
-  ...more,
-  { do: 'write', file: 'plan.md', text: PARENT_PLAN },
-  {
-    do: 'write',
-    file: 'handoff.md',
-    text: handoff({
-      decisions: [{ what: '자식 Work로 맡김', why: '나란히 할 수 있음', by: 'ai' }],
-      summary: '자식 Work를 합쳤다.',
-    }),
-  },
-]
-
-/** 부모 자율 진행과 자식 자율 진행의 시나리오. parent는 부모의 단계(마무리 전), child는 자식의 단계(기본은 TDD로 median) */
+/** 부모 자율 진행과 자식 자율 진행의 시나리오 (D557): 부모는 parent 단계 뒤 계획을 쓰고 턴을 끝낸다. 사람이 [Work 완료]로 끝낸다 */
 function childScenario(parent: Step[]): Scenario {
   const base = autoScenario()
-  const own = finishingSteps(
-    [{ do: 'prompt' }, ...finishParent(parent), { do: 'stop' }],
-    AUTO_VERDICTS,
-    after,
-  )
   return {
     ...base,
-    tasks: { ...base.tasks, orchestrate: own.own, 'orchestrate#child': CHILD_STEPS },
-    reviewed: { ...base.reviewed, orchestrate: own.reviewed },
+    tasks: {
+      ...base.tasks,
+      orchestrate: [
+        { do: 'prompt' },
+        ...parent,
+        { do: 'write', file: 'plan.md', text: PARENT_PLAN },
+        { do: 'stop' },
+      ],
+      'orchestrate#child': CHILD_STEPS,
+    },
   }
+}
+
+/** 부모의 자율 진행이 사람을 기다릴 때까지 몰고, 부모를 [Work 완료]로 끝낸다 */
+async function runParent(
+  s: Awaited<ReturnType<typeof setup>>,
+  key: string,
+  before?: () => Promise<unknown>,
+) {
+  const result = await drive(s.h.relay, s.h.ui, key, {
+    pauseAt: (t) => t.label.includes('자율 진행'),
+  })
+  expect(result, s.h.ui.dump()).toMatchObject({ status: 'paused' })
+  await before?.()
+  const taskId = s.h.ui.works.get(key)?.current ?? ''
+  expect(await s.h.relay.completeSession(key, taskId)).toMatchObject({ ok: true })
+  await settle(s.h, key)
+  expect(s.h.ui.works.get(key)?.status).toBe('completed')
 }
 
 async function setup(s: Scenario) {
@@ -158,9 +137,17 @@ describe('[흐름] 자식 Work (M44)', () => {
       ]),
     )
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed', reason: null })
+    // 부모가 합치고 턴을 끝내면 앱이 자식을 닫는다 (D556)
+    await runParent(s, key, () =>
+      s.h.ui.until(
+        () =>
+          s.h.relay.snapshot().works.find((w) => w.parent?.key === key)?.status === 'completed'
+            ? true
+            : null,
+        '자식이 닫힘',
+        30_000,
+      ),
+    )
 
     // 자식: 부모 링크, 의도 정리 없이 자율 진행 하나, 부모(caller)가 승인해 전달 없이 완료
     const childView = s.h.relay.snapshot().works.find((w) => w.parent?.key === key)
@@ -248,13 +235,7 @@ describe('[흐름] 자식 Work (M44)', () => {
       ]),
     )
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
-      ['01 의도 정리', 0],
-      ['02 자율 진행', 0],
-    ])
+    await runParent(s, key)
     const childView = s.h.relay.snapshot().works.find((w) => w.parent?.key === key)
     expect(childView?.status).toBe('active')
     expect(
@@ -267,9 +248,7 @@ describe('[흐름] 자식 Work (M44)', () => {
   it('자식은 자식을 만들지 못하고(깊이 1), 사람이 진행하는 Work의 다른 task는 자식 도구를 받지 않는다 (D545)', async () => {
     const s = await setup(childScenario([SPAWN]))
     const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
+    await runParent(s, key)
     const childView = s.h.relay.snapshot().works.find((w) => w.parent?.key === key)
     if (!childView) throw new Error('자식 Work가 없음')
     // 자식의 task에서 부르면 거절한다

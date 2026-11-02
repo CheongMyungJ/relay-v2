@@ -770,6 +770,20 @@ textarea {
   width: 1em;
 }
 
+/* 세션이 하는 Work의 내보낸 것과 독립 리뷰 (D560) */
+.session-branches {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+.session-box h3 + * {
+  margin-top: 2px;
+}
+.session-box .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .human-question {
   margin: 12px 0;
   padding: 14px;

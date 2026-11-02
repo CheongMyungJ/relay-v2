@@ -219,15 +219,23 @@ export function completesWork(
 }
 
 /**
+ * 세션이 하고 앱은 보는 Work인가 (D557): 자율 유형이다. 자율 진행에 마무리 단계, 산출물 형식, plan.md 관문이 없고, 세션이
+ * push와 PR을 직접 하며, 사람이 [Work 완료]로 끝낸다. 자식 Work(D543)도 자율이라 같다
+ */
+export function sessionDriven(work: Pick<WorkState, 'type' | 'pipeline'>): boolean {
+  return !legacyPipeline(work) && workType(work) === 'auto'
+}
+
+/**
  * 마무리 단계 task인가 (D493): 새 Work의 마지막 작업 단계다. 판정표를 쓰고 독립 리뷰를 받아 반영한 뒤 pr.md와 지식을 쓴다
  * (5.6.14). 옛 Work의 verify와 깨진 기록이 보낸 verify는 아니다
  */
 export function finishesWork(work: PipelineWork, task: Pick<TaskRecord, 'node' | 'step'>): boolean {
-  // 자식 Work(D543)는 부모의 지시만 하고 마무리 절차(독립 리뷰, pr.md)를 하지 않는다 (D552). 부모의 마무리가 합친 것을 본다
+  // 세션이 하는 Work(자율, D557)와 그 자식(D552)은 마무리 절차(판정표, pr.md, 전달)를 하지 않는다
   return (
     !legacyPipeline(work) &&
     task.node !== 'verify' &&
-    work.parent === undefined &&
+    !sessionDriven(work) &&
     completesWork(work, task)
   )
 }

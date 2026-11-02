@@ -466,6 +466,12 @@ export function registerIpc(ready: Promise<Relay>, hooks: IpcHooks): void {
   ipcMain.handle(IPC.cancelCountdown, async (_e, workKey: unknown, taskId: unknown) =>
     (await ready).cancelCountdown(text(workKey), text(taskId)),
   )
+  ipcMain.handle(IPC.completeSession, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).completeSession(text(workKey), text(taskId)),
+  )
+  ipcMain.handle(IPC.sessionReview, async (_e, workKey: unknown, taskId: unknown) =>
+    (await ready).sessionReview(text(workKey), text(taskId)),
+  )
   ipcMain.handle(IPC.takeOver, async (_e, workKey: unknown) =>
     (await ready).takeOver(text(workKey)),
   )

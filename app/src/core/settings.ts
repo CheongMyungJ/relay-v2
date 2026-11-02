@@ -114,6 +114,8 @@ export interface DenyInput {
   previousTaskDirs: readonly string[]
   /** 지금 task 디렉터리. 있으면 그 안의 단계 절차(instructions.md) 편집을 막는다 (D443) */
   taskDir?: string
+  /** 세션이 하는 Work (D557): git push와 gh pr을 막지 않는다. 위험한 것은 PreToolUse 훅이 막는다 (D558) */
+  allowPush?: boolean
 }
 
 /**
@@ -124,8 +126,7 @@ export interface DenyInput {
 export function denyRules(input: DenyInput): string[] {
   const work = ruleAbs(input.workDir)
   return [
-    'Bash(git push*)',
-    'Bash(gh pr*)',
+    ...(input.allowPush ? [] : ['Bash(git push*)', 'Bash(gh pr*)']),
     ...APP_OWNED_FILES.map((f) => `Edit(${ruleJoin(work, f)})`),
     ...input.previousTaskDirs.map((d) => `Edit(${ruleJoin(ruleAbs(d), '**')})`),
     ...(input.taskDir ? [`Edit(${ruleJoin(ruleAbs(input.taskDir), INSTRUCTIONS_FILE)})`] : []),
