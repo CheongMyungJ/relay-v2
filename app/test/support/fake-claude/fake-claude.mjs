@@ -476,7 +476,7 @@ async function steps(list, ctx, vars) {
         fs.writeFileSync(file, fill(text, vars))
       }
     } else if (s === 'git') {
-      // 인자의 {이름}은 vars로 채운다 (자식 Work의 브랜치를 합칠 때, D547)
+      // 인자의 {이름}은 vars로 채운다 (자식 Work의 브랜치를 합칠 때, D556)
       execFileSync(
         'git',
         (step.args ?? []).map((x) => fill(x, vars)),

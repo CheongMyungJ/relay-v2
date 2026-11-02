@@ -552,8 +552,8 @@ export interface RunnerContext {
     args: Record<string, unknown>,
     signal: AbortSignal,
   ): Promise<unknown>
-  /** 정하지 않은 자식 Work의 key (D548) */
-  openChildren(parentKey: string): string[]
+  /** 부모 브랜치에 합쳐진 자식 Work를 닫는다 (D556) */
+  closeMergedChildren(parentKey: string): Promise<void>
   /** 같은 프로젝트의 다른 Work의 제목과 worktree (D553: 자식이 부모 세션을 찾는다). 없으면 null */
   workInfo(projectId: string, workId: string): { title: string; tree: string } | null
 }
@@ -1182,7 +1182,6 @@ export class WorkRunner {
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
       ...(autonomy ? { autonomy } : {}),
-      ...(task.node === 'orchestrate' ? { openChildren: this.ctx.openChildren(this.key) } : {}),
       ...(this.work.parent ? { child: true } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
@@ -1220,6 +1219,9 @@ export class WorkRunner {
     opts: { stop?: boolean } = {},
   ): Promise<TaskCheck> {
     const f = files ?? (await this.files.taskFiles(task))
+    // 자율 진행이 턴을 끝낼 때 부모 브랜치에 합쳐진 자식을 닫는다 (D556)
+    if (opts.stop && task.node === 'orchestrate' && !this.work.parent)
+      await this.ctx.closeMergedChildren(this.key).catch(() => undefined)
     return this.check(
       task,
       f,
@@ -1504,7 +1506,6 @@ export class WorkRunner {
     taskId: string,
     codeReview: boolean,
     signal: AbortSignal,
-    standalone = false,
   ): Promise<ReviewResult | undefined> {
     const task = this.task(taskId)
     if (!task) return undefined
@@ -1646,7 +1647,6 @@ export class WorkRunner {
       path.join(dir, REVIEW_RECORD_FILE),
       `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
     )
-    if (standalone) return result
     const error = reviewError(result)
     await this.feedReviewFinished(taskId, signal, {
       ...(error ? { error } : {}),
@@ -1657,29 +1657,11 @@ export class WorkRunner {
     return result
   }
 
-  /**
-   * 자식 Work를 따로 PR로 내기 전의 독립 리뷰 (D554): 마무리 단계의 리뷰와 같은 찾기·확인을 부르고 결과 글을 쓴다. 상태는
-   * 바꾸지 않고 결과를 돌려준다(세션을 다시 열지 않는다). 지금 task가 없으면 null이다
-   */
-  async reviewChildForPr(signal?: AbortSignal): Promise<ReviewResult | null> {
-    const task = currentTask(this.work)
-    if (!task) return null
-    const result = await this.runReview(task.id, true, signal ?? new AbortController().signal, true)
-    return result ?? null
-  }
-
-  /** 자식 task의 기록용 handoff를 쓴다 (D555): 부모가 자식을 정할 때 앱이 대신 쓴다 */
+  /** 자식 task의 기록용 handoff를 쓴다 (D555, D556): 자식을 닫을 때 앱이 대신 쓴다 */
   async writeChildHandoff(text: string): Promise<void> {
     const task = currentTask(this.work)
     if (!task) throw new Error('지금 task가 없음')
     await writeFileAtomic(path.join(this.files.taskDir(task), HANDOFF_FILE), text)
-  }
-
-  /** 자식 Work의 PR 초안을 지금 task 디렉터리에 쓴다 (D554). 전달이 pr.md에서 제목과 본문을 읽는다 */
-  async writeChildPr(text: string): Promise<void> {
-    const task = currentTask(this.work)
-    if (!task) throw new Error('지금 task가 없음')
-    await writeFileAtomic(path.join(this.files.taskDir(task), PR_FILE), text)
   }
 
   /**
@@ -2176,7 +2158,7 @@ export class WorkRunner {
     )
   }
 
-  /** 자식 Work 도구의 호출 (D544): 처리 줄 밖에서 Relay의 ChildService로 넘긴다. wait_children가 오래 기다린다 */
+  /** 자식 Work 도구의 호출 (D544): 처리 줄 밖에서 Relay의 ChildService로 넘긴다 */
   private async childCall(
     taskId: string,
     body: Record<string, unknown>,
@@ -2579,8 +2561,7 @@ export class WorkRunner {
       env: {
         ...this.agentEnv(),
         ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
-        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521). 자식을 기다리는
-        // wait_children도 길다 (D546)
+        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521). 자식 도구도 같은 값을 쓴다
         ...(opts.ask || opts.children ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
       },
       cols,

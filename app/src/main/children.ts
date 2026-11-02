@@ -1,9 +1,12 @@
-// 자식 Work의 도구 (D543~D548). 자율 Work의 자율 진행 task가 task용 relay MCP(relay_task)로 부른 도구를 받아, 그 Work의
-// 자식 Work를 만들고 진행한다. 바깥 호출자용 relay MCP(D516)와 도구는 다르고, 자식의 질문 답·승인·전달은 같은 처리
-// (McpService의 answer, approve, deliver, revise, abandon)를 부모의 이름으로 부른다. Electron을 import하지 않는다
+// 자식 Work의 도구 (D543~D546, D556). 자율 Work의 자율 진행 task가 task용 relay MCP(relay_task)로 부른 도구를 받아, 그 Work의
+// 자식 Work를 만든다. 합치기, PR, 언제 끝낼지는 두 세션이 정하고, 앱은 부모 브랜치에 합쳐진 자식을 닫기만 한다(D556). 바깥
+// 호출자용 relay MCP(D516)와 도구는 다르고, 자식의 질문 답과 닫기는 같은 처리(McpService의 answer, approve)를 부모의 이름으로
+// 부른다. Electron을 import하지 않는다
+import { headCommit, isAncestor } from '../adapters/git'
 import {
   MAX_CHILDREN,
   childHandoff,
+  childMerged,
   childOverlap,
   childTurnEnded,
   isOpenChild,
@@ -17,7 +20,7 @@ import type { Relay } from './relay'
 type Args = Record<string, unknown>
 
 /** 자식 도구의 이름 (D544). 브리지(scripts/codex-bridge.mjs)의 도구 정의와 같다 */
-export const CHILD_TOOLS = ['spawn_child', 'list_children', 'answer_child', 'decide_child'] as const
+export const CHILD_TOOLS = ['spawn_child', 'list_children', 'answer_child'] as const
 
 class ArgError extends Error {}
 
@@ -40,7 +43,10 @@ function strings(args: Args, key: string): string[] {
 }
 
 export class ChildService {
-  constructor(private readonly relay: Relay) {}
+  constructor(
+    private readonly relay: Relay,
+    private readonly env: NodeJS.ProcessEnv = process.env,
+  ) {}
 
   /** 부모 task의 도구 호출 하나. 부모는 브리지를 띄운 task의 훅 토큰으로 정해진다(남의 Work를 부를 수 없다) */
   async call(
@@ -48,21 +54,19 @@ export class ChildService {
     parentTaskId: string,
     tool: string,
     args: Args,
-    signal?: AbortSignal,
   ): Promise<McpResult> {
     try {
       switch (tool) {
         case 'spawn_child':
           return await this.spawn(parentKey, parentTaskId, args)
         case 'list_children':
+          await this.closeMerged(parentKey)
           return { ok: true, result: await this.summaries(parentKey) }
         case 'answer_child':
           return await this.relay.mcp.call('answer', {
             ...args,
             work: this.child(parentKey, args).key,
           })
-        case 'decide_child':
-          return await this.decide(parentKey, args, signal)
         default:
           return { ok: false, error: `모르는 자식 도구입니다: ${tool}` }
       }
@@ -81,11 +85,34 @@ export class ChildService {
       .sort((a, b) => a.key.localeCompare(b.key))
   }
 
-  /** 정하지 않은 자식 (D548): 끝나지 않은(완료, 포기, 보관이 아닌) 자식의 key */
-  openChildren(parentKey: string): string[] {
-    return this.childrenOf(parentKey)
-      .filter((w) => isOpenChild(w.status))
-      .map((w) => w.key)
+  /**
+   * 부모 브랜치에 합쳐진 자식을 닫는다 (D556): 턴을 끝낸 자식의 브랜치 끝이 부모 worktree의 HEAD에 담겼으면 기록용 handoff를
+   * 쓰고 승인해 전달 없이 완료한다. 부모가 턴을 끝낼 때와 list_children 때 부른다. 실패한 자식은 건너뛴다
+   */
+  async closeMerged(parentKey: string): Promise<void> {
+    const parent = this.relay.work(parentKey)
+    if (!parent) return
+    const env = { env: this.env }
+    for (const view of this.childrenOf(parentKey)) {
+      if (view.status !== 'active') continue
+      const runner = this.relay.work(view.key)
+      const task = currentTaskView(view)
+      if (!runner || !task) continue
+      try {
+        const head = await headCommit(runner.worktree, env)
+        const merged = childMerged({
+          turnEnded: childTurnEnded(task.status),
+          head,
+          base: runner.work.base_commit,
+          inParent: await isAncestor(parent.worktree, head, 'HEAD', env),
+        })
+        if (!merged) continue
+        await runner.writeChildHandoff(childHandoff())
+        await this.relay.mcp.call('approve', { work: view.key })
+      } catch {
+        // 자식 하나를 읽지 못해도 다른 자식은 본다
+      }
+    }
   }
 
   /** 인자의 자식. 이 부모의 자식이 아니면 던진다 */
@@ -153,14 +180,13 @@ export class ChildService {
               warning: `나란히 도는 자식과 맡는 파일이 겹침: ${overlap.map((o) => `${o.work}(${o.files.join(', ')})`).join('; ')}. 합칠 때 충돌할 수 있습니다`,
             }
           : {}),
-        note: '자식의 기준은 부모 브랜치의 지금 커밋입니다. 커밋하지 않은 부모의 변경은 자식에 없습니다. 일하는 중인 자식에게는 ListAgents로 tree 폴더의 세션을 찾아 SendMessage로 말하세요',
+        note: '자식의 기준은 부모 브랜치의 지금 커밋입니다(커밋하지 않은 변경은 없음). 자식과는 ListAgents로 tree 폴더의 세션을 찾아 SendMessage로 말합니다',
       },
     }
   }
 
-  /** 자식마다 지금 상태 (get_work의 모양에 브랜치, 기준 커밋, 맡는 파일, state_key를 더함) */
+  /** 자식마다 지금 상태 (get_work의 모양에 브랜치, worktree, 맡는 파일, state_key를 더함) */
   private async summaries(parentKey: string) {
-    const parentBase = this.relay.work(parentKey)?.work.base_commit
     const out = []
     for (const w of this.childrenOf(parentKey)) {
       const got = await this.relay.mcp.call('get_work', { work: w.key })
@@ -170,94 +196,9 @@ export class ChildService {
         branch: w.branch,
         tree: runner?.worktree ?? null,
         files: w.parent?.files ?? [],
-        // 부모 브랜치의 변경 위에서 시작했는가: 그런 자식은 PR로 따로 낼 수 없다 (D547)
-        on_parent_changes: runner ? runner.work.base_commit !== parentBase : null,
         state_key: stateKey(w),
       })
     }
     return out
-  }
-
-  /**
-   * decide_child (D547): 마친 자식(Work 완료 화면)을 정한다. merge는 전달 없이 완료하고 부모가 자기 worktree에서 그 브랜치를
-   * 합친다. pr은 따로 PR을 만든다(부모의 변경 위에서 시작한 자식은 막음). revise는 고칠 점과 함께 다시 열고, discard는 포기한다
-   */
-  private async decide(parentKey: string, args: Args, signal?: AbortSignal): Promise<McpResult> {
-    const child = this.child(parentKey, args)
-    const decision = text(args, 'decision') ?? ''
-    // 자식 세션이 턴을 끝냈으면 정할 수 있다 (D555): 끝났는지는 자식이 부모에게 직접 말한다
-    const atCompletion = () => {
-      const task = currentTaskView(child)
-      return child.status === 'active' && !!task && childTurnEnded(task.status)
-    }
-    const runner = this.relay.work(child.key)
-    const busy = '자식 세션이 아직 일하는 중입니다. 자식이 끝났다고 말하면 정하세요'
-    switch (decision) {
-      case 'merge': {
-        if (!atCompletion() || !runner) return { ok: false, error: busy }
-        await runner.writeChildHandoff(childHandoff('merge'))
-        const r = await this.relay.mcp.call('approve', { work: child.key })
-        if (!r.ok) return r
-        return {
-          ok: true,
-          result: {
-            ok: true,
-            branch: child.branch,
-            next: `부모 worktree에서 \`git merge --no-ff ${child.branch}\`로 합치고, 충돌은 직접 풀고, 테스트를 다시 돌리세요`,
-          },
-        }
-      }
-      case 'pr': {
-        if (!text(args, 'pr_title', false))
-          throw new ArgError('pr에는 pr_title(PR 제목)이 필요합니다. 본문은 pr_body')
-        if (!atCompletion()) return { ok: false, error: busy }
-        const parent = this.relay.work(parentKey)?.work
-        if (!parent || !runner) return { ok: false, error: 'Work가 없습니다' }
-        if (runner.work.base_commit !== parent.base_commit)
-          return {
-            ok: false,
-            error:
-              '부모 브랜치의 변경 위에서 시작한 자식은 PR로 따로 내지 않습니다 (D547). merge로 부모에 합치세요',
-          }
-        const title = (text(args, 'pr_title') ?? '').replace(/\s+/g, ' ').trim()
-        const body = text(args, 'pr_body', false) ?? ''
-        // 따로 나가는 PR은 부모의 마지막 리뷰를 지나지 않으므로 앱이 먼저 독립 리뷰를 돌린다 (D554)
-        const review = await runner.reviewChildForPr(signal)
-        if (!review) return { ok: false, error: '자식의 지금 task가 없습니다' }
-        const blocking = review.findings.filter((f) => f.severity === '차단')
-        if (blocking.length)
-          return {
-            ok: false,
-            error: `독립 리뷰에 차단 지적이 있어 PR을 만들지 않았습니다. 자식에게 고치게 한 뒤(SendMessage나 revise) 다시 pr로 정하세요: ${blocking
-              .map((f) => `${f.file}${f.line ? `:${f.line}` : ''} ${f.summary}`)
-              .join('; ')}`,
-          }
-        const notes = review.findings.map(
-          (f) => `- [${f.severity}] ${f.file}${f.line ? `:${f.line}` : ''} — ${f.summary}`,
-        )
-        await runner.writeChildPr(
-          [
-            `# ${title}`,
-            '',
-            body.trim(),
-            '',
-            '## 독립 리뷰',
-            notes.length ? notes.join('\n') : '- 지적 없음',
-            '',
-          ].join('\n'),
-        )
-        await runner.writeChildHandoff(childHandoff('pr'))
-        return await this.relay.mcp.call('deliver', { work: child.key, choice: 'pr' })
-      }
-      case 'revise':
-        return await this.relay.mcp.call('revise', {
-          work: child.key,
-          message: text(args, 'message') ?? '',
-        })
-      case 'discard':
-        return await this.relay.mcp.call('abandon', { work: child.key })
-      default:
-        throw new ArgError('decision은 merge, pr, revise, discard 가운데 하나여야 합니다')
-    }
   }
 }

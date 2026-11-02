@@ -1,14 +1,11 @@
-// 자식 Work의 판정 (docs/design.md D543~D548). 자율 Work의 자율 진행이 나란히 코드를 바꿀 일을 자식 Work로 맡긴다. 만들기와
-// 진행은 main/children이 하고, 여기는 상한과 겹침, 끝났는지만 정한다
+// 자식 Work의 판정 (docs/design.md D543~D546, D552~D556). 자율 Work의 자율 진행이 나란히 코드를 바꿀 일을 자식 Work로 맡긴다.
+// 만들기와 닫기는 main/children이 하고, 여기는 상한과 겹침, 연결 규칙, 닫을 수 있는지만 정한다
 import type { WorkStatus } from '../shared/work'
 
 /** 한 Work의 자식 수 상한 (D545, (기본값)). 포기한 자식은 세지 않는다 */
 export const MAX_CHILDREN = 5
 
-/**
- * 정하지 않은 자식인가 (D548): 진행 중이거나 멈춘 자식이다. 완료(merge), PR 진행(pr), 포기(discard), 보관은 정한 것이다. 부모는
- * 정하지 않은 자식이 남아 있으면 마무리하지 못한다
- */
+/** 끝나지 않은 자식인가: 진행 중이거나 멈춘 자식이다. 완료, 포기, 보관은 끝난 것이다 */
 export function isOpenChild(status: WorkStatus): boolean {
   return status === 'active' || status === 'stopped'
 }
@@ -20,7 +17,7 @@ const norm = (p: string) => p.trim().replace(/\\/g, '/').replace(/^\.\//, '').re
 const overlaps = (a: string, b: string) => a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
 
 /**
- * 새 자식이 맡는 파일과 나란히 도는 다른 자식이 맡는 파일의 겹침 (D545). 막지 않고 경고로 알린다: 합칠 때 부모가 충돌을 푼다
+ * 새 자식이 맡는 파일과 나란히 도는 다른 자식이 맡는 파일의 겹침 (D545). 막지 않고 경고로 알린다
  */
 export function childOverlap(
   files: readonly string[],
@@ -33,11 +30,6 @@ export function childOverlap(
       files: o.files.map(norm).filter((f) => mine.some((m) => overlaps(m, f))),
     }))
     .filter((o) => o.files.length > 0)
-}
-
-/** 부모가 마무리할 때 정하지 않은 자식이 남은 오류 (D548) */
-export function openChildrenIssue(open: readonly string[]): string {
-  return `정하지 않은 자식 Work가 있음: ${open.join(', ')}. decide_child로 merge, pr, discard 가운데 하나를 정한 뒤 마무리하세요 (D548)`
 }
 
 /** 자식 세션이 받는 연결 규칙의 재료 (D552) */
@@ -56,31 +48,18 @@ export interface ChildLink {
 }
 
 /**
- * 자식 세션의 시스템 프롬프트 (D552, D553, D555): 절차는 없고 연결 규칙만이다. 무엇을 할지는 부모의 지시(context.md)가
- * 정한다. 어디서 일하는지, 커밋과 push 금지, 부모와 말하는 법(ListAgents, SendMessage), 끝나면 부모에게 직접 말하고 턴을
- * 끝냄. relay는 끝 신호를 거치지 않는다
+ * 자식 세션의 시스템 프롬프트 (D552, D553, D556): 절차는 없고 사실만이다. 무엇을 어떻게 할지(커밋, 합치기, PR, 언제 무엇을
+ * 알릴지)는 부모의 지시(context.md)와 두 세션이 정한다. 여기는 어디서 일하는지와 부모에게 닿는 법뿐이다
  */
 export function childRules(c: ChildLink): string {
   return [
     '# relay: child session',
     '',
-    `You are a child session of the relay Work ${c.parentWorkId} ("${c.parentTitle}"). The parent session gave you one piece of its work. What to do is in the parent's brief in \`context.md\` (path at the end). Follow it; the brief decides how you work.`,
+    `You are a child session of the relay Work ${c.parentWorkId} ("${c.parentTitle}"). The parent session gave you a piece of its work. Its brief is in \`context.md\` (path at the end).`,
     '',
-    '## Where you work',
-    '',
-    `- Work only in this worktree: \`${c.tree}\` (branch \`${c.branch}\`).${c.files.length ? ` The parent gave you these files: ${c.files.map((f) => `\`${f}\``).join(', ')}. Touch other files only if the brief allows it.` : ''}`,
-    '- Commit your changes before you finish. Do not push and do not open PRs: the parent merges your branch or delivers it.',
-    '',
-    '## Talking with the parent',
-    '',
-    `- The parent session works in \`${c.parentTree}\`. Find it with your \`ListAgents\` tool (the session whose working directory is that folder) and message it with \`SendMessage\`. The parent cannot see your terminal: put everything it needs into the message.`,
-    '- Tell the parent what it should know while you work: a finding that affects other pieces, a change of plan, a question. Messages from the parent arrive between your tool calls, or start your next turn if you are idle; read them and adjust.',
-    '- If you cannot go on without an answer, send the question and end your turn. The answer starts your next turn.',
-    '- The human may also type in your terminal. A human instruction comes first; tell the parent what changed.',
-    '',
-    '## When you are done',
-    '',
-    'Commit everything, then send the parent one message: that you are done, what you did, the commits, and the tests you ran with their result. Then end your turn. Always send this message: the parent waits for it. If you stop because you are stuck, say that instead, and what you need.',
+    `- You work in this worktree: \`${c.tree}\` (branch \`${c.branch}\`).${c.files.length ? ` The parent gave you these files: ${c.files.map((f) => `\`${f}\``).join(', ')}.` : ''}`,
+    `- The parent session works in \`${c.parentTree}\`. To talk with it, find it with your \`ListAgents\` tool (the session whose working directory is that folder) and use \`SendMessage\`. It cannot see your terminal, and it waits for your messages. Its messages arrive between your tool calls, or start your next turn if you are idle.`,
+    '- The human can also type in your terminal.',
     '',
     'Write in Korean.',
     '',
@@ -106,18 +85,17 @@ export function childContext(c: ChildLink & { brief: string }): string {
 }
 
 /**
- * 부모가 자식을 정할 때 앱이 자식 task에 남기는 기록용 handoff (D555): 자식은 handoff를 쓰지 않고 부모에게 직접 말하므로,
- * 승인 기록(D3)과 Work 완료가 같은 길을 지나게 앱이 대신 쓴다
+ * 자식 브랜치가 부모 브랜치에 합쳐져 앱이 자식을 닫을 때 자식 task에 남기는 기록용 handoff (D555, D556): 자식은 handoff를 쓰지
+ * 않으므로 승인 기록(D3)과 Work 완료가 같은 길을 지나게 앱이 대신 쓴다
  */
-export function childHandoff(decision: 'merge' | 'pr'): string {
-  const what = decision === 'merge' ? '부모가 merge로 정함' : '부모가 따로 PR로 정함'
+export function childHandoff(): string {
   return [
     '---',
     'status: awaiting_approval',
     'blocked_reason:',
     'decisions:',
-    `  - what: "${what}"`,
-    '    why: "자식 세션이 부모에게 끝났다고 알림"',
+    '  - what: "자식 브랜치가 부모 브랜치에 합쳐짐"',
+    '    why: "부모 브랜치가 자식 브랜치의 커밋을 담음"',
     '    by: ai',
     'assumptions: []',
     'rejected: []',
@@ -126,11 +104,24 @@ export function childHandoff(decision: 'merge' | 'pr'): string {
     'risks: []',
     '---',
     '## 요약',
-    `${what}. 자식이 한 일은 부모 세션과 주고받은 메시지와 이 브랜치의 커밋에 있다.`,
+    '자식 브랜치가 부모 브랜치에 합쳐져 앱이 닫았다. 자식이 한 일은 두 세션이 주고받은 메시지와 이 브랜치의 커밋에 있다.',
     '## 다음 task가 알아야 할 것',
     '- 없음',
     '',
   ].join('\n')
+}
+
+/**
+ * 자식을 닫을 수 있는가 (D556): 자식 세션이 턴을 끝냈고(일하는 중이 아님), 자식 브랜치에 기준 뒤의 커밋이 있으며, 그 끝이 부모
+ * 브랜치에 담겼다. 커밋이 없는 자식은 기준 커밋이 늘 부모에 담기므로 닫지 않는다
+ */
+export function childMerged(c: {
+  turnEnded: boolean
+  head: string
+  base: string
+  inParent: boolean
+}): boolean {
+  return c.turnEnded && c.head !== c.base && c.inParent
 }
 
 /** 자식 세션이 턴을 끝내 정할 수 있는 상태인가 (D555): 일하는 중이거나 대기열이 아니다 */

@@ -217,10 +217,10 @@ export const CALLER_ASK_NOTE =
   '\n## Who answers\n\nA relay MCP caller (another agent working for the human) answers your questions and approves this step. It cannot see this terminal. Put everything it needs to answer (lists, scenarios, explanations you would write in terminal text) into the question text itself.\n'
 
 /**
- * 자식 Work(D543)의 절차 끝에 붙이는 안내: 질문과 승인은 부모 Work의 자율 진행이 하고, 전달은 부모가 정한다
+ * 자식 Work(D543)의 절차 끝에 붙이는 안내: 질문은 부모 Work의 자율 진행이 답한다
  */
 export const CHILD_ASK_NOTE =
-  '\n## Who answers\n\nThis Work is a child Work: the parent Work that made it answers your questions and decides your result (merge into its branch, its own PR, or discard). The parent cannot see this terminal. Put everything it needs to answer into the question text itself. Ask only what the intent cannot settle; the parent asks the human when it must. Do not push or open PRs.\n'
+  '\n## Who answers\n\nThis Work is a child Work: the parent Work that made it answers your questions. The parent cannot see this terminal. Put everything it needs to answer into the question text itself.\n'
 
 /**
  * 질문을 relay MCP로 묻는 task의 옵션 (D521): relay 서버를 더하고 터미널의 질문 도구를 뺀다. 두 옵션은 값을 여럿 받아

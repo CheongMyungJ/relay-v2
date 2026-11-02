@@ -26,12 +26,7 @@
   ],
   "reveals": [],
   "events": [],
-  "expectedFiles": [
-    "src/markdown.js",
-    "src/cron.js",
-    "src/expr.js",
-    "test/**"
-  ],
+  "expectedFiles": ["src/markdown.js", "src/cron.js", "src/expr.js", "test/**"],
   "checks": [
     {
       "name": "Markdown 변환",

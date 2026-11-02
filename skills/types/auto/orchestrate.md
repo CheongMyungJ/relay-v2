@@ -39,28 +39,19 @@ Each piece has a goal, how it runs, the files it owns, and when it is done. Pick
 |---|---|
 | `직접` | It needs what you already know in this conversation, or it is small |
 | `서브에이전트` | You need an answer, not a code change: searching a large code base, reading logs, checking a finding, reviewing a piece from a fresh context. Use your subagent tool if you have one; give it a full brief (paths, the question, what to return). Otherwise do it `직접` |
-| `자식 Work` | Only if you have the relay child tools (`spawn_child` and the others, below). A code change that can run in parallel with the rest and owns files no other running piece touches: a separate module, an independent fix, a change that could be its own PR or branch |
+| `자식 Work` | Only if you have the relay child tools (below). A code change that runs in its own session, worktree and branch, in parallel with the rest |
 
 - One piece is fine. Small work has one `직접` piece and a short plan: do not split for the sake of it.
-- **Separate branches or PRs per part:** if the intent asks for a separate branch or PR for each part, child sessions fit: each keeps its own branch, and `decide_child` with `merge` or `pr` delivers it. You may also make the branches yourself. Decide by what the work needs.
 - Split only when the cost of splitting (a fresh context reading the code again, merging results) is clearly smaller than doing it in one go.
 - Subagents do not change code in this Work. Code changes happen in this session or in child sessions, so the commits stay in an order you control.
 
 ## Child sessions (only with the relay child tools)
 
-A child session works on one piece in its own worktree and branch, as its own Work in relay's sidebar. relay gives it only connection rules (where to work, how to talk to you, how to say it is done); **what it does and how is only what you write in the brief**. Whether to use child sessions at all, for which pieces, and what to put in each brief is your decision. relay allows at most 5 per Work, and a child cannot make children.
-
-1. **Commit first.** A child starts from the current commit of your branch. Uncommitted changes are not in it.
-2. **Spawn** with `spawn_child`: a one-line `title`, the `brief`, and the `files` it owns. A good brief says the goal, the files it may touch, what not to do, how to know it is done, and which tests to add and run. Give each child files no other running piece touches. Write the child's work id in the piece's `결과`.
-3. **Talk directly.** Find a child with your `ListAgents` tool (the session whose working directory is the `tree` that `spawn_child` returned) and message it with `SendMessage`. A child messages you the same way: findings, questions, and a message when it is done. relay does not relay these messages.
-4. **Wait by ending your turn.** When you have nothing else to do, end your turn: a child's message starts your next turn. `list_children` shows each child's state when you want to check.
-5. **Answer** a child's question with `SendMessage`. If only the human knows the answer, ask the human first. (`answer_child` answers a child that asked with relay's question tool.)
-6. **Decide** each child after it tells you it is done (its session has ended its turn), with `decide_child`:
-   - `merge`: the child completes without delivery; then run `git merge --no-ff <its branch>` in your worktree, resolve conflicts yourself, and run the tests again. Your own finishing reviews the merged result.
-   - `pr` with `pr_title` and `pr_body`: relay runs an independent review of the child first and opens its own PR only if there is no 차단 finding. Only for a child that started from your base commit (`on_parent_changes: false`).
-   - `revise` with a `message`: what to fix. The child reopens and goes on.
-   - `discard`: drop it, and do that piece another way.
-7. relay does not let you finish while a child is undecided. relay checks the tests and reviews your whole result when you finish, merged children included.
+- `spawn_child` starts a child session with your `brief`. It works in its own worktree and branch, starting from the current commit of your branch (uncommitted changes are not in it), and shows under this Work in relay's sidebar, where the human can also talk to it.
+- relay tells the child only how to reach you. What it does and how is only your brief.
+- Talk with a child through your `ListAgents` tool (the session whose working directory is the `tree` that `spawn_child` returned) and `SendMessage`. When you are idle, a child's message starts your next turn. `list_children` shows their state.
+- relay closes a child once its branch is merged into yours. relay's review when you finish checks your branch as a whole.
+- At most 5 children per Work, and a child cannot make children.
 
 ## `## 설계` (only with `설계 먼저`)
 
@@ -90,7 +81,7 @@ The human watches and does not steer. Ask on the spot only in these cases. In an
 ## Done when
 
 - `plan.md` has all six template sections (`## 설계` too, with `설계 먼저`), and `방식` is the way you really worked.
-- Every piece in `## 조각` has a `결과`, and every child Work is decided (merged, its own PR, or discarded).
+- Every piece in `## 조각` has a `결과`.
 - Every 완료조건 has the result of running its check method (where to look, for `확인: 사람`).
 - Every change in code behavior has a test, or a `(테스트 못 더함)` line with the reason.
 - Every change is committed.

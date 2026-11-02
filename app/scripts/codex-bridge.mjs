@@ -99,12 +99,12 @@ const work = {
   description: '자식 Work의 key (spawn_child·list_children의 work)',
 }
 
-/** 자식 Work 도구 (D544~D547) */
+/** 자식 Work 도구 (D544~D546, D556) */
 const childTools = [
   {
     name: 'spawn_child',
     description:
-      '이 Work의 조각 하나를 자식 세션에 맡깁니다. 자식은 자기 worktree와 브랜치에서 brief(당신이 쓴 지시)대로만 일합니다. relay는 절차를 더하지 않으니 목표, 맡는 파일, 하지 말 것, 끝났다고 볼 조건, 시험을 brief에 쓰세요. 기준은 부모 브랜치의 지금 커밋이니 먼저 커밋하세요. 자식과는 ListAgents(결과의 tree 폴더)와 SendMessage로 직접 말하고, 자식은 끝나면 SendMessage로 알립니다. 기다릴 때는 턴을 끝내세요: 자식의 메시지가 다음 턴을 엽니다.',
+      '자식 세션을 하나 만듭니다. 자식은 부모 브랜치의 지금 커밋에서 시작하는 자기 worktree와 브랜치에서 일하고, relay가 주는 것은 부모에게 닿는 법뿐이라 무엇을 어떻게 할지는 brief가 전부입니다. 자식과는 ListAgents(결과의 tree 폴더의 세션)와 SendMessage로 말합니다. 쉬고 있을 때 자식의 메시지가 오면 다음 턴이 열립니다. 부모 브랜치에 합쳐진 자식은 relay가 닫습니다.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -119,8 +119,7 @@ const childTools = [
         brief: {
           type: 'string',
           minLength: 1,
-          description:
-            '자식에게 줄 지시(자유 글): 할 일, 맡는 파일, 하지 말 것, 끝났다고 볼 조건, 돌릴 시험',
+          description: '자식에게 줄 지시(자유 글)',
         },
         files: {
           type: 'array',
@@ -154,23 +153,6 @@ const childTools = [
       },
     },
   },
-  {
-    name: 'decide_child',
-    description:
-      '끝났다고 말한 자식을 정합니다(자식 세션이 턴을 끝낸 뒤). merge: 전달 없이 완료하고 이 worktree에서 그 브랜치를 git merge합니다. pr: relay가 독립 리뷰를 돌리고 차단 지적이 없으면 pr_title·pr_body로 따로 PR을 만듭니다(부모 변경 위에서 시작한 자식은 안 됨). revise: message로 고칠 점을 주고 다시 엽니다. discard: 포기합니다.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['work', 'decision'],
-      properties: {
-        work,
-        decision: { type: 'string', enum: ['merge', 'pr', 'revise', 'discard'] },
-        message: { type: 'string' },
-        pr_title: { type: 'string' },
-        pr_body: { type: 'string' },
-      },
-    },
-  },
 ]
 const childNames = childTools.map((t) => t.name)
 const withChildren = process.env.RELAY_CHILD_TOOLS === '1'
@@ -200,7 +182,7 @@ async function rpc(message) {
           : process.env.RELAY_HOOK_TASK === 'cleanup'
             ? '정리 세션입니다. push/PR 및 앱 소유 파일 수정은 앱이 합니다. 질문은 ask_human을 사용하세요.'
             : withChildren
-              ? 'relay 자율 진행의 도구입니다. 맡길 조각은 spawn_child로 자식 세션에 brief와 함께 맡기세요. 자식과는 ListAgents와 SendMessage로 직접 말하고, 기다릴 때는 턴을 끝내면 자식의 메시지가 다음 턴을 엽니다. 끝났다고 말한 자식은 decide_child로 정하세요.'
+              ? 'relay 자율 진행의 도구입니다. spawn_child로 자식 세션을 만들 수 있습니다. 자식과는 ListAgents와 SendMessage로 직접 말합니다.'
               : 'relay task의 질문 도구입니다. 사람에게 물을 것은 ask_human으로 묻고 답을 기다리세요.'
         return respond({
           protocolVersion: '2024-11-05',

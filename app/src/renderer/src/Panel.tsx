@@ -196,14 +196,14 @@ function CallerBand({ work }: { work: WorkView }) {
     setBusy(false)
     if (!r.ok) setError(r.error)
   }
-  // 자식 Work는 부모 Work의 자율 진행이 진행한다 (D543, D549)
+  // 자식 Work는 부모 Work의 자율 진행과 함께 진행하고, 부모 브랜치에 합쳐지면 앱이 닫는다 (D543, D549, D556)
   const parent = work.parent
   return (
     <section className="notice caller-band" aria-label={parent ? '부모 Work' : 'MCP 호출자'}>
       <strong>{parent ? '부모 Work가 진행하는 자식 Work' : 'MCP 호출자가 진행하는 Work'}</strong>
       <div className="dim">
         {parent
-          ? `질문 답과 승인은 부모 Work(${parent.key.split('/')[1] ?? parent.key})의 자율 진행이 하고, 마치면 부모가 합치거나 PR로 냅니다. 터미널에서 직접 말할 수 있고, [즉시 중단], [Work 포기]도 여기서 할 수 있습니다.`
+          ? `부모 Work(${parent.key.split('/')[1] ?? parent.key})의 자율 진행과 직접 말하며 일하고, 이 브랜치가 부모 브랜치에 합쳐지면 relay가 완료로 닫습니다. 터미널에서 직접 말할 수 있고, [즉시 중단], [Work 포기]도 여기서 할 수 있습니다.`
           : '질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운 [취소], [Work 포기]는 여기서도 할 수 있습니다.'}
       </div>
       {open ? (
@@ -776,7 +776,9 @@ function Review({
         {readOnly ? null : work?.driver === 'caller' ? (
           // 승인과 전달은 호출자가 한다 (D523). 사람은 패널 맨 위의 [직접 맡기]로 맡는다
           <div className="notice caller-drives">
-            {work.parent ? '부모 Work가 정하기를 기다립니다' : 'MCP 호출자가 승인을 기다립니다'}
+            {work.parent
+              ? '이 브랜치가 부모 브랜치에 합쳐지면 relay가 닫습니다'
+              : 'MCP 호출자가 승인을 기다립니다'}
           </div>
         ) : review.completion && work ? (
           <CompletionActions

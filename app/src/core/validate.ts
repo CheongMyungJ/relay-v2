@@ -11,7 +11,6 @@ import type { CheckSummary, FormatIssue, TypeTarget, WorkType } from '../shared/
 import { checkMethodOn, typeTarget } from './builtin-types'
 import { NODE_INFO } from './pipeline'
 import { commitIssues, PLAN_FILE, PLAN_SECTIONS, planIssues, type AutonomyFacts } from './autonomy'
-import { openChildrenIssue } from './children'
 
 /** 지금 쓰는 형식 버전 (5.2.1). task를 시작할 때 work.json에 기록하고, 그 버전의 스키마로 검사한다 */
 export const FORMAT_VERSION = 1
@@ -738,8 +737,6 @@ export interface TaskCheckInput {
    * 방식과 시험을 커밋으로 본다. 자율 진행이 아니면 없다
    */
   autonomy?: AutonomyFacts
-  /** 자율 진행의 정하지 않은 자식 Work (D548). 리뷰 요청과 마무리 때 남아 있으면 오류다. 없거나 비면 없다 */
-  openChildren?: readonly string[]
   /** 자식 Work의 task (D552): 필수 산출물과 plan.md 관문이 없고 handoff만 본다 */
   child?: boolean
 }
@@ -899,13 +896,6 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
     if (status === 'review_requested' || status === 'awaiting_approval') {
       errors.push(...missingSections(PLAN_FILE, plan, PLAN_SECTIONS, '자율 진행 산출물'))
       if (input.autonomy) errors.push(...commitIssues(plan, input.autonomy))
-      if (input.openChildren?.length)
-        errors.push({
-          file: PLAN_FILE,
-          part: 'body',
-          field: '조각',
-          message: openChildrenIssue(input.openChildren),
-        })
     }
   }
   // 커스텀 단계 산출물의 절 (D453). 파일이 있으면 늘 본다

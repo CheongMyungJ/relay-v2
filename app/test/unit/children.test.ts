@@ -1,15 +1,15 @@
-// [단위] 자식 Work의 판정 (docs/design.md D543~D549): 상한, 정하지 않은 자식, 맡는 파일의 겹침, 자식 Work 만들기의 전이,
-// 부모 마무리의 관문, 사이드바의 자리
+// [단위] 자식 Work의 판정 (docs/design.md D543~D549, D552~D556): 상한, 끝나지 않은 자식, 맡는 파일의 겹침, 자식 Work 만들기의
+// 전이, 사이드바의 자리, 연결 규칙, 자식을 닫는 조건
 import { describe, expect, it } from 'vitest'
 import {
   MAX_CHILDREN,
   childContext,
   childHandoff,
+  childMerged,
   childOverlap,
   childRules,
   childTurnEnded,
   isOpenChild,
-  openChildrenIssue,
 } from '../../src/core/children'
 import { finishesWork } from '../../src/core/pipeline'
 import { createWork } from '../../src/core/machine'
@@ -17,19 +17,18 @@ import { checkTask } from '../../src/core/validate'
 import { nestChildren } from '../../src/renderer/src/sidebar'
 import { DEFAULT_CONFIG } from '../../src/shared/config'
 import type { WorkView } from '../../src/shared/views'
-import { autoIntentDraft, autoPlan } from '../support/scenarios'
+import { autoIntentDraft } from '../support/scenarios'
 
-describe('[단위] 자식 Work의 상한과 상태 (D545, D548)', () => {
+describe('[단위] 자식 Work의 상한과 상태 (D545)', () => {
   it('한 Work의 자식은 다섯까지다', () => {
     expect(MAX_CHILDREN).toBe(5)
   })
 
-  it('진행 중이거나 멈춘 자식만 정하지 않은 것이다. 완료(merge), PR 진행(pr), 포기(discard), 보관은 정한 것이다', () => {
+  it('진행 중이거나 멈춘 자식만 끝나지 않은 것이다. 완료, PR 진행, 포기, 보관은 끝난 것이다', () => {
     expect(isOpenChild('active')).toBe(true)
     expect(isOpenChild('stopped')).toBe(true)
     for (const s of ['completed', 'pr', 'abandoned', 'archived'] as const)
       expect(isOpenChild(s)).toBe(false)
-    expect(openChildrenIssue(['p/w-2'])).toContain('p/w-2')
   })
 
   it('맡는 파일의 겹침: 같은 파일, 폴더와 그 안의 파일. 경로 모양(./, \\, 끝의 /)은 맞춰 본다', () => {
@@ -87,51 +86,6 @@ describe('[단위] 자식 Work 만들기 (D543)', () => {
   })
 })
 
-describe('[단위] 부모 마무리의 관문 (D548)', () => {
-  const handoff = [
-    '---',
-    'status: review_requested',
-    'blocked_reason:',
-    'decisions: []',
-    'assumptions: []',
-    'rejected: []',
-    'open_questions: []',
-    'intent_deviation: null',
-    'risks: []',
-    '---',
-    '## 요약',
-    '요약',
-    '## 다음 task가 알아야 할 것',
-    '- 없음',
-    '',
-  ].join('\n')
-  const run = (openChildren?: string[]) =>
-    checkTask({
-      node: 'orchestrate',
-      type: 'auto',
-      files: {
-        'handoff.md': handoff,
-        'plan.md': autoPlan(),
-        'verification.md': '## 완료조건 판정\n| a | 통과 | b |\n',
-      },
-      config: DEFAULT_CONFIG,
-      finishing: { requested: false },
-      ...(openChildren ? { openChildren } : {}),
-    }).errors
-
-  it('정하지 않은 자식이 있으면 리뷰 요청을 되돌린다', () => {
-    expect(run(['p/w-2'])).toEqual([
-      expect.objectContaining({
-        file: 'plan.md',
-        field: '조각',
-        message: expect.stringContaining('p/w-2'),
-      }),
-    ])
-    expect(run([])).toEqual([])
-    expect(run()).toEqual([])
-  })
-})
-
 describe('[단위] 사이드바의 자식 Work 자리 (D549)', () => {
   const view = (key: string, parent?: string) =>
     ({
@@ -169,23 +123,22 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
     files: ['src/csv.js'],
   }
 
-  it('연결 규칙: 어디서 일하는지, push 금지, 부모 세션의 폴더와 SendMessage, 끝나면 부모에게 직접 말하고 턴을 끝냄. 단계 절차와 handoff는 없다', () => {
+  it('연결 규칙은 사실뿐이다: 어디서 일하는지, 부모 세션의 폴더와 ListAgents·SendMessage. 절차, handoff, 커밋·push·PR 규칙은 없다 (D556)', () => {
     const rules = childRules(link)
     expect(rules).toMatch(/^# relay: child session$/m)
     for (const s of [
       '/wt/w-2',
       'relay/w-2',
       '`src/csv.js`',
-      'Do not push',
       '/wt/w-1',
       '`SendMessage`',
       '`ListAgents`',
-      'send the parent one message',
     ])
       expect(rules, s).toContain(s)
     expect(rules).not.toContain('plan.md')
     expect(rules).not.toContain('handoff')
     expect(rules).not.toContain('독립 리뷰')
+    for (const s of ['push', 'PR', 'Commit', 'When you are done']) expect(rules, s).not.toContain(s)
   })
 
   it('컨텍스트는 부모의 지시와 연결 정보뿐이다', () => {
@@ -195,20 +148,27 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
     expect(ctx).not.toContain('팀 지식')
   })
 
-  it('부모가 정할 때 앱이 쓰는 기록용 handoff는 형식 검사를 통과한다 (D555)', () => {
-    for (const d of ['merge', 'pr'] as const) {
-      const errors = checkTask({
-        node: 'orchestrate',
-        type: 'auto',
-        files: { 'handoff.md': childHandoff(d) },
-        config: DEFAULT_CONFIG,
-        child: true,
-      }).errors
-      expect(errors, d).toEqual([])
-    }
+  it('자식을 닫을 때 앱이 쓰는 기록용 handoff는 형식 검사를 통과한다 (D555, D556)', () => {
+    const errors = checkTask({
+      node: 'orchestrate',
+      type: 'auto',
+      files: { 'handoff.md': childHandoff() },
+      config: DEFAULT_CONFIG,
+      child: true,
+    }).errors
+    expect(errors).toEqual([])
     expect(childTurnEnded('idle')).toBe(true)
     expect(childTurnEnded('working')).toBe(false)
     expect(childTurnEnded('queued')).toBe(false)
+  })
+
+  it('턴을 끝냈고 기준 뒤의 커밋이 있으며 그 끝이 부모 브랜치에 담긴 자식만 닫는다 (D556)', () => {
+    const c = { turnEnded: true, head: 'c2', base: 'c1', inParent: true }
+    expect(childMerged(c)).toBe(true)
+    expect(childMerged({ ...c, turnEnded: false })).toBe(false)
+    expect(childMerged({ ...c, inParent: false })).toBe(false)
+    // 커밋이 없는 자식의 끝은 기준 커밋이라 늘 부모에 담긴다: 닫지 않는다
+    expect(childMerged({ ...c, head: 'c1' })).toBe(false)
   })
 
   it('자식 Work의 자율 진행은 마무리 단계가 아니고, 형식 검사는 handoff만 본다', () => {

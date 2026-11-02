@@ -257,7 +257,7 @@ export class Relay {
 
   /** relay MCP의 도구 호출 (D516). 훅 서버의 /control로 받는다 */
   readonly mcp: McpService
-  /** 자식 Work 도구 (D543~D548) */
+  /** 자식 Work 도구 (D543~D546, D556) */
   readonly children: ChildService
   /** Work 스냅샷을 창과 relay MCP(wait, D525)에 함께 보낸다 */
   private readonly ui: UiPort
@@ -267,7 +267,7 @@ export class Relay {
   private constructor(private readonly o: RelayOptions) {
     this.env = o.env ?? process.env
     this.mcp = new McpService(this)
-    this.children = new ChildService(this)
+    this.children = new ChildService(this, this.env)
     // 받은 UiPort는 클래스일 수 있어(시험의 FakeUi) 펼치지 않고 메서드마다 넘긴다
     const ui = o.ui
     this.ui = {
@@ -446,9 +446,9 @@ export class Relay {
       config: () => this.config,
       at: () => this.at(),
       size: () => this.size,
-      children: (parentKey, taskId, tool, args, signal) =>
-        this.children.call(parentKey, taskId, tool, args, signal),
-      openChildren: (parentKey) => this.children.openChildren(parentKey),
+      children: (parentKey, taskId, tool, args) =>
+        this.children.call(parentKey, taskId, tool, args),
+      closeMergedChildren: (parentKey) => this.children.closeMerged(parentKey),
       workInfo: (projectId, workId) => {
         const w = this.works.get(`${projectId}/${workId}`)
         return w ? { title: w.view().title, tree: w.worktree } : null

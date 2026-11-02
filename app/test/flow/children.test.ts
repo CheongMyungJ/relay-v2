@@ -1,13 +1,12 @@
-// [흐름] 자식 Work (docs/implementation.md M44, docs/design.md D543~D549). 가짜 claude로 자율 Work의 자율 진행이 task용 relay
-// MCP의 자식 도구로 자식 Work를 만들고, 기다리고, 합치는지 본다. 자식은 의도 정리 없이 자율 진행부터 하고 부모가 승인한다.
-// 상한과 겹침 판정은 test/unit/children.test.ts가 본다.
+// [흐름] 자식 Work (docs/implementation.md M44, docs/design.md D543~D549, D556). 가짜 claude로 자율 Work의 자율 진행이 task용
+// relay MCP의 자식 도구로 자식 Work를 만들고, 부모가 자식 브랜치를 합치면 앱이 자식을 닫는지 본다. 자식은 의도 정리 없이 자율
+// 진행부터 한다. 상한, 겹침, 닫는 조건은 test/unit/children.test.ts가 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
 import { drive } from '../support/driver'
-import { FakeGitHub } from '../support/github'
 import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   AUTO_PR,
@@ -144,7 +143,7 @@ const SPAWN: Step = {
 }
 
 describe('[흐름] 자식 Work (M44)', () => {
-  it('부모가 spawn_child로 자식을 만들고, 턴을 끝낸 자식을 merge로 합친다. 자식은 handoff 없이 끝나고 앱이 기록용 handoff를 남긴다 (D543~D547, D555)', async () => {
+  it('부모가 spawn_child로 자식을 만들고 턴을 끝낸 자식의 브랜치를 합치면, 부모가 턴을 끝낼 때 앱이 자식을 닫고 기록용 handoff를 남긴다 (D543~D546, D555, D556)', async () => {
     const s = await setup(
       childScenario([
         SPAWN,
@@ -155,7 +154,6 @@ describe('[흐름] 자식 Work (M44)', () => {
           tries: 150,
           pause: 100,
         },
-        { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'merge' } },
         { do: 'git', args: ['merge', '--no-ff', '-m', 'merge: median', '{childBranch}'] },
       ]),
     )
@@ -203,8 +201,8 @@ describe('[흐름] 자식 Work (M44)', () => {
     const ctx = read(path.join(childTask, 'context.md'))
     expect(ctx).toContain(`## 부모의 지시\n\n${BRIEF}`)
     expect(ctx).not.toContain('## 팀 지식')
-    // 자식은 handoff를 쓰지 않았고, 부모가 merge로 정할 때 앱이 기록용으로 썼다 (D555)
-    expect(read(path.join(childTask, 'handoff.md'))).toContain('부모가 merge로 정함')
+    // 자식은 handoff를 쓰지 않았고, 앱이 자식을 닫을 때 기록용으로 썼다 (D555, D556)
+    expect(read(path.join(childTask, 'handoff.md'))).toContain('자식 브랜치가 부모 브랜치에 합쳐짐')
     for (const f of ['plan.md', 'verification.md', 'pr.md', 'independent-review.md'])
       expect(fs.existsSync(path.join(childTask, f)), f).toBe(false)
     expect(read(path.join(childTask, 'task.mcp.json'))).not.toContain('RELAY_CHILD_TOOLS')
@@ -226,132 +224,48 @@ describe('[흐름] 자식 Work (M44)', () => {
     ])
     expect(read(path.join(tree, 'src', 'avg.js'))).toContain('export function median')
 
-    // 도구 결과: spawn은 자식 key와 브랜치, decide merge는 다음 할 일을 알려 준다
-    const calls = s.h
-      .records()
-      .filter((r) => r['type'] === 'mcp')
-      .map((r) => [r['tool'], r['isError']])
-    expect(calls[0]).toEqual(['spawn_child', false])
-    expect(calls.at(-1)).toEqual(['decide_child', false])
-    const decided = s.h
-      .records()
-      .filter((r) => r['type'] === 'mcp' && r['tool'] === 'decide_child')
-      .map((r) => r['result'] as Record<string, unknown>)
-    expect(decided[0]).toMatchObject({ ok: true, branch: childView.branch })
+    // 도구 결과: spawn은 자식 key와 브랜치, worktree를 알려 준다
+    const spawned = s.h.records().find((r) => r['type'] === 'mcp' && r['tool'] === 'spawn_child')
+    expect(spawned?.['isError']).toBe(false)
+    expect(spawned?.['result']).toMatchObject({
+      work: childView.key,
+      branch: childView.branch,
+      tree: s.tree(childView.key),
+    })
   })
 
-  it('정하지 않은 자식이 있으면 부모의 리뷰 요청을 되돌린다. discard로 정하면 이어 간다 (D548)', async () => {
-    const base = childScenario([SPAWN])
-    // 부모: 자식을 정하지 않고 리뷰를 요청한다 → 되돌림 → 자식을 버리고 다시 마무리한다
-    const own = base.tasks?.['orchestrate'] ?? []
-    const stopAt = own.findIndex((st) => st.do === 'stop')
-    const tasks = {
-      ...base.tasks,
-      orchestrate: own.map((st, i) =>
-        i === stopAt && st.do === 'stop'
-          ? {
-              ...st,
-              onBlock: [
-                {
-                  do: 'mcpCall' as const,
-                  tool: 'decide_child',
-                  args: { work: '{child}', decision: 'discard' },
-                },
-              ],
-            }
-          : st,
-      ),
-      // 자식은 일을 시작하고 멈춰 있는다(부모가 버린다)
-      'orchestrate#child': [{ do: 'prompt' as const }, { do: 'wait' as const }],
-    }
-    const s = await setup({ ...base, tasks })
+  it('부모는 자식을 합치지 않고도 마무리한다. 합치지 않은 자식은 앱이 닫지 않고 열린 채 남는다 (D556)', async () => {
+    const s = await setup(
+      childScenario([
+        SPAWN,
+        {
+          do: 'mcpCall',
+          tool: 'list_children',
+          until: '"state":"idle"',
+          tries: 150,
+          pause: 100,
+        },
+      ]),
+    )
     const key = await s.create()
     const result = await drive(s.h.relay, s.h.ui, key)
     await settle(s.h, key)
     expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
     expect(result.tasks.map((t) => [t.label, t.bounces])).toEqual([
       ['01 의도 정리', 0],
-      ['02 자율 진행', 1],
+      ['02 자율 진행', 0],
     ])
-    const bounced = events(s.dir(key)).filter((e) => e.type === 'task.bounced')
-    expect(JSON.stringify(bounced[0])).toContain('정하지 않은 자식 Work')
     const childView = s.h.relay.snapshot().works.find((w) => w.parent?.key === key)
-    expect(childView?.status).toBe('abandoned')
-  })
-
-  it('부모 기준 커밋에서 시작한 자식은 decide_child pr로 따로 PR이 된다. PR 진행인 자식은 정한 것이라 부모가 마무리한다 (D547, D548)', async () => {
-    const s = await setup(
-      childScenario([
-        SPAWN,
-        {
-          do: 'mcpCall',
-          tool: 'list_children',
-          until: '"state":"idle"',
-          tries: 150,
-          pause: 100,
-        },
-        {
-          do: 'mcpCall',
-          tool: 'decide_child',
-          args: { work: '{child}', decision: 'pr', pr_title: 'median 추가', pr_body: '요약' },
-        },
-      ]),
-    )
-    const gh = new FakeGitHub(path.join(s.h.root, 'record'), '', path.join(s.h.root, 'outside'))
-    const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    const childView = s.h.relay.snapshot().works.find((w) => w.parent?.key === key)
-    if (!childView) throw new Error('자식 Work가 없음')
-    expect(childView.status).toBe('pr')
-    expect(gh.prs()).toEqual([
-      expect.objectContaining({ head: childView.branch, base: 'main', state: 'open' }),
-    ])
-    const decided = s.h.records().find((r) => r['type'] === 'mcp' && r['tool'] === 'decide_child')
-    expect(decided?.['isError']).toBe(false)
-  })
-
-  it('부모가 커밋한 뒤에 만든 자식은 PR로 따로 내지 못한다 (D547)', async () => {
-    const s = await setup(
-      childScenario([
-        { do: 'commit', files: { 'README.md': '# sample\n' }, message: 'docs: README' },
-        SPAWN,
-        {
-          do: 'mcpCall',
-          tool: 'list_children',
-          until: '"state":"idle"',
-          tries: 150,
-          pause: 100,
-        },
-        {
-          do: 'mcpCall',
-          tool: 'decide_child',
-          args: { work: '{child}', decision: 'pr', pr_title: 'median 추가' },
-        },
-        { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'discard' } },
-      ]),
-    )
-    const key = await s.create()
-    const result = await drive(s.h.relay, s.h.ui, key)
-    await settle(s.h, key)
-    expect(result, s.h.ui.dump()).toMatchObject({ status: 'completed' })
-    const decided = s.h
-      .records()
-      .filter((r) => r['type'] === 'mcp' && r['tool'] === 'decide_child')
-      .map((r) => [r['isError'], JSON.stringify(r['result'])])
-    expect(decided[0]?.[0]).toBe(true)
-    expect(decided[0]?.[1]).toContain('부모 브랜치의 변경 위에서 시작한 자식')
-    expect(decided[1]?.[0]).toBe(false)
+    expect(childView?.status).toBe('active')
+    expect(
+      fs.existsSync(
+        path.join(s.dir(childView?.key ?? ''), 'tasks', '01-orchestrate', 'handoff.md'),
+      ),
+    ).toBe(false)
   })
 
   it('자식은 자식을 만들지 못하고(깊이 1), 사람이 진행하는 Work의 다른 task는 자식 도구를 받지 않는다 (D545)', async () => {
-    const s = await setup(
-      childScenario([
-        SPAWN,
-        { do: 'mcpCall', tool: 'decide_child', args: { work: '{child}', decision: 'discard' } },
-      ]),
-    )
+    const s = await setup(childScenario([SPAWN]))
     const key = await s.create()
     const result = await drive(s.h.relay, s.h.ui, key)
     await settle(s.h, key)
