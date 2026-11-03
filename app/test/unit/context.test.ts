@@ -706,6 +706,20 @@ describe('context.md: 설계 (D350, D358, D365, D374)', () => {
       '초안 우선 (`draft_first`)',
     )
   })
+
+  it('자율 Work의 의도 정리는 앱 설정과 관계없이 결정마다 확인이 기본이고, Work 설정이 있으면 그것을 따른다 (D563)', () => {
+    expect(questionMode(DEFAULT_CONFIG, {}, 'intake', 'auto')).toBe('confirm_each')
+    expect(questionMode(DEFAULT_CONFIG, {}, 'intake', 'feature')).toBe('draft_first')
+    expect(questionMode(DEFAULT_CONFIG, {}, 'orchestrate', 'auto')).toBe('draft_first')
+    expect(
+      questionMode(
+        DEFAULT_CONFIG,
+        { question_mode: { 'work-start': 'draft_first' } },
+        'intake',
+        'auto',
+      ),
+    ).toBe('draft_first')
+  })
 })
 
 describe('context.md: 서브모듈 Work (D413, D414)', () => {

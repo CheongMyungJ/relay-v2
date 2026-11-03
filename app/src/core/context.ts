@@ -7,7 +7,13 @@ import { taskEngine } from './agent'
 import type { AppConfig, QuestionMode, WorkSettings } from '../shared/config'
 import type { NodeName, TaskNode } from '../shared/contracts'
 import type { PrItem } from '../shared/pr'
-import { WORK_TYPE_LABEL, type CustomStep, type TaskRecord, type WorkState } from '../shared/work'
+import {
+  WORK_TYPE_LABEL,
+  type CustomStep,
+  type TaskRecord,
+  type WorkState,
+  type WorkType,
+} from '../shared/work'
 import { approvalMode, autoApprovable, type ApprovalMode } from './approval'
 import {
   NODE_INFO,
@@ -36,17 +42,25 @@ import { REVIEW_RESULT_FILE } from './independent-review'
 
 /**
  * 이 노드 스킬의 질문 방식. Work 설정, 앱 설정 순서로 본다 (D26, D72). 설계 문답(spec)과 커스텀 단계는 질문 방식 설정이
- * 없어 null이다 (D358, I104, D457)
+ * 없어 null이다 (D358, I104, D457). 자율 Work의 의도 정리는 앱 설정 대신 결정마다 확인이 기본이다 (D563): 의도 승인 뒤로
+ * 사람이 끼지 않고, 대충 쓴 요청에서 초안 우선은 묻지 않고 지나가기도 했다
  */
 export function questionMode(
   config: AppConfig,
   settings: WorkSettings,
   node: TaskNode,
+  type?: WorkType,
 ): QuestionMode | null {
   const skill = NODE_INFO[node].skill
   if (skill === 'spec' || skill === 'custom') return null
-  return settings.question_mode?.[skill] ?? config.question_mode[skill]
+  const own = settings.question_mode?.[skill]
+  if (own) return own
+  if (type === 'auto' && skill === 'work-start') return AUTO_INTAKE_QUESTION_MODE
+  return config.question_mode[skill]
 }
+
+/** 자율 Work 의도 정리의 기본 질문 방식 (D563) */
+export const AUTO_INTAKE_QUESTION_MODE: QuestionMode = 'confirm_each'
 
 const CLOSING =
   '산출물과 handoff를 썼습니다. 오른쪽 패널에서 확인하고 [승인]을 누르세요. 고칠 점은 여기에 말해 주세요.'
@@ -167,12 +181,15 @@ function questionLine(
   settings: WorkSettings,
   node: TaskNode,
   step?: CustomStep,
+  type?: WorkType,
 ): string {
   if (node === 'custom')
     return step?.question_mode
       ? `${QUESTION_LABEL[step.question_mode]}. 이 유형의 정의가 정한 질문 방식이다 (D511)`
       : CUSTOM_QUESTION_LINE
-  const mode = questionMode(config, settings, node)
+  const mode = questionMode(config, settings, node, type)
+  if (mode && type === 'auto' && node === 'intake' && !settings.question_mode?.['work-start'])
+    return `${QUESTION_LABEL[mode]}. 자율 Work의 의도 정리는 결정마다 확인이 기본이다 (D563)`
   return mode ? QUESTION_LABEL[mode] : SPEC_QUESTION_LINE
 }
 
@@ -723,7 +740,10 @@ export function buildContext(input: ContextInput): string {
     ...(finishesWork(work, task)
       ? [finishingSection(input, codeReviewOn(config, work.settings))]
       : []),
-    ['질문 방식', questionLine(config, work.settings, task.node, customStep(work, task))],
+    [
+      '질문 방식',
+      questionLine(config, work.settings, task.node, customStep(work, task), workType(work)),
+    ],
     ...(input.knowledge ? [knowledgeSection(task.node, input.knowledge, completes)] : []),
     ...(input.target ? [targetSection(input.target)] : []),
     ...(input.bundle

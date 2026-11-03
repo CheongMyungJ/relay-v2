@@ -1,0 +1,72 @@
+{
+  "id": "46-rough-modules",
+  "type": "feature",
+  "repoName": "shop-reports",
+  "title": "39와 같은 기능 셋, 처음 요청은 떠오르는 대로 대충",
+  "purpose": "39와 같은 레포·숨긴 시험이지만 처음 요청은 실무처럼 짧게 쓴다(파일과 함수 이름, 하는 일 한마디). 반환 모양, 정렬, 머리글, 이메일 가리기 같은 세부는 사람 역할이 물으면 답하는 지식으로 옮겼다. 의도 정리(자율은 결정마다 확인, D563)가 대충 쓴 요청에서 세부를 끌어내는지 맨 CLI와 견준다.",
+  "report": "기능 세 개 넣어 줘. src/sales.js에 monthlyTotals(월별 매출 합계), src/inventory.js에 lowStock(재고 부족 목록), src/members.js에 exportMembers(회원 목록 CSV로 내보내기). 셋은 서로 관계없어.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "monthlyTotals(sales)는 달(YYYY-MM)마다 금액 합계를 [{ month, total }] 꼴로, 달 오름차순으로 돌려준다."
+    },
+    {
+      "share": "on_ask",
+      "text": "lowStock(items, threshold = 5)는 재고가 기준 이하인 품목을 수량이 적은 차례로 돌려준다. 수량이 같으면 이름 차례."
+    },
+    {
+      "share": "on_ask",
+      "text": "exportMembers(members)는 id,name,email 머리글이 있는 CSV 글을 돌려준다."
+    },
+    {
+      "share": "on_ask",
+      "text": "exportMembers에서 이메일은 개인정보라 앞 한 글자만 보이게 가린다: kim@example.com → k***@example.com."
+    },
+    {
+      "share": "on_ask",
+      "text": "환불은 음수 금액으로 들어온다. 월별 합계에서도 그 달 금액에서 뺀다."
+    },
+    {
+      "share": "on_ask",
+      "text": "재고가 기준값과 딱 같은 품목도 부족으로 본다(기준 이하)."
+    },
+    {
+      "share": "on_ask",
+      "text": "이름에 쉼표가 든 회원이 있다. CSV에서 그런 값은 따옴표로 감싸야 한다."
+    }
+  ],
+  "preferences": [
+    "세 가지를 새 Work 하나(또는 요청 하나)로 한 번에 맡기고 싶다. 어떻게 나눌지는 도구가 정하면 좋겠다.",
+    "처음 요청은 바빠서 떠오르는 대로 짧게 썼다. 세부는 물어보면 답한다.",
+    "셋 다 이번에 끝내고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/sales.js", "src/inventory.js", "src/members.js", "test/**"],
+  "checks": [
+    {
+      "name": "월별 합계",
+      "file": "sales.test.js",
+      "bug": "sales"
+    },
+    {
+      "name": "재고 부족",
+      "file": "inventory.test.js",
+      "bug": "inventory"
+    },
+    {
+      "name": "회원 내보내기",
+      "file": "members.test.js",
+      "bug": "members"
+    },
+    {
+      "name": "기존 함수 그대로",
+      "file": "existing.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 60,
+    "turns": 80
+  }
+}
