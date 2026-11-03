@@ -1,6 +1,6 @@
 // [흐름] 자율 유형: 세션이 하고 앱은 보는 Work (docs/implementation.md M42, M50, docs/design.md D557~D561). 가짜 claude로
-// 자율 Work가 intake → orchestrate로 가고, 세션이 Work 브랜치를 push하면 앱이 독립 리뷰를 돌리며, 위험한 git 명령을 훅이 막고,
-// 사람의 [Work 완료]로 전달 없이 끝나는지 본다. git 명령 판정은 test/unit/git-guard.test.ts가 자세히 본다.
+// 자율 Work가 intake → orchestrate로 가고, 세션이 push한 브랜치를 앱이 보이며, 위험한 git 명령을 훅이 막고, 앱이 독립 리뷰를
+// 돌리지 않으며, 사람의 [Work 완료]로 전달 없이 끝나는지 본다. git 명령 판정은 test/unit/git-guard.test.ts가 자세히 본다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -79,7 +79,7 @@ function sessionScenario(): Scenario {
 }
 
 describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
-  it('intake → orchestrate. push하면 앱이 독립 리뷰를 돌리고, main push는 훅이 막고, [Work 완료]로 전달 없이 끝난다 (D557~D561)', async () => {
+  it('intake → orchestrate. push한 브랜치를 보이고, main push는 훅이 막고, 앱은 리뷰를 돌리지 않고, [Work 완료]로 전달 없이 끝난다 (D557, D558, D560~D562)', async () => {
     const s = await setup(sessionScenario())
     const key = await s.create()
     const dir = s.dir(key)
@@ -91,29 +91,18 @@ describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
     const task = path.join(dir, 'tasks', '02-orchestrate')
     const taskId = work(dir).tasks[1]?.id ?? ''
 
-    // 앱이 독립 리뷰를 한 번 돌리고 기록을 남겼다 (D559)
-    await s.h.ui.until(
-      () => (fs.existsSync(path.join(task, 'session-reviews.json')) ? true : null),
-      '독립 리뷰 기록',
-      60_000,
-    )
-    const reviews = JSON.parse(read(path.join(task, 'session-reviews.json'))) as {
-      commit: string
-      auto: boolean
-    }[]
     const tree = s.tree(key)
-    expect(reviews).toEqual([
-      expect.objectContaining({ commit: git(tree, 'rev-parse', 'HEAD'), auto: true }),
-    ])
-    expect(fs.existsSync(path.join(task, 'independent-review.md'))).toBe(true)
+    // push 뒤 화면을 다시 그릴 때까지 기다린다 (D560)
+    for (let i = 0; i < 100; i++) {
+      if ((await s.h.relay.review(key, taskId))?.session?.branches.length) break
+      await new Promise((r) => setTimeout(r, 200))
+    }
 
-    // 승인 화면: 내보낸 것(push한 Work 브랜치), 리뷰, [Work 완료]를 누를 수 있음, 계획
+    // 승인 화면: 내보낸 것(push한 Work 브랜치), [Work 완료]를 누를 수 있음, 계획
     const view = await s.h.relay.review(key, taskId)
     const branch = work(dir).branch ?? ''
     expect(view?.session).toMatchObject({
       branches: [{ name: branch, commit: git(tree, 'rev-parse', 'HEAD'), pr: null }],
-      reviewing: false,
-      autoLeft: 1,
       canComplete: true,
       openChildren: [],
     })
@@ -148,7 +137,8 @@ describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
     expect(events(dir).find((e) => e.type === 'work.completed')?.payload).toMatchObject({
       delivery: 'none',
     })
-    for (const file of ['verification.md', 'pr.md'])
+    // 앱은 독립 리뷰를 돌리지 않는다 (D562)
+    for (const file of ['verification.md', 'pr.md', 'independent-review.md'])
       expect(fs.existsSync(path.join(task, file)), file).toBe(false)
     const intent = parseFrontMatter(read(path.join(dir, 'intent.md')))
     expect(intent.body.trim()).toBe(autoIntentDraft().trim())

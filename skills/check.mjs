@@ -431,7 +431,6 @@ const spec = {
     ['5.6.16', '입력: context.md, request.md 경로', /`context\.md`[\s\S]*`request\.md`/],
     ['D557', '하는 방법은 세션이 정함: 전략, 나누기, 서브에이전트, 자식, 시험, 커밋, 브랜치, push, PR', /How to do it is yours to decide[\s\S]*pushes and PRs/],
     ['D558', '막는 것: 머지 대상·기준·main·master push, 강제 push, 원격 브랜치 지우기, gh pr merge. 머지는 사람', /blocks pushing to the merge target, the base branch, `main` or `master`, force pushes, deleting remote branches, and `gh pr merge`[\s\S]*The human merges PRs/],
-    ['D559', 'Work 브랜치를 push하면 앱이 독립 리뷰, 반영은 세션이 정함', /Each time you push this Work's branch, relay runs an independent review[\s\S]*You decide what to apply/],
     ['D561', 'handoff 없이 끝나고 사람이 Work를 끝냄', /You do not write a handoff[\s\S]*end your turn/],
     ['D552', '자식은 부모에게 닿는 법만 받고 할 일은 brief가 정함', /relay tells the child only how to reach you[\s\S]*only your brief/],
     ['D553', '자식과 ListAgents와 SendMessage로 직접 말하고, 쉴 때 자식의 메시지가 다음 턴을 엶', /`ListAgents`[\s\S]*`SendMessage`[\s\S]*a child's message starts your next turn/],

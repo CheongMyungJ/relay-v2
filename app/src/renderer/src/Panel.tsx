@@ -511,14 +511,13 @@ function ProgressFiles({ review, task }: { review: ReviewView; task: TaskView })
 }
 
 /**
- * 세션이 하는 Work의 자율 진행 칸 (D559~D561): 세션이 push한 브랜치와 PR, 앱이 돌린 독립 리뷰, [독립 리뷰], [Work 완료].
+ * 세션이 하는 Work의 자율 진행 칸 (D560, D561): 세션이 push한 브랜치와 PR, [Work 완료].
  * 끝나지 않은 자식이 있으면 [Work 완료]를 한 번 더 눌러야 한다
  */
 function SessionBox({ review, session }: { review: ReviewView; session: SessionFactsView }) {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
-  const last = session.reviews.at(-1)
   const complete = async () => {
     if (session.openChildren.length && !confirming) {
       setConfirming(true)
@@ -530,13 +529,8 @@ function SessionBox({ review, session }: { review: ReviewView; session: SessionF
     setBusy(false)
     if (!r.ok) setError(r.error ?? '끝내지 못했습니다')
   }
-  const reviewNow = async () => {
-    setError(null)
-    const r = await call(() => window.relay.sessionReview(review.workKey, review.taskId))
-    if (!r.ok) setError(r.error ?? '독립 리뷰를 시작하지 못했습니다')
-  }
   return (
-    <section className="session-box" aria-label="내보낸 것과 독립 리뷰">
+    <section className="session-box" aria-label="내보낸 것">
       <h3>내보낸 것</h3>
       {session.branches.length ? (
         <ul className="session-branches">
@@ -565,26 +559,7 @@ function SessionBox({ review, session }: { review: ReviewView; session: SessionF
           아직 push한 브랜치가 없습니다. 세션이 브랜치를 push하고 PR을 엽니다.
         </div>
       )}
-      <h3>독립 리뷰</h3>
-      {session.reviewing ? <div>독립 리뷰가 도는 중입니다…</div> : null}
-      {last ? (
-        <div>
-          커밋 {last.commit.slice(0, 7)}: 차단 {last.counts.차단} · 권장 {last.counts.권장} · 사소{' '}
-          {last.counts.사소}
-          <div className="dim" title={last.file}>
-            결과 글: {last.file.split(/[\\/]/).pop()} (task 디렉터리, [파일] 탭)
-          </div>
-        </div>
-      ) : session.reviewing ? null : (
-        <div className="dim">
-          아직 없음. 세션이 Work 브랜치를 push하면 relay가 돌립니다
-          {session.autoLeft ? ` (자동 ${session.autoLeft}번 남음)` : ''}.
-        </div>
-      )}
       <div className="actions">
-        <button type="button" disabled={session.reviewing} onClick={() => void reviewNow()}>
-          독립 리뷰
-        </button>
         <button
           type="button"
           className="primary"

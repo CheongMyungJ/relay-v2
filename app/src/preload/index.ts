@@ -50,7 +50,6 @@ const api: RelayApi = {
   approve: (workKey, taskId, opts) => ipcRenderer.invoke(IPC.approve, workKey, taskId, opts),
   cancelCountdown: (workKey, taskId) => ipcRenderer.invoke(IPC.cancelCountdown, workKey, taskId),
   completeSession: (workKey, taskId) => ipcRenderer.invoke(IPC.completeSession, workKey, taskId),
-  sessionReview: (workKey, taskId) => ipcRenderer.invoke(IPC.sessionReview, workKey, taskId),
   takeOver: (workKey) => ipcRenderer.invoke(IPC.takeOver, workKey),
   answerQuestion: (workKey, taskId, questionId, answers) =>
     ipcRenderer.invoke(IPC.answerQuestion, workKey, taskId, questionId, answers),

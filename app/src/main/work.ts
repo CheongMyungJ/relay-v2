@@ -355,7 +355,6 @@ import {
 } from '../core/validate'
 import { PLAN_FILE, planView } from '../core/autonomy'
 import { riskyGitCommand } from '../core/git-guard'
-import { SESSION_AUTO_REVIEWS, SESSION_REVIEWS_FILE } from '../core/session-driven'
 import {
   childContext,
   childRules,
@@ -425,7 +424,6 @@ import type {
   RespondStartInput,
   ReviewView,
   SessionFactsView,
-  SessionReviewView,
   TaskView,
   TerminalBacklog,
   ToolActivityView,
@@ -676,7 +674,7 @@ function bashCommand(body: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-/** git push를 부른 셸 명령인가 (D559). 낱말만 본다 */
+/** git push를 부른 셸 명령인가 (D560). 낱말만 본다 */
 function pushCommand(body: Record<string, unknown>): boolean {
   return /\bgit\b[^;&|\n]*\bpush\b/.test(bashCommand(body) ?? '')
 }
@@ -1515,7 +1513,6 @@ export class WorkRunner {
     taskId: string,
     codeReview: boolean,
     signal: AbortSignal,
-    detached = false,
   ): Promise<ReviewResult | undefined> {
     const task = this.task(taskId)
     if (!task) return undefined
@@ -1657,8 +1654,6 @@ export class WorkRunner {
       path.join(dir, REVIEW_RECORD_FILE),
       `${JSON.stringify({ engine, code_review: codeReview, calls }, null, 2)}\n`,
     )
-    // 세션이 하는 Work의 리뷰(D559)는 상태를 바꾸지 않고 결과만 돌려준다
-    if (detached) return result
     const error = reviewError(result)
     await this.feedReviewFinished(taskId, signal, {
       ...(error ? { error } : {}),
@@ -2816,39 +2811,22 @@ export class WorkRunner {
       : null
   }
 
-  /** 세션이 하는 Work의 독립 리뷰가 도는 중 (D559) */
-  private sessionReviewing = false
   /** push한 브랜치마다 찾은 열린 PR (D560). gh가 없거나 실패하면 null. 메모리에만 둔다 */
   private sessionPrs = new Map<string, { number: number; url: string } | null>()
 
-  /** push 뒤의 처리를 줄 밖에서 한다 (D559, D560) */
+  /** push 뒤의 처리를 줄 밖에서 한다 (D560) */
   private afterPushSoon(taskId: string): void {
     void this.afterPush(taskId).catch((e: unknown) =>
       console.error(`[${this.key}] push 뒤 처리 실패: ${message(e)}`),
     )
   }
 
-  /**
-   * 세션이 push한 뒤 (D559, D560): push한 브랜치의 PR을 다시 찾고, Work 브랜치의 원격 끝이 아직 리뷰하지 않은 커밋이면 자동
-   * 리뷰를 돌린다(Work당 SESSION_AUTO_REVIEWS번까지). 자식 Work는 자동 리뷰하지 않는다
-   */
+  /** 세션이 push한 뒤 (D560): push한 브랜치의 PR을 다시 찾고 화면을 다시 그린다 */
   private async afterPush(taskId: string): Promise<void> {
     const task = this.task(taskId)
     if (!task || !this.pushesItself(task)) return
     await this.refreshSessionPrs()
     this.changed()
-    if (this.work.parent) return
-    const env = { env: this.ctx.env }
-    const remote = await refCommit(
-      this.worktree,
-      `refs/remotes/origin/${workBranch(this.work)}`,
-      env,
-    )
-    if (!remote || remote === this.work.base_commit) return
-    const log = await this.sessionReviews(task)
-    if (log.some((r) => r.commit === remote)) return
-    if (log.filter((r) => r.auto).length >= SESSION_AUTO_REVIEWS) return
-    await this.sessionReview(taskId, true)
   }
 
   /** push한 브랜치마다 열린 PR을 gh로 찾는다 (D560). 실패하면 null로 둔다 */
@@ -2888,66 +2866,6 @@ export class WorkRunner {
     }
   }
 
-  /** 앱이 돌린 독립 리뷰의 기록 (D559): task 디렉터리의 session-reviews.json */
-  private async sessionReviews(task: TaskRecord): Promise<SessionReviewView[]> {
-    const text = await readText(path.join(this.files.taskDir(task), SESSION_REVIEWS_FILE))
-    if (!text) return []
-    try {
-      const v: unknown = JSON.parse(text)
-      return Array.isArray(v) ? (v as SessionReviewView[]) : []
-    } catch {
-      return []
-    }
-  }
-
-  /**
-   * 세션이 하는 Work의 독립 리뷰 (D559): 마무리 단계와 같은 찾기·확인을 기준 커밋부터 지금 worktree까지에 돌리고, 기록을 남기고,
-   * 결과 글의 경로를 세션에 보낸다. 막지 않는다. 이미 도는 중이면 하지 않는다
-   */
-  async sessionReview(taskId: string, auto = false): Promise<CommandResult> {
-    const task = this.task(taskId)
-    if (!task || !this.pushesItself(task))
-      return { ok: false, error: '세션이 하는 Work의 자율 진행이 아닙니다' }
-    if (this.sessionReviewing) return { ok: false, error: '독립 리뷰가 이미 도는 중입니다' }
-    this.sessionReviewing = true
-    this.changed()
-    try {
-      const commit = await headCommit(this.worktree, { env: this.ctx.env })
-      const result = await this.runReview(taskId, true, new AbortController().signal, true)
-      if (!result) return { ok: false, error: '독립 리뷰를 돌리지 못했습니다' }
-      const file = path.join(this.files.taskDir(task), REVIEW_RESULT_FILE)
-      const count = (sev: string) => result.findings.filter((f) => f.severity === sev).length
-      const entry: SessionReviewView = {
-        commit,
-        at: this.ctx.at(),
-        auto,
-        counts: { 차단: count('차단'), 권장: count('권장'), 사소: count('사소') },
-        file,
-      }
-      await writeJson(path.join(this.files.taskDir(task), SESSION_REVIEWS_FILE), [
-        ...(await this.sessionReviews(task)),
-        entry,
-      ])
-      // 세션이 살아 있으면 알린다: 일하는 중이면 Claude Code가 입력을 받아 두었다가 읽는다
-      this.sayToSession(
-        taskId,
-        `relay: 독립 리뷰가 끝났습니다(커밋 ${commit.slice(0, 7)}, 차단 ${entry.counts.차단} · 권장 ${entry.counts.권장} · 사소 ${entry.counts.사소}). ${file}를 읽고 반영할지 정하세요.`,
-      )
-      return { ok: true }
-    } finally {
-      this.sessionReviewing = false
-      this.changed()
-    }
-  }
-
-  /** 살아 있는 세션의 터미널에 한 줄을 넣고 보낸다 (D559) */
-  private sayToSession(taskId: string, text: string): void {
-    const pty = this.live.get(taskId)?.pty
-    if (!pty) return
-    pty.write(text)
-    setTimeout(() => pty.write('\r'), 300)
-  }
-
   /**
    * [Work 완료] (D561): 세션이 하는 Work의 자율 진행을 사람이 끝낸다. 세션이 일하는 중이면 거절한다. 앱이 기록용 handoff를 쓰고
    * 사람의 승인으로 Work를 전달 없이 완료한다
@@ -2962,19 +2880,13 @@ export class WorkRunner {
     return this.approve(taskId, { by: 'human' })
   }
 
-  /** 세션이 하는 Work의 자율 진행 칸 (D559~D561) */
+  /** 세션이 하는 Work의 자율 진행 칸 (D560, D561) */
   private async sessionView(task: TaskRecord): Promise<SessionFactsView> {
-    const reviews = await this.sessionReviews(task)
     return {
       branches: (await this.pushedBranches()).map((b) => ({
         ...b,
         pr: this.sessionPrs.get(b.name) ?? null,
       })),
-      reviews,
-      reviewing: this.sessionReviewing,
-      autoLeft: this.work.parent
-        ? 0
-        : Math.max(0, SESSION_AUTO_REVIEWS - reviews.filter((r) => r.auto).length),
       canComplete: this.work.status === 'active' && childTurnEnded(task.status),
       openChildren: this.ctx.openChildren(this.key),
     }
@@ -3037,7 +2949,7 @@ export class WorkRunner {
               ? this.codexToolReply(req, task, task ? this.pushesItself(task) : false)
               : null))
           : null
-      // 세션이 Work 브랜치를 push하면 독립 리뷰를 돌린다 (D559)
+      // 세션이 push하면 push한 브랜치와 PR을 다시 본다 (D560)
       if (req.event === 'PostToolUse' && task && this.pushesItself(task) && pushCommand(b))
         this.afterPushSoon(task.id)
       const name = str(b['tool_name']) ?? ''

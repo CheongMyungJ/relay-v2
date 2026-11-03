@@ -9,8 +9,7 @@ For an autonomous Work, reach the intent on your own. The human approved the int
 ## What relay does
 
 - **Guards a few git and gh actions.** You may push work branches and open PRs. relay blocks pushing to the merge target, the base branch, `main` or `master`, force pushes, deleting remote branches, and `gh pr merge`. The human merges PRs.
-- **Reviews when you push.** Each time you push this Work's branch, relay runs an independent review of the change from the base commit (twice at most on its own; the human can ask for more) and sends you the path of the result. You decide what to apply.
-- **Shows the human what you do:** your terminal, the branches you pushed and their PRs, the review results, child sessions, and `plan.md` in the task directory if you write one (a `## 전략` section with `- 방식: …`, and a `## 조각` table with `| id | 목표 | 실행 형태 | … | 결과 |` columns show as the plan).
+- **Shows the human what you do:** your terminal, the branches you pushed and their PRs, child sessions, and `plan.md` in the task directory if you write one (a `## 전략` section with `- 방식: …`, and a `## 조각` table with `| id | 목표 | 실행 형태 | … | 결과 |` columns show as the plan).
 - **Ends the Work when the human says so.** You do not write a handoff or a closing file. When you are done, say what you did and where it is in the terminal, and end your turn.
 
 ## Child sessions (only with the relay child tools)

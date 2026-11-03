@@ -184,8 +184,6 @@ export interface RelayApi {
   cancelCountdown(workKey: string, taskId: string): Promise<CommandResult>
   /** 세션이 하는 Work의 [Work 완료] (D561) */
   completeSession(workKey: string, taskId: string): Promise<CommandResult>
-  /** 세션이 하는 Work의 [독립 리뷰] (D559) */
-  sessionReview(workKey: string, taskId: string): Promise<CommandResult>
   /** [직접 맡기] (D523): relay MCP 호출자가 진행하던 Work를 사람이 맡는다 */
   takeOver(workKey: string): Promise<CommandResult>
   /** Codex MCP 질문의 실제 답변. null은 취소이며 선택이나 동의로 취급하지 않는다. */
@@ -356,7 +354,6 @@ export const IPC = {
   approve: 'work:approve',
   cancelCountdown: 'work:cancel-countdown',
   completeSession: 'work:complete-session',
-  sessionReview: 'work:session-review',
   takeOver: 'work:take-over',
   answerQuestion: 'work:answer-question',
   interrupt: 'work:interrupt',
