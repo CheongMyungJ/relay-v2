@@ -102,11 +102,25 @@ const appOf = (arm, apps) => {
   return build === 'relay' || build === 'relay-ask' ? APP : (apps[build] ?? null)
 }
 
+/** 폴더 안 파일 가운데 가장 늦게 고친 때(ms). 없으면 0 */
+function newestMtime(dir) {
+  if (!fs.existsSync(dir)) return 0
+  let newest = 0
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    newest = Math.max(newest, e.isDirectory() ? newestMtime(p) : fs.statSync(p).mtimeMs)
+  }
+  return newest
+}
+
 function preflight(arms, apps) {
   const problems = []
   for (const dir of new Set(arms.map((a) => appOf(a, apps)).filter(Boolean))) {
-    if (!fs.existsSync(path.join(dir, 'out/main/index.js')))
-      problems.push(`앱 빌드(${dir}/out)가 없습니다`)
+    const built = path.join(dir, 'out/main/index.js')
+    if (!fs.existsSync(built)) problems.push(`앱 빌드(${dir}/out)가 없습니다`)
+    // 소스를 고치고 빌드하지 않으면 예전 앱으로 평가한다 (2026-11-03 평가에서 실제로 있었다)
+    else if (newestMtime(path.join(dir, 'src')) > fs.statSync(built).mtimeMs)
+      problems.push(`앱 빌드(${dir}/out)가 src보다 오래됐습니다. ${dir}에서 npm run build를 돌리세요`)
     if (!fs.existsSync(path.join(dir, 'node_modules/electron/dist/electron')))
       problems.push('Electron 실행 파일이 없습니다')
   }
