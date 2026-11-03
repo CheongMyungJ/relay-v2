@@ -33,6 +33,19 @@ describe('[단위] git·gh 보호 (D558)', () => {
       expect(guard(cmd), cmd).toMatch(/D558/)
   })
 
+  it('따옴표, 서브셸, 명령 치환, bash -c 안의 push와 여러 브랜치 refspec도 본다', () => {
+    for (const cmd of [
+      'git push origin "HEAD:main"',
+      "git push origin 'main'",
+      '(git push origin main)',
+      "bash -c 'git push origin main'",
+      'echo $(git push origin main)',
+      'git push origin refs/heads/*:refs/heads/*',
+    ])
+      expect(guard(cmd), cmd).toMatch(/D558/)
+    expect(guard('gh api repos/o/r/pulls/1')).toBeNull()
+  })
+
   it('강제 push, 원격 브랜치 지우기, 모든 브랜치 push, PR 머지를 막는다', () => {
     for (const cmd of [
       'git push -f origin work/a',
@@ -45,6 +58,9 @@ describe('[단위] git·gh 보호 (D558)', () => {
       'git push --all',
       'git push --mirror',
       'gh pr merge 3 --squash',
+      'git push -ud origin feat',
+      'gh api -X PUT repos/o/r/pulls/1/merge',
+      'gh api --method DELETE repos/o/r/git/refs/heads/x',
     ])
       expect(guard(cmd), cmd).toMatch(/D558/)
   })

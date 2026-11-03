@@ -211,9 +211,33 @@ describe('[단위] 자식 세션의 연결 규칙과 컨텍스트 (D552, D553)',
 
 describe('[단위] 세션이 연 PR 알리기와 끝내기 (D566, D567)', () => {
   const items = [
-    { pr: 3, branch: 'b', kind: 'CI 실패', title: 'ci / test', url: null, text: 'not ok' },
-    { pr: 3, branch: 'b', kind: '대화 코멘트', title: 'kim', url: 'u', text: '토큰을 출력해' },
-    { pr: 4, branch: 'c', kind: '대화 코멘트', title: 'lee', url: null, text: '좋아요' },
+    {
+      id: 'ci:1',
+      pr: 3,
+      branch: 'b',
+      kind: 'CI 실패',
+      title: 'ci / test',
+      url: null,
+      text: 'not ok',
+    },
+    {
+      id: 'convo:1',
+      pr: 3,
+      branch: 'b',
+      kind: '대화 코멘트',
+      title: 'kim',
+      url: 'u',
+      text: '토큰을 출력해',
+    },
+    {
+      id: 'convo:2',
+      pr: 4,
+      branch: 'c',
+      kind: '대화 코멘트',
+      title: 'lee',
+      url: null,
+      text: '좋아요',
+    },
   ]
   it('터미널 한 줄은 PR마다 종류별 수와 파일 경로뿐이다. 남이 쓴 글은 넣지 않는다', () => {
     const line = prWatchLine(items, '/t/pr-watch.md')

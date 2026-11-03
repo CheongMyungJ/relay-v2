@@ -266,7 +266,12 @@ if (cmd === 'pr' && sub === 'list') {
   const head = opt('--head')
   const open = env.FAKE_GH_OPEN_PR
     ? [{ url: env.FAKE_GH_OPEN_PR, number: 7, isDraft: false, baseRefName: 'main', head }]
-    : loadPrs().filter((p) => p.repo === repo && p.head === head && p.state === 'open')
+    : loadPrs()
+        .filter((p) => p.repo === repo && p.head === head)
+        .filter(
+          (p) => (opt('--state') ?? 'open') === 'all' || p.state === (opt('--state') ?? 'open'),
+        )
+        .reverse()
   const fields = (opt('--json') ?? 'url').split(',')
   const rows = open.map((p) => Object.fromEntries(fields.map((f) => [f, p[f]])))
   process.stdout.write(`${JSON.stringify(rows)}\n`)

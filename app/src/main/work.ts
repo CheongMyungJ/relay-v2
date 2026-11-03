@@ -1218,7 +1218,7 @@ export class WorkRunner {
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
-      ...(sessionDriven(this.work) ? { sessionDriven: true } : {}),
+      ...(this.pushesItself(task) ? { sessionDriven: true } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
         ? { finishing: { requested: task.review !== undefined } }
@@ -2867,6 +2867,9 @@ export class WorkRunner {
     }
   >()
   private sessionPrTimer: ReturnType<typeof setTimeout> | null = null
+  /** 도는 세션 PR 읽기 (D565). 읽는 동안 다시 부르면 끝난 뒤 한 번 더 읽는다(타이머가 둘이 되지 않게) */
+  private sessionPrReading: Promise<CommandResult> | null = null
+  private sessionPrAgain: { force: boolean } | null = null
   /** 세션에 알릴 새 PR 항목 (D566). 세션이 쉬면 보낸다 */
   private prWatchPending: PrWatchItem[] = []
   /** 이미 알렸거나 알릴 줄에 넣은 항목 id (D566). task 디렉터리의 pr-watch.json에 남겨 앱을 다시 켜도 다시 알리지 않는다 */
@@ -2884,8 +2887,31 @@ export class WorkRunner {
     await this.readSessionPrs()
   }
 
-  /** 세션이 연 PR을 모두 한 번 읽는다 (D565). 닫히거나 머지된 PR은 [새로 고침]으로만 다시 읽는다 */
-  async readSessionPrs(force = false): Promise<CommandResult> {
+  /**
+   * 세션이 연 PR을 모두 한 번 읽는다 (D565). 닫히거나 머지된 PR은 [새로 고침]으로만 다시 읽는다. 읽는 중이면 그 읽기가 끝난
+   * 뒤 한 번 더 읽는다: 겹친 읽기가 주기 타이머를 둘 걸지 않게 한다
+   */
+  readSessionPrs(force = false): Promise<CommandResult> {
+    if (this.sessionPrReading) {
+      this.sessionPrAgain = { force: force || (this.sessionPrAgain?.force ?? false) }
+      return this.sessionPrReading
+    }
+    const run = (async (): Promise<CommandResult> => {
+      let r = await this.readSessionPrsOnce(force)
+      while (this.sessionPrAgain) {
+        const again = this.sessionPrAgain
+        this.sessionPrAgain = null
+        r = await this.readSessionPrsOnce(again.force)
+      }
+      return r
+    })().finally(() => {
+      this.sessionPrReading = null
+    })
+    this.sessionPrReading = run
+    return run
+  }
+
+  private async readSessionPrsOnce(force: boolean): Promise<CommandResult> {
     if (!sessionDriven(this.work)) return { ok: false, error: '세션이 하는 Work가 아님' }
     // [새로 고침]은 새로 열린 PR도 찾는다
     if (force) await this.refreshSessionPrs()
@@ -3004,14 +3030,17 @@ export class WorkRunner {
       this.prWatchSeen = new Set(Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [])
     }
     const seen = this.prWatchSeen
-    const fresh = items.filter((i) => i.status === 'new' && !i.gone && !seen.has(i.id))
+    const queued = new Set(this.prWatchPending.map((p) => p.id))
+    const fresh = items.filter(
+      (i) => i.status === 'new' && !i.gone && !seen.has(i.id) && !queued.has(i.id),
+    )
     if (!fresh.length) return
     for (const i of fresh) {
-      seen.add(i.id)
       const v = prItemView(i, rules)
       // 남이 쓴 글(코멘트 본문)은 제목에 넣지 않고 인용으로만 둔다
       const comment = i.body !== undefined
       this.prWatchPending.push({
+        id: i.id,
         pr,
         branch,
         kind: v.kindLabel,
@@ -3020,7 +3049,6 @@ export class WorkRunner {
         text: comment ? (i.body ?? '') : (i.log ?? v.text),
       })
     }
-    await writeJson(file, [...seen])
   }
 
   /**
@@ -3033,6 +3061,11 @@ export class WorkRunner {
     if (!task || !this.live.get(task.id)?.pty || !childTurnEnded(task.status)) return
     const items = this.prWatchPending
     this.prWatchPending = []
+    // 보낸 항목만 알린 것으로 남긴다: 보내기 전에 앱이 꺼지면 다음에 다시 모아 보낸다
+    const seen = this.prWatchSeen ?? new Set<string>()
+    for (const i of items) seen.add(i.id)
+    this.prWatchSeen = seen
+    await writeJson(path.join(this.files.taskDir(task), PR_WATCH_STATE), [...seen])
     const file = path.join(this.files.taskDir(task), PR_WATCH_FILE)
     const before = (await readText(file)) ?? '# relay: 세션이 연 PR의 새 항목\n\n'
     await writeFileAtomic(file, `${before}${prWatchSection(items, this.ctx.at())}\n`)
@@ -3060,6 +3093,8 @@ export class WorkRunner {
     )
       return
     if (!reads.some((r) => r.read?.state === 'MERGED')) return
+    // 끝나지 않은 자식이 있으면 끝내지 않는다: 자식의 질문에 답할 부모가 없어진다. 사람이 [Work 완료]로 정한다
+    if (this.ctx.openChildren(this.key).length) return
     const task = this.sessionTask()
     if (!task || !childTurnEnded(task.status)) return
     await writeFileAtomic(
@@ -3123,6 +3158,8 @@ export class WorkRunner {
           cwd: this.worktree,
           env,
           head: b.name,
+          // 앱이 꺼진 동안 머지된 PR도 찾는다 (D567)
+          state: 'all',
         })
         this.sessionPrs.set(b.name, open ? { number: open.number, url: open.url } : null)
         // 찾은 PR은 닫히거나 머지돼도 패널에 남긴다 (D565)
@@ -3149,12 +3186,23 @@ export class WorkRunner {
     const own = workBranch(this.work)
     const others = this.ctx.workBranches(this.project.project_id).filter((b) => b !== own)
     const skip = new Set([this.work.target_branch, this.work.base_branch, ...others])
+    const env = { env: this.ctx.env }
     try {
-      return (
-        await remoteBranchesAfter(this.worktree, this.work.base_commit, 'origin', {
-          env: this.ctx.env,
-        })
-      ).filter((b) => !skip.has(b.name))
+      const remote = (
+        await remoteBranchesAfter(this.worktree, this.work.base_commit, 'origin', env)
+      ).filter((b) => !skip.has(b.name) && b.name !== 'main' && b.name !== 'master')
+      // 세션이 push한 브랜치만: 같은 이름의 로컬 브랜치가 있고 원격 끝을 담는다. 팀원의 브랜치는 원격 추적 참조뿐이다
+      const out: { name: string; commit: string }[] = []
+      for (const b of remote) {
+        const local = await refCommit(this.worktree, `refs/heads/${b.name}`, env)
+        if (!local) continue
+        if (
+          local === b.commit ||
+          (await isAncestor(this.worktree, b.commit, local, env).catch(() => false))
+        )
+          out.push(b)
+      }
+      return out
     } catch {
       return []
     }
@@ -3236,6 +3284,8 @@ export class WorkRunner {
       session.tool = null
       session.agents.clear()
     }
+    // 턴이 끝나면 끝나지 않은 서브에이전트도 없다(Esc로 끊으면 PostToolUse가 오지 않음, D542)
+    if (req.event === 'Stop' && str(b['agent_id']) === undefined) session.agents.clear()
     if (TOOL_HOOKS.includes(req.event)) {
       const task = this.task(taskId)
       const denial =

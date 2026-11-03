@@ -43,6 +43,9 @@ function strings(args: Args, key: string): string[] {
 }
 
 export class ChildService {
+  /** 부모 Work마다 도는 spawn_child (상한 검사와 만들기를 한 묶음으로) */
+  private readonly spawning = new Map<string, Promise<void>>()
+
   constructor(
     private readonly relay: Relay,
     private readonly env: NodeJS.ProcessEnv = process.env,
@@ -57,8 +60,19 @@ export class ChildService {
   ): Promise<McpResult> {
     try {
       switch (tool) {
-        case 'spawn_child':
-          return await this.spawn(parentKey, parentTaskId, args)
+        case 'spawn_child': {
+          // 한 부모의 spawn_child는 하나씩 한다: 나란히 부르면 상한(D545) 검사를 함께 지나갈 수 있다
+          const before = this.spawning.get(parentKey) ?? Promise.resolve()
+          const run = before.then(() => this.spawn(parentKey, parentTaskId, args))
+          this.spawning.set(
+            parentKey,
+            run.then(
+              () => undefined,
+              () => undefined,
+            ),
+          )
+          return await run
+        }
         case 'list_children':
           await this.closeMerged(parentKey)
           return { ok: true, result: await this.summaries(parentKey) }

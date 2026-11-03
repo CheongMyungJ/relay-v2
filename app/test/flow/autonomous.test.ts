@@ -1,6 +1,7 @@
 // [흐름] 자율 유형: 세션이 하고 앱은 보는 Work (docs/implementation.md M42, M50, docs/design.md D557~D561). 가짜 claude로
 // 자율 Work가 intake → orchestrate로 가고, 세션이 push한 브랜치를 앱이 보이며, 위험한 git 명령을 훅이 막고, 앱이 독립 리뷰를
 // 돌리지 않으며, 사람의 [Work 완료]로 전달 없이 끝나는지 본다. git 명령 판정은 test/unit/git-guard.test.ts가 자세히 본다.
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -193,6 +194,18 @@ describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
       gh.checkRun(n, { name: 'test', conclusion: 'FAILURE', log: '시험 실패' }),
     ])
     gh.convo(n, '경계값도 시험해 주세요')
+
+    // 팀원이 기준 뒤에 push한 브랜치는 세션이 push한 것이 아니다(로컬 브랜치가 없음)
+    const mate = path.join(s.h.root, 'outside', 'mate')
+    execFileSync('git', ['clone', '-q', remote, mate])
+    git(mate, 'config', 'user.email', 'm@x')
+    git(mate, 'config', 'user.name', 'm')
+    git(mate, 'checkout', '-q', '-b', 'teammate', 'origin/main')
+    fs.writeFileSync(path.join(mate, 'mate.txt'), 'x\n')
+    git(mate, 'add', '.')
+    git(mate, 'commit', '-qm', 'mate')
+    git(mate, 'push', '-q', 'origin', 'teammate')
+    git(s.tree(key), 'fetch', '-q', 'origin')
 
     expect(await s.h.relay.sessionPrRefresh(key)).toMatchObject({ ok: true })
     const view = await s.h.relay.review(key, taskId)

@@ -63,10 +63,13 @@ export interface OpenPullRequest {
   baseRefName: string
 }
 
-/** head 브랜치의 열린 PR (gh pr list --head --state open --json). 없으면 null (7-4) */
+/**
+ * head 브랜치의 PR (gh pr list --head --state <state> --json). 기본은 열린 PR이고, state가 all이면 상태와 관계없이 가장 최근
+ * PR이다(relay D567). 없으면 null (7-4)
+ */
 export async function ghOpenPr(
   bin: string,
-  o: GhRepoOptions & { head: string },
+  o: GhRepoOptions & { head: string; state?: 'open' | 'all' },
 ): Promise<OpenPullRequest | null> {
   const r = await run(
     bin,
@@ -78,7 +81,7 @@ export async function ghOpenPr(
       '--head',
       o.head,
       '--state',
-      'open',
+      o.state ?? 'open',
       '--json',
       'url,number,isDraft,baseRefName',
       '--limit',

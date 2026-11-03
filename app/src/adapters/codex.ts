@@ -105,7 +105,15 @@ export async function deployCodexSkill(o: {
   askViaMcp?: boolean
   /** relay MCP 호출자가 답한다 (D521): 호출자가 터미널을 보지 못한다는 안내를 붙인다 */
   callerAnswers?: boolean | 'parent'
+  /** 공용 규칙 없이 이 글만 배포한다 (D552, D557): 세션이 하는 Work의 자율 진행과 자식 세션. handoff와 단계 절차가 없다 */
+  bareRules?: string
 }): Promise<DeployedSkill> {
+  if (o.bareRules !== undefined) {
+    const content = `---\nname: ${relaySkillName(o.skill)}\ndescription: The active relay ${o.skill} task. Follow only this.\n---\nNever edit app-owned files or previous task files, and never bypass a tool denial.\n\n${o.bareRules}`
+    const file = codexSkillPath(o.taskDir, o.skill)
+    await writeFileAtomic(file, content)
+    return { file, hash: `sha256:${sha256(content)}` }
+  }
   const original = await skillText(o.source, o.skill, o.type, o.typeSource, o.finishing)
   // skillText는 머리글을 뗀 절차다 (D444). 질문 도구 이름만 바꾼다
   const asked = askViaRelay(original)

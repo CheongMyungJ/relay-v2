@@ -141,6 +141,8 @@ export function mergedHandoff(prs: readonly { number: number; state: string }[])
 
 /** 세션에 알릴 새 PR 항목 (D566) */
 export interface PrWatchItem {
+  /** PR 항목 id (PrItem.id) */
+  id: string
   pr: number
   branch: string
   kind: string
