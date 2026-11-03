@@ -1,0 +1,77 @@
+{
+  "id": "45-rough-libraries",
+  "type": "feature",
+  "repoName": "office-utils",
+  "title": "40과 같은 기능 셋, 처음 요청은 떠오르는 대로 대충",
+  "purpose": "40과 같은 레포·숨긴 시험이지만 처음 요청은 실무처럼 짧게 쓴다(파일과 함수 이름, 모듈마다 브랜치). 따옴표 칸, 줄바꿈 종류, 원화 꼴, 날짜 형식 같은 세부는 사람 역할이 물으면 답하는 지식으로 옮겼다. 의도 정리가 대충 쓴 요청에서 세부를 끌어내는지, 맨 CLI와 사람 차례·숨긴 시험 통과로 견준다.",
+  "report": "공용 도구 셋 만들어 줘. src/csv.js에 parseCsv(CSV 읽기), src/money.js에 formatKrw랑 parseKrw(원화 금액 쓰고 읽기), src/workdays.js에 workdaysBetween이랑 addWorkdays(근무일 세기, 더하기). 서로 상관없는 모듈이고 리뷰하는 사람이 달라서 모듈마다 브랜치 따로 둬 줘.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "parseCsv(text)는 CSV 글을 칸 목록의 목록으로 읽는다. 큰따옴표로 감싼 칸(안의 쉼표, 줄바꿈, \"\"는 따옴표 하나)을 받고, LF와 CRLF를 모두 받고, 빈 칸은 빈 글로 남긴다."
+    },
+    {
+      "share": "on_ask",
+      "text": "src/csv.js에 이미 있는 toCsv로 쓴 것을 parseCsv로 읽으면 그대로여야 한다."
+    },
+    {
+      "share": "on_ask",
+      "text": "formatKrw는 ₩1,234,567 꼴로 쓴다. 음수는 -₩1,500처럼 기호 앞에 -를 붙인다."
+    },
+    {
+      "share": "on_ask",
+      "text": "parseKrw(text)는 ₩ 기호와 쉼표, 앞뒤 공백을 받아 숫자로 읽고, 읽지 못하면 null을 돌려준다."
+    },
+    {
+      "share": "on_ask",
+      "text": "날짜는 'YYYY-MM-DD' 글로 주고받는다. workdaysBetween(start, end, holidays = [])와 addWorkdays(date, n, holidays = [])는 주말과 공휴일(holidays 목록, 같은 글 꼴)을 뺀 근무일을 센다/더한다."
+    },
+    {
+      "share": "on_ask",
+      "text": "workdaysBetween은 시작일과 끝날을 모두 센다(양 끝 포함). 시작이 끝보다 뒤면 0이다."
+    },
+    {
+      "share": "on_ask",
+      "text": "formatKrw에서 원 미만(소수)은 0 쪽으로 버린다. 1999.9는 ₩1,999, -1999.9는 -₩1,999."
+    },
+    {
+      "share": "on_ask",
+      "text": "addWorkdays(date, 0)은 그날을 그대로 돌려준다."
+    }
+  ],
+  "preferences": [
+    "세 가지를 새 Work 하나(또는 요청 하나)로 한 번에 맡기고 싶다. 어떻게 나눌지는 도구가 정하면 좋겠다.",
+    "세 모듈은 리뷰하는 사람이 달라서 모듈마다 브랜치를 따로 두고 싶다. PR은 내가 그 브랜치로 낸다.",
+    "처음 요청은 바빠서 떠오르는 대로 짧게 썼다. 세부는 물어보면 답한다.",
+    "셋 다 이번에 끝내고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/csv.js", "src/money.js", "src/workdays.js", "test/**"],
+  "checks": [
+    {
+      "name": "CSV 읽기",
+      "file": "csv.test.js",
+      "bug": "csv"
+    },
+    {
+      "name": "원화 쓰기·읽기",
+      "file": "money.test.js",
+      "bug": "money"
+    },
+    {
+      "name": "근무일",
+      "file": "workdays.test.js",
+      "bug": "workdays"
+    },
+    {
+      "name": "기존 함수 그대로",
+      "file": "existing.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 75,
+    "turns": 100
+  }
+}

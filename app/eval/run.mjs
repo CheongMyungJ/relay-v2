@@ -30,7 +30,7 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all). all은 개발용(scenario.json의
                            dev, 25~27)을 빼고, 개발용은 번호나 이름으로만 고른다
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
-  --arms <목록>            relay, relay-off(지식을 끈 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
+  --arms <목록>            relay, relay-off(지식을 끈 relay), relay-ask(의도 정리의 질문 방식을 결정마다 확인으로 둔 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
                            그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
                            relay,relay-off, 나머지는 relay,cli). relay 쪽 뒤에 @<유형>을 붙이면(예: relay@general)
                            시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93)
@@ -93,13 +93,13 @@ async function ensureDisplay() {
   throw new Error('Xvfb를 띄우지 못했습니다')
 }
 
-const ARMS = ['relay', 'relay-off', 'cli']
+const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli']
 
 /** 쪽 이름이 쓸 앱 폴더. cli는 null */
 const appOf = (arm, apps) => {
   if (arm === 'cli') return null
   const build = armBase(arm).replace(/-off$/, '')
-  return build === 'relay' ? APP : (apps[build] ?? null)
+  return build === 'relay' || build === 'relay-ask' ? APP : (apps[build] ?? null)
 }
 
 function preflight(arms, apps) {
