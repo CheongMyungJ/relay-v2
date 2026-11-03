@@ -347,6 +347,7 @@ const spec = {
     ['D540', '자율: 사람만 아는 규칙은 의도 정리에서 물음', /Ask now what only the human knows/, ['auto']],
     ['D540', '자율: 다른 유형을 권하지 않음', /Do not ask whether another type fits better/, ['auto']],
     ['D551', '자율: 요청을 여러 Work로 쪼개지 않음(나누기는 자율 진행이 정함)', /Do not split the request into several Works[\s\S]*decides how to split it[\s\S]*Do not write Work drafts for this/, ['auto']],
+    ['D564', '자율: 짧은 요청은 만들 것마다 입출력(예시)과 오류 처리를 따로 물음', /Short requests:[\s\S]*what goes in and what comes out, with a concrete example[\s\S]*what happens on bad input or errors/, ['auto']],
     ['D550', '자율: 요청 옆의 틀린 동작은 혼자 비목표로 돌리지 않고 물음', /Wrong behavior next to the request[\s\S]*do not decide it alone and do not just list it in `비목표`[\s\S]*fix it in this Work \/ leave it out/, ['auto']],
     ['D533', '자율: 방법과 나누기는 쓰지 않음(자율 진행이 고름)', /Do not plan how to do the work, and do not split it/, ['auto']],
     ['D241', '일반의 사람 제안: 반드시면 제약, 아니면 (사람 제안)', /`제약` when it is a must[\s\S]*"\(사람 제안\)"[\s\S]*execute decides/, ['general']],
