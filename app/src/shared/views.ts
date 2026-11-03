@@ -927,6 +927,8 @@ export interface SessionFactsView {
   canComplete: boolean
   /** 끝나지 않은 자식 Work의 key */
   openChildren: string[]
+  /** 세션이 연 PR의 패널 (D565): PR 진행의 패널과 같은 모양이고 읽기만 한다. repo 자리에 브랜치 이름이 있다 */
+  prs: PrView[]
 }
 
 /**

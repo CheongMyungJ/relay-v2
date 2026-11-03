@@ -6,8 +6,11 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseFrontMatter } from '../../src/core/validate'
 import type { LifecycleEvent, WorkState } from '../../src/shared/work'
+import { ghCreatePr } from '../../src/adapters/gh'
+import { ghRepo } from '../../src/core/delivery'
 import { drive } from '../support/driver'
-import { git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
+import { FakeGitHub } from '../support/github'
+import { FAKE_GH, git, harness, makeRepo, register, settle, type Harness } from '../support/harness'
 import {
   AUTO_REQUEST,
   FEATURE_FILES,
@@ -146,6 +149,71 @@ describe('[흐름] 자율 유형: 세션이 하는 Work (M42, M50)', () => {
       'test: median',
       'feat: median',
     ])
+  })
+
+  it('세션이 연 PR을 읽어 PR 패널과 같은 모양으로 보이기만 한다: CI, 리뷰, 항목. 대응과 머지는 없다 (D565)', async () => {
+    const base = autoScenario()
+    const s = await setup({
+      ...base,
+      tasks: {
+        ...base.tasks,
+        orchestrate: [
+          { do: 'prompt' },
+          { do: 'commit', files: FEATURE_FILES, message: 'feat: median' },
+          { do: 'git', args: ['push', '-q', '-u', 'origin', 'HEAD'] },
+          { do: 'stop' },
+        ],
+      },
+    })
+    const key = await s.create()
+    const result = await drive(s.h.relay, s.h.ui, key, {
+      pauseAt: (t) => t.label.includes('자율 진행'),
+    })
+    expect(result, s.h.ui.dump()).toMatchObject({ status: 'paused' })
+    const dir = s.dir(key)
+    const taskId = work(dir).tasks[1]?.id ?? ''
+    const branch = work(dir).branch ?? ''
+    // 세션이 gh pr create로 PR을 열고, CI가 실패하고, 리뷰 코멘트가 달린다
+    const remote = git(s.repo, 'remote', 'get-url', 'origin')
+    const gh = new FakeGitHub(path.join(s.h.root, 'record'), remote, path.join(s.h.root, 'outside'))
+    fs.mkdirSync(path.join(s.h.root, 'outside'), { recursive: true })
+    const url = await ghCreatePr(FAKE_GH, {
+      repo: ghRepo(remote),
+      base: 'main',
+      head: branch,
+      title: 'median',
+      body: '본문',
+      draft: false,
+      cwd: s.repo,
+      env: s.h.env,
+    })
+    const n = gh.prs()[0]?.number ?? 0
+    const head = git(s.tree(key), 'rev-parse', 'HEAD')
+    gh.setChecks(n, head, [
+      gh.checkRun(n, { name: 'test', conclusion: 'FAILURE', log: '시험 실패' }),
+    ])
+    gh.convo(n, '경계값도 시험해 주세요')
+
+    expect(await s.h.relay.sessionPrRefresh(key)).toMatchObject({ ok: true })
+    const view = await s.h.relay.review(key, taskId)
+    const pr = view?.session?.prs[0]
+    expect(pr, JSON.stringify(view?.session)).toMatchObject({
+      repo: branch,
+      number: n,
+      url,
+      state: 'OPEN',
+      ci: 'fail',
+      gate: { enabled: false },
+      respond: { enabled: false },
+      rerun: null,
+    })
+    expect(pr?.items.map((i) => i.kind).sort()).toEqual(['ci', 'convo'])
+    expect(view?.session?.branches).toEqual([
+      expect.objectContaining({ name: branch, pr: { number: n, url } }),
+    ])
+    // 읽기만 한다: Work는 그대로 진행 중이고 PR 진행이 되지 않는다
+    expect(work(dir)).toMatchObject({ status: 'active' })
+    expect(work(dir).pr).toBeUndefined()
   })
 
   it('세션이 일하는 중에는 [Work 완료]를 거절한다 (D561)', async () => {

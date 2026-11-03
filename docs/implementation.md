@@ -226,6 +226,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I210 | git 보호(D558)는 `core/git-guard.riskyGitCommand(명령, 지킬 브랜치)`이고 `WorkRunner.gitGuardReply`가 PreToolUse의 셸 명령(Claude `Bash`의 `command`, Codex 명령)에 부른다. 지킬 브랜치는 머지 대상과 기준 브랜치에 main·master를 더한 것이다. task 설정은 `DenyInput.allowPush`로 `git push`·`gh pr` deny를 뺀다(Codex는 `codexToolDenial`의 `allowPush`) | 훅은 진행 표시의 빠른 응답 경로에서 답한다 |
 | I211 | push 뒤(D560)는 PostToolUse의 셸 명령이 `git push`를 담으면 `afterPushSoon`이 줄 밖에서 `refreshSessionPrs`(브랜치마다 `ghOpenPr`)를 하고 `changed()`로 화면을 다시 읽게 한다. push한 브랜치는 `adapters/git.remoteBranchesAfter(worktree, 기준 커밋)`에서 머지 대상·기준·다른 Work의 브랜치를 뺀 것이다. 화면은 `ReviewView.session`(`SessionFactsView`)이다. [Work 완료]는 `WorkRunner.completeSession`(턴이 끝났는지 `childTurnEnded`, `sessionHandoff`를 쓰고 `approve(by: human)`)이고 IPC `work:complete-session`이다. 앱의 독립 리뷰(`sessionReview`, `runReview`의 `detached`, `session-reviews.json`)는 D562로 없앴다 | PR은 gh가 없거나 로그인하지 않았으면 비운다. PR 상태 변화(머지)는 아직 보지 않는다 |
 | I212 | 자율 의도 정리의 질문 방식(D563)은 `core/context.questionMode`의 `type` 인자다: Work 설정이 없고 `auto`의 `work-start`면 `AUTO_INTAKE_QUESTION_MODE`(confirm_each). `questionLine`이 그 까닭을 덧붙인다. 앱 설정 화면은 바꾸지 않았다 | 평가 도구의 `relay-ask` 쪽은 자율에서는 이제 relay와 같다 |
+| I213 | 세션이 연 PR(D565)은 `WorkRunner.sessionPrReads`(PR 주소 → 브랜치, 번호, `PrReadState`, `PrItem[]`, 오류, 읽는 중)다. `refreshSessionPrs`가 `ghOpenPr`로 찾은 PR을 더하고, `readSessionPrs`가 `readPr`과 `gatherItems`(갈라짐은 보지 않음)로 읽고 `pr_poll_interval_sec`마다 다시 건다(`stopPrTimers`가 멈춤). `sessionPrViews`가 `prView`에 합성한 `work`(status pr, pr 기록)를 넣어 PR 패널을 만들고 gate·respond·rerun·rounds를 비운다. 화면은 `SessionFactsView.prs`이고 `PrPanel`의 `watch`(보기 전용, [새로 고침]은 IPC `work:session-pr-refresh`)다. 앱을 켤 때는 `startPr`이 `watchSessionPrs`를 부른다 | gh JSON의 새 필드는 쓰지 않는다(PR 진행과 같은 읽기) |
 
 ## 3. 확인한 사실
 
@@ -1724,6 +1725,17 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 - **[단위]** `test/unit/git-guard.test.ts`(막지 않는 것, 지킬 브랜치, 강제 push·지우기·PR 머지, deny의 allowPush), `test/unit/autonomy.test.ts`(방식 줄과 계획 보기), `test/unit/children.test.ts`(세션이 하는 Work는 마무리가 아님).
 - **[흐름]** `test/flow/autonomous.test.ts`: '내보낸 것', main push 거절, 앱의 독립 리뷰 없음, 공용 규칙 없는 배포와 deny 없는 설정, [Work 완료]로 전달 없이 완료, 일하는 중의 [Work 완료] 거절.
+
+### M51. 세션이 연 PR 보기 (D565)
+
+사람이 세션이 연 PR의 CI, 리뷰, 충돌을 기존 PR 패널처럼 보기를 바랐다. PR 진행의 읽기와 패널을 보기 전용으로 쓴다.
+
+- 앱: `WorkRunner`의 `sessionPrReads`, `watchSessionPrs`, `readSessionPrs`, `sessionPrViews`. push 감지에 `gh pr` 명령을 더함. IPC 하나.
+- 화면: `PrPanel`의 `watch`, 진행 중 패널의 '내보낸 것' 아래 PR 카드, [Work 완료]는 그 아래.
+
+**시험**
+
+- **[흐름]** `test/flow/autonomous.test.ts`: 세션 브랜치에 가짜 gh로 PR을 열고 CI 실패와 대화 코멘트를 넣으면 [새로 고침]으로 PR 패널(상태, CI, 항목)이 보이고, 대응·머지는 꺼져 있고, Work는 PR 진행이 되지 않는다.
 
 ## 8. 테스트 전략
 

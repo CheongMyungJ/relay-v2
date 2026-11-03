@@ -176,7 +176,7 @@ export function Panel({
           onShowCleanup={onShowCleanup}
         />
       ) : (
-        <Progress review={review} task={task} />
+        <Progress review={review} task={task} work={work} />
       )}
     </div>
   )
@@ -461,7 +461,7 @@ function ReviewLine({
 }
 
 /** 진행 중: 형식 되돌림 안내(D220), 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
-function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
+function Progress({ review, task, work }: { review: ReviewView; task: TaskView; work?: WorkView }) {
   return (
     <>
       {task.bounceNotice ? <div className="notice">{task.bounceNotice}</div> : null}
@@ -474,7 +474,7 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         </section>
       ) : null}
       {review.plan ? <PlanProgress plan={review.plan} /> : null}
-      {review.session ? <SessionBox review={review} session={review.session} /> : null}
+      {review.session ? <SessionBox review={review} session={review.session} work={work} /> : null}
       {review.session ? null : <ProgressFiles review={review} task={task} />}
     </>
   )
@@ -514,7 +514,15 @@ function ProgressFiles({ review, task }: { review: ReviewView; task: TaskView })
  * 세션이 하는 Work의 자율 진행 칸 (D560, D561): 세션이 push한 브랜치와 PR, [Work 완료].
  * 끝나지 않은 자식이 있으면 [Work 완료]를 한 번 더 눌러야 한다
  */
-function SessionBox({ review, session }: { review: ReviewView; session: SessionFactsView }) {
+function SessionBox({
+  review,
+  session,
+  work,
+}: {
+  review: ReviewView
+  session: SessionFactsView
+  work?: WorkView
+}) {
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -559,6 +567,16 @@ function SessionBox({ review, session }: { review: ReviewView; session: SessionF
           아직 push한 브랜치가 없습니다. 세션이 브랜치를 push하고 PR을 엽니다.
         </div>
       )}
+      {work
+        ? session.prs.map((pr) => (
+            <PrPanel
+              key={pr.url}
+              work={work}
+              pr={pr}
+              watch={() => window.relay.sessionPrRefresh(review.workKey)}
+            />
+          ))
+        : null}
       <div className="actions">
         <button
           type="button"

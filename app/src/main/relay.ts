@@ -1632,6 +1632,11 @@ export class Relay {
     return this.withWork(workKey, (w) => w.completeSession(taskId))
   }
 
+  /** 세션이 연 PR을 다시 읽는다 (D565). 닫힌 PR도 읽는다 */
+  sessionPrRefresh(workKey: string): Promise<CommandResult> {
+    return this.withWork(workKey, (w) => w.readSessionPrs(true))
+  }
+
   /** 승인 화면의 [취소]: 자동 승인 카운트다운을 멈춘다 (4.3) */
   cancelCountdown(workKey: string, taskId: string): Promise<CommandResult> {
     return this.withWork(workKey, (w) => w.cancelCountdown(taskId))

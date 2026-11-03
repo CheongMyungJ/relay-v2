@@ -674,9 +674,10 @@ function bashCommand(body: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-/** git push를 부른 셸 명령인가 (D560). 낱말만 본다 */
+/** git push나 gh pr을 부른 셸 명령인가 (D560, D565). 세션은 push한 뒤 gh pr create로 PR을 연다. 낱말만 본다 */
 function pushCommand(body: Record<string, unknown>): boolean {
-  return /\bgit\b[^;&|\n]*\bpush\b/.test(bashCommand(body) ?? '')
+  const c = bashCommand(body) ?? ''
+  return /\bgit\b[^;&|\n]*\bpush\b/.test(c) || /\bgh\b[^;&|\n]*\bpr\b/.test(c)
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const exists = (p: string) =>
@@ -1247,6 +1248,8 @@ export class WorkRunner {
     // 자율 진행이 턴을 끝낼 때 부모 브랜치에 합쳐진 자식을 닫는다 (D556)
     if (opts.stop && task.node === 'orchestrate' && !this.work.parent)
       await this.ctx.closeMergedChildren(this.key).catch(() => undefined)
+    // 세션이 턴을 끝낼 때 push한 브랜치와 PR을 다시 본다 (D565). 기다리지 않는다
+    if (opts.stop && this.pushesItself(task)) void this.watchSessionPrs().catch(() => undefined)
     return this.check(
       task,
       f,
@@ -2825,8 +2828,165 @@ export class WorkRunner {
   private async afterPush(taskId: string): Promise<void> {
     const task = this.task(taskId)
     if (!task || !this.pushesItself(task)) return
+    await this.watchSessionPrs()
+  }
+
+  /**
+   * 세션이 연 PR을 읽은 것 (D565): PR 주소마다 마지막 읽기, 모은 항목, 오류. PR 진행(D158)의 읽기와 같은 것을 읽기만 한다:
+   * fast-forward, pr-items.json, 상태 바꾸기, 알림이 없다. 메모리에만 둔다(앱을 켜면 다시 읽는다)
+   */
+  private sessionPrReads = new Map<
+    string,
+    {
+      branch: string
+      number: number
+      url: string
+      read: PrReadState | null
+      items: PrItem[]
+      error: string | null
+      reading: boolean
+      headSeen: Map<string, number>
+      runEvents: Map<number, string>
+    }
+  >()
+  private sessionPrTimer: ReturnType<typeof setTimeout> | null = null
+
+  /** 세션이 연 PR을 읽고 있는 Work인가: 세션이 하는 Work이고 아직 끝나지 않았다 (D565) */
+  private watchesSessionPrs(): boolean {
+    return sessionDriven(this.work) && this.work.status === 'active' && !this.closing
+  }
+
+  /** 앱을 켤 때와 push 뒤: PR을 찾고 읽고 주기 읽기를 건다 (D565) */
+  private async watchSessionPrs(): Promise<void> {
+    if (!this.watchesSessionPrs()) return
     await this.refreshSessionPrs()
+    await this.readSessionPrs()
+  }
+
+  /** 세션이 연 PR을 모두 한 번 읽는다 (D565). 닫히거나 머지된 PR은 [새로 고침]으로만 다시 읽는다 */
+  async readSessionPrs(force = false): Promise<CommandResult> {
+    if (!sessionDriven(this.work)) return { ok: false, error: '세션이 하는 Work가 아님' }
+    // [새로 고침]은 새로 열린 PR도 찾는다
+    if (force) await this.refreshSessionPrs()
+    if (this.sessionPrTimer) clearTimeout(this.sessionPrTimer)
+    this.sessionPrTimer = null
+    const rules = this.prRules('')
+    for (const r of this.sessionPrReads.values()) {
+      if (!force && r.read && r.read.state !== 'OPEN') continue
+      const location = prLocation(r.url)
+      if (!location) {
+        r.error = `PR 주소를 읽지 못함: ${r.url}`
+        continue
+      }
+      r.reading = true
+      this.changed()
+      try {
+        const f = await readPr(
+          {
+            ghBin: this.ctx.ghBin,
+            env: this.ctx.env,
+            repo: this.project.repo_path,
+            worktree: this.worktree,
+            ignore: this.laneIgnore(''),
+            branch: r.branch,
+            location,
+            runEvents: r.runEvents,
+          },
+          (id, job) => ciLogRead(r.items, id, job),
+        )
+        const now = Date.now()
+        const seen = r.headSeen.get(f.view.head) ?? now
+        r.headSeen.set(f.view.head, seen)
+        r.items = gatherItems(
+          r.items,
+          {
+            at: this.ctx.at(),
+            head: f.view.head,
+            comments: f.comments,
+            failing: f.checks.filter((c) => c.bucket === 'fail'),
+            conflict: f.conflict,
+            // 세션의 브랜치와 원격을 맞추는 일은 세션이 한다: 갈라짐은 보지 않는다
+            diverged: undefined,
+            logs: f.logs,
+          },
+          rules,
+        ).items
+        r.read = {
+          at: this.ctx.at(),
+          state: f.view.state,
+          head: f.view.head,
+          headRef: f.view.headRef,
+          baseRef: f.view.baseRef,
+          isDraft: f.view.isDraft,
+          mergeable: f.view.mergeable,
+          mergeStateStatus: f.view.mergeStateStatus,
+          reviewDecision: f.view.reviewDecision,
+          checks: f.checks,
+          ci: ciState(f.checks, now - seen >= CHECK_WAIT_MS),
+          sync: null,
+        }
+        r.error = f.warnings.length ? f.warnings.join(' / ') : null
+      } catch (e) {
+        r.error = `PR을 읽지 못함: ${message(e)}`
+      } finally {
+        r.reading = false
+      }
+    }
     this.changed()
+    // 열린 PR이 남아 있으면 PR 진행과 같은 간격으로 다시 읽는다 (D158)
+    if (
+      this.watchesSessionPrs() &&
+      [...this.sessionPrReads.values()].some(
+        (r) => r.read?.state !== 'MERGED' && r.read?.state !== 'CLOSED',
+      )
+    ) {
+      this.sessionPrTimer = setTimeout(() => {
+        this.sessionPrTimer = null
+        void this.readSessionPrs()
+      }, this.ctx.config().pr_poll_interval_sec * 1000)
+    }
+    return { ok: true }
+  }
+
+  /** 세션이 연 PR의 패널 (D565): PR 진행의 패널을 읽기 전용으로 만든다. 대응, 머지, 자동 대응은 없다 */
+  private sessionPrViews(): PrView[] {
+    const out: PrView[] = []
+    for (const r of this.sessionPrReads.values()) {
+      const view = prView({
+        work: {
+          status: 'pr',
+          tasks: [],
+          settings: this.work.settings,
+          pr: {
+            number: r.number,
+            url: r.url,
+            head: r.read?.head ?? '',
+            gh_version: null,
+            started_at: r.read?.at ?? this.ctx.at(),
+            ...(r.read ? { read_at: r.read.at } : {}),
+            ...(r.read?.state === 'CLOSED' ? { closed_at: r.read.at } : {}),
+          },
+        },
+        config: this.ctx.config(),
+        read: r.read,
+        file: { ...EMPTY_PR_ITEMS, items: r.items },
+        rules: this.prRules(''),
+        localHead: null,
+        reading: r.reading,
+        error: r.error,
+      })
+      if (!view) continue
+      out.push({
+        ...view,
+        repo: r.branch,
+        gate: { enabled: false, reasons: [] },
+        respond: { enabled: false, reason: null, items: [] },
+        rerun: null,
+        rounds: [],
+        offerClean: false,
+      })
+    }
+    return out
   }
 
   /** push한 브랜치마다 열린 PR을 gh로 찾는다 (D560). 실패하면 null로 둔다 */
@@ -2844,6 +3004,19 @@ export class WorkRunner {
           head: b.name,
         })
         this.sessionPrs.set(b.name, open ? { number: open.number, url: open.url } : null)
+        // 찾은 PR은 닫히거나 머지돼도 패널에 남긴다 (D565)
+        if (open && !this.sessionPrReads.has(open.url))
+          this.sessionPrReads.set(open.url, {
+            branch: b.name,
+            number: open.number,
+            url: open.url,
+            read: null,
+            items: [],
+            error: null,
+            reading: false,
+            headSeen: new Map(),
+            runEvents: new Map(),
+          })
       } catch {
         this.sessionPrs.set(b.name, null)
       }
@@ -2888,6 +3061,7 @@ export class WorkRunner {
         pr: this.sessionPrs.get(b.name) ?? null,
       })),
       canComplete: this.work.status === 'active' && childTurnEnded(task.status),
+      prs: this.sessionPrViews(),
       openChildren: this.ctx.openChildren(this.key),
     }
   }
@@ -5703,6 +5877,8 @@ export class WorkRunner {
    * 않고 자동 대응을 바라지 않는다 (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
    */
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
+    // 세션이 하는 Work는 세션이 연 PR을 읽는다 (D565). 기다리지 않는다
+    if (this.watchesSessionPrs()) void this.watchSessionPrs().catch(() => undefined)
     // PR 카드마다 한다 (D480)
     for (const lane of this.cardLanes()) await this.startLane(lane, opts)
   }
@@ -5745,6 +5921,8 @@ export class WorkRunner {
 
   /** 모든 PR 카드의 주기 읽기를 멈춘다: 앱을 끝내거나 기록을 지운다 */
   private stopPrTimers(): void {
+    if (this.sessionPrTimer) clearTimeout(this.sessionPrTimer)
+    this.sessionPrTimer = null
     for (const L of this.laneStates.values()) {
       if (L.timer) clearTimeout(L.timer)
       L.timer = null
