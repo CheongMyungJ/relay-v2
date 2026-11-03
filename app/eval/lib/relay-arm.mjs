@@ -5,8 +5,8 @@ import path from 'node:path'
 import { _electron as electron } from '@playwright/test'
 import { cleanEnv, findClaude } from './env.mjs'
 import { DialogGuard } from './dialogs.mjs'
-import { gitState } from './repo.mjs'
-import { copyTree, sleep } from './util.mjs'
+import { branchTrees, gitState } from './repo.mjs'
+import { copyTree, git, sleep } from './util.mjs'
 
 const APP_DIR = path.resolve(import.meta.dirname, '../..')
 /**
@@ -193,6 +193,8 @@ export class RelayArm {
     this.noticeSeen = 0
     this.launches = 0
     this.snapped = new Map()
+    /** 꺼낸 브랜치: label → 커밋 (finalTrees) */
+    this.exported = new Map()
     this.guard = new DialogGuard()
   }
 
@@ -457,10 +459,26 @@ export class RelayArm {
     }
   }
 
-  /** 에이전트가 고친 코드가 있는 곳들: Work의 worktree, 지워졌으면 마지막 스냅숏 */
+  /**
+   * 에이전트가 고친 코드가 있는 곳들: Work의 worktree, 지워졌으면 마지막 스냅숏, 그리고 worktree에 체크아웃되지 않은 로컬
+   * 브랜치 가운데 worktree에 아직 들어 있지 않은 것(세션이 부분마다 브랜치를 직접 만든 경우, relay D557). 맨 CLI와 같은 규칙이다
+   */
   finalTrees() {
     const live = this.worktrees()
     const trees = live.map((t) => ({ ...t, git: gitState(t.path, this.o.base) }))
+    if (live.length && this.o.repo) {
+      const checkedOut = trees.map((t) => t.git?.branch).filter(Boolean)
+      trees.push(
+        ...branchTrees({
+          repo: this.o.repo,
+          base: this.o.base,
+          heads: live.map((t) => git(t.path, 'rev-parse', 'HEAD')),
+          skipBranches: ['main', ...checkedOut],
+          dir: path.join(this.o.dir, 'branches'),
+          exported: this.exported,
+        }),
+      )
+    }
     const snaps = path.join(this.o.dir, 'snapshots')
     if (fs.existsSync(snaps)) {
       for (const label of fs.readdirSync(snaps)) {

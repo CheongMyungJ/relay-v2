@@ -239,3 +239,53 @@ function setUser(dir) {
   git(dir, 'config', 'user.name', 'dev')
   git(dir, 'config', 'commit.gpgsign', 'false')
 }
+
+/**
+ * 체크아웃되지 않은 로컬 브랜치 가운데 기준 뒤에 커밋이 있고 이미 판정하는 폴더(heads의 커밋)에 들어 있지 않은 것을 git
+ * archive로 꺼낸다. 에이전트가 고친 것을 부분마다 브랜치에 나눠 두면 체크아웃된 폴더만으로는 보이지 않으므로 그런 브랜치를
+ * 따로 판정한다(레포는 건드리지 않는다). exported는 label → 꺼낸 커밋이고 같은 커밋이면 다시 꺼내지 않는다
+ * @param {{ repo: string, base: string, heads: string[], skipBranches: string[], dir: string, exported: Map<string, string> }} o
+ * @returns {{ path: string, label: string, git: { branch: string, commits: number, log: string[], uncommitted: string[] } }[]}
+ */
+export function branchTrees(o) {
+  let branches
+  try {
+    branches = git(o.repo, 'for-each-ref', '--format=%(refname:short)', 'refs/heads')
+      .split('\n')
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+  const out = []
+  for (const b of branches) {
+    if (o.skipBranches.includes(b)) continue
+    try {
+      const sha = git(o.repo, 'rev-parse', b)
+      const commits = Number(git(o.repo, 'rev-list', '--count', `${o.base}..${sha}`))
+      if (commits === 0) continue
+      // 판정하는 폴더에 이미 들어 있으면 그 폴더가 대신한다
+      if (
+        o.heads.some(
+          (h) => run('git', ['merge-base', '--is-ancestor', sha, h], { cwd: o.repo }).code === 0,
+        )
+      )
+        continue
+      const label = `branch-${b.replace(/[^\w.-]+/g, '-')}`
+      const dir = path.join(o.dir, label)
+      if (o.exported.get(label) !== sha) {
+        fs.rmSync(dir, { recursive: true, force: true })
+        fs.mkdirSync(dir, { recursive: true })
+        const tar = `${dir}.tar`
+        git(o.repo, 'archive', '--format=tar', '-o', tar, sha)
+        run('tar', ['-xf', tar, '-C', dir])
+        fs.rmSync(tar, { force: true })
+        o.exported.set(label, sha)
+      }
+      const log = git(o.repo, 'log', '--format=%s', `${o.base}..${sha}`).split('\n').filter(Boolean)
+      out.push({ path: dir, label, git: { branch: b, commits, log, uncommitted: [] } })
+    } catch {
+      // 브랜치를 읽지 못하면 그 브랜치만 빼고 판정한다
+    }
+  }
+  return out
+}
