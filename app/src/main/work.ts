@@ -1260,13 +1260,18 @@ export class WorkRunner {
       await this.ctx.closeMergedChildren(this.key).catch(() => undefined)
     // 세션이 턴을 끝낼 때 push한 브랜치와 PR을 다시 보고, 쉬는 동안 쌓인 알림을 보내고, PR이 다 끝났으면 Work를 끝낸다
     // (D565~D567). 턴이 끝난 상태가 반영된 뒤에 하도록 잠깐 둔다. 기다리지 않는다
-    if (opts.stop && this.pushesItself(task))
-      setTimeout(() => {
-        void this.watchSessionPrs()
-          .then(() => this.deliverPrWatch())
-          .then(() => this.completeIfPrsDone())
-          .catch(() => undefined)
+    if (opts.stop && this.pushesItself(task) && !this.closing) {
+      if (this.sessionStopTimer) clearTimeout(this.sessionStopTimer)
+      this.sessionStopTimer = setTimeout(() => {
+        this.sessionStopTimer = null
+        if (this.closing) return
+        this.sessionPrTrack(
+          this.watchSessionPrs()
+            .then(() => this.deliverPrWatch())
+            .then(() => this.completeIfPrsDone()),
+        )
       }, 1000)
+    }
     return this.check(
       task,
       f,
@@ -2834,11 +2839,19 @@ export class WorkRunner {
   /** push한 브랜치마다 찾은 열린 PR (D560). gh가 없거나 실패하면 null. 메모리에만 둔다 */
   private sessionPrs = new Map<string, { number: number; url: string } | null>()
 
+  /** 줄 밖의 세션 PR 일을 기다릴 수 있게 적어 둔다 (D565) */
+  private sessionPrTrack(p: Promise<unknown>): void {
+    const tracked = p.catch((e: unknown) =>
+      console.error(`[${this.key}] 세션 PR 처리 실패: ${message(e)}`),
+    )
+    this.sessionPrBusy.add(tracked)
+    void tracked.finally(() => this.sessionPrBusy.delete(tracked))
+  }
+
   /** push 뒤의 처리를 줄 밖에서 한다 (D560) */
   private afterPushSoon(taskId: string): void {
-    void this.afterPush(taskId).catch((e: unknown) =>
-      console.error(`[${this.key}] push 뒤 처리 실패: ${message(e)}`),
-    )
+    if (this.closing) return
+    this.sessionPrTrack(this.afterPush(taskId))
   }
 
   /** 세션이 push한 뒤 (D560): push한 브랜치의 PR을 다시 찾고 화면을 다시 그린다 */
@@ -2867,6 +2880,10 @@ export class WorkRunner {
     }
   >()
   private sessionPrTimer: ReturnType<typeof setTimeout> | null = null
+  /** 세션 PR을 찾고 읽고 알리는 줄 밖의 일 (D565~D567). 앱을 끝내거나 시험 도구가 폴더를 지우기 전에 기다린다 */
+  private readonly sessionPrBusy = new Set<Promise<unknown>>()
+  /** 세션이 턴을 끝낸 뒤의 처리를 미룬 타이머 (D565) */
+  private sessionStopTimer: ReturnType<typeof setTimeout> | null = null
   /** 도는 세션 PR 읽기 (D565). 읽는 동안 다시 부르면 끝난 뒤 한 번 더 읽는다(타이머가 둘이 되지 않게) */
   private sessionPrReading: Promise<CommandResult> | null = null
   private sessionPrAgain: { force: boolean } | null = null
@@ -2912,6 +2929,7 @@ export class WorkRunner {
   }
 
   private async readSessionPrsOnce(force: boolean): Promise<CommandResult> {
+    if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
     if (!sessionDriven(this.work)) return { ok: false, error: '세션이 하는 Work가 아님' }
     // [새로 고침]은 새로 열린 PR도 찾는다
     if (force) await this.refreshSessionPrs()
@@ -6050,7 +6068,7 @@ export class WorkRunner {
    */
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
     // 세션이 하는 Work는 세션이 연 PR을 읽는다 (D565). 기다리지 않는다
-    if (this.watchesSessionPrs()) void this.watchSessionPrs().catch(() => undefined)
+    if (this.watchesSessionPrs()) this.sessionPrTrack(this.watchSessionPrs())
     // PR 카드마다 한다 (D480)
     for (const lane of this.cardLanes()) await this.startLane(lane, opts)
   }
@@ -6089,12 +6107,17 @@ export class WorkRunner {
    */
   async prIdle(): Promise<void> {
     for (const L of this.laneStates.values()) while (L.reading) await L.reading
+    // 세션이 연 PR의 일도 기다린다 (D565): git·gh가 worktree를 작업 폴더로 쓴다
+    while (this.sessionPrBusy.size) await Promise.all([...this.sessionPrBusy])
+    if (this.sessionPrReading) await this.sessionPrReading.catch(() => undefined)
   }
 
   /** 모든 PR 카드의 주기 읽기를 멈춘다: 앱을 끝내거나 기록을 지운다 */
   private stopPrTimers(): void {
     if (this.sessionPrTimer) clearTimeout(this.sessionPrTimer)
     this.sessionPrTimer = null
+    if (this.sessionStopTimer) clearTimeout(this.sessionStopTimer)
+    this.sessionStopTimer = null
     for (const L of this.laneStates.values()) {
       if (L.timer) clearTimeout(L.timer)
       L.timer = null
