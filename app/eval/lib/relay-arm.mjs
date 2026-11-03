@@ -217,7 +217,10 @@ export class RelayArm {
     // 없는 키는 앱이 기본값으로 채운다 (relay store.loadConfig)
     const config = path.join(this.home, 'config.json')
     if (this.o.questionMode && !fs.existsSync(config))
-      fs.writeFileSync(config, `${JSON.stringify({ question_mode: this.o.questionMode }, null, 2)}\n`)
+      fs.writeFileSync(
+        config,
+        `${JSON.stringify({ question_mode: this.o.questionMode }, null, 2)}\n`,
+      )
     // 다른 빌드는 그 폴더의 Electron으로 띄운다(네이티브 모듈이 그 Electron에 맞춰 빌드돼 있다)
     const exe = path.join(this.appDir, 'node_modules/electron/dist/electron')
     this.app = await electron.launch({
