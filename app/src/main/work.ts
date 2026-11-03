@@ -235,6 +235,7 @@ import {
   mergeGate,
   prBadgeKind,
   prLocation,
+  prItemView,
   prView,
   preferredMethod,
   repoArg,
@@ -359,8 +360,12 @@ import {
   childContext,
   childRules,
   childTurnEnded,
+  mergedHandoff,
+  prWatchLine,
+  prWatchSection,
   sessionHandoff,
   type ChildLink,
+  type PrWatchItem,
 } from '../core/children'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import {
@@ -662,6 +667,11 @@ const TOOL_HOOKS: readonly string[] = ['PreToolUse', 'PostToolUse', 'PostToolUse
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+
+/** 세션에 알린 PR 항목의 내용 (D566). task 디렉터리에 둔다 */
+const PR_WATCH_FILE = 'pr-watch.md'
+/** 세션에 알렸거나 알릴 줄에 넣은 PR 항목 id (D566) */
+const PR_WATCH_STATE = 'pr-watch.json'
 
 /** 훅 본문의 셸 명령 (Claude의 Bash, Codex의 명령). 셸 도구가 아니면 undefined */
 function bashCommand(body: Record<string, unknown>): string | undefined {
@@ -1248,8 +1258,15 @@ export class WorkRunner {
     // 자율 진행이 턴을 끝낼 때 부모 브랜치에 합쳐진 자식을 닫는다 (D556)
     if (opts.stop && task.node === 'orchestrate' && !this.work.parent)
       await this.ctx.closeMergedChildren(this.key).catch(() => undefined)
-    // 세션이 턴을 끝낼 때 push한 브랜치와 PR을 다시 본다 (D565). 기다리지 않는다
-    if (opts.stop && this.pushesItself(task)) void this.watchSessionPrs().catch(() => undefined)
+    // 세션이 턴을 끝낼 때 push한 브랜치와 PR을 다시 보고, 쉬는 동안 쌓인 알림을 보내고, PR이 다 끝났으면 Work를 끝낸다
+    // (D565~D567). 턴이 끝난 상태가 반영된 뒤에 하도록 잠깐 둔다. 기다리지 않는다
+    if (opts.stop && this.pushesItself(task))
+      setTimeout(() => {
+        void this.watchSessionPrs()
+          .then(() => this.deliverPrWatch())
+          .then(() => this.completeIfPrsDone())
+          .catch(() => undefined)
+      }, 1000)
     return this.check(
       task,
       f,
@@ -2850,6 +2867,10 @@ export class WorkRunner {
     }
   >()
   private sessionPrTimer: ReturnType<typeof setTimeout> | null = null
+  /** 세션에 알릴 새 PR 항목 (D566). 세션이 쉬면 보낸다 */
+  private prWatchPending: PrWatchItem[] = []
+  /** 이미 알렸거나 알릴 줄에 넣은 항목 id (D566). task 디렉터리의 pr-watch.json에 남겨 앱을 다시 켜도 다시 알리지 않는다 */
+  private prWatchSeen: Set<string> | null = null
 
   /** 세션이 연 PR을 읽고 있는 Work인가: 세션이 하는 Work이고 아직 끝나지 않았다 (D565) */
   private watchesSessionPrs(): boolean {
@@ -2926,6 +2947,7 @@ export class WorkRunner {
           sync: null,
         }
         r.error = f.warnings.length ? f.warnings.join(' / ') : null
+        await this.queuePrWatch(r.number, r.branch, r.items, rules)
       } catch (e) {
         r.error = `PR을 읽지 못함: ${message(e)}`
       } finally {
@@ -2933,6 +2955,8 @@ export class WorkRunner {
       }
     }
     this.changed()
+    await this.deliverPrWatch()
+    await this.completeIfPrsDone()
     // 열린 PR이 남아 있으면 PR 진행과 같은 간격으로 다시 읽는다 (D158)
     if (
       this.watchesSessionPrs() &&
@@ -2946,6 +2970,103 @@ export class WorkRunner {
       }, this.ctx.config().pr_poll_interval_sec * 1000)
     }
     return { ok: true }
+  }
+
+  /** 이 Work의 자율 진행 task (세션이 하는 Work) */
+  private sessionTask(): TaskRecord | undefined {
+    return this.work.tasks.find((t) => this.pushesItself(t) && t.status !== 'approved')
+  }
+
+  /** 세션에 PR을 알리는가 (D566): Work 설정, 없으면 켬 */
+  private prWatchOn(): boolean {
+    return this.work.settings.session_pr_notify !== false
+  }
+
+  /** 새 항목(받은 것)을 알릴 줄에 넣는다 (D566). 알리기를 껐으면 넣지 않는다(켜면 그때 새 항목을 알린다) */
+  private async queuePrWatch(
+    pr: number,
+    branch: string,
+    items: readonly PrItem[],
+    rules: ItemRules,
+  ): Promise<void> {
+    if (!this.prWatchOn()) return
+    const task = this.sessionTask()
+    if (!task) return
+    const file = path.join(this.files.taskDir(task), PR_WATCH_STATE)
+    if (!this.prWatchSeen) {
+      const text = await readText(file)
+      let ids: unknown
+      try {
+        ids = text ? JSON.parse(text) : []
+      } catch {
+        ids = []
+      }
+      this.prWatchSeen = new Set(Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [])
+    }
+    const seen = this.prWatchSeen
+    const fresh = items.filter((i) => i.status === 'new' && !i.gone && !seen.has(i.id))
+    if (!fresh.length) return
+    for (const i of fresh) {
+      seen.add(i.id)
+      const v = prItemView(i, rules)
+      // 남이 쓴 글(코멘트 본문)은 제목에 넣지 않고 인용으로만 둔다
+      const comment = i.body !== undefined
+      this.prWatchPending.push({
+        pr,
+        branch,
+        kind: v.kindLabel,
+        title: comment ? `${i.author?.login ?? '?'}${i.path ? ` · ${i.path}` : ''}` : v.title,
+        url: v.url,
+        text: comment ? (i.body ?? '') : (i.log ?? v.text),
+      })
+    }
+    await writeJson(file, [...seen])
+  }
+
+  /**
+   * 알릴 줄을 세션에 보낸다 (D566): 세션이 살아 있고 턴을 끝냈을 때만. pr-watch.md에 내용을 더하고, 터미널에는 수와 종류,
+   * 파일 경로만 한 줄로 넣는다. 일하는 중이면 다음에 턴을 끝낼 때 보낸다
+   */
+  private async deliverPrWatch(): Promise<void> {
+    if (!this.prWatchPending.length || !this.prWatchOn()) return
+    const task = this.sessionTask()
+    if (!task || !this.live.get(task.id)?.pty || !childTurnEnded(task.status)) return
+    const items = this.prWatchPending
+    this.prWatchPending = []
+    const file = path.join(this.files.taskDir(task), PR_WATCH_FILE)
+    const before = (await readText(file)) ?? '# relay: 세션이 연 PR의 새 항목\n\n'
+    await writeFileAtomic(file, `${before}${prWatchSection(items, this.ctx.at())}\n`)
+    this.sayToSession(task.id, prWatchLine(items, file))
+  }
+
+  /** 살아 있는 세션의 터미널에 한 줄을 넣고 보낸다 (D566) */
+  private sayToSession(taskId: string, text: string): void {
+    const pty = this.live.get(taskId)?.pty
+    if (!pty) return
+    pty.write(text)
+    setTimeout(() => pty.write('\r'), 300)
+  }
+
+  /**
+   * 세션이 연 PR이 모두 머지되거나 닫혔으면 Work를 끝낸다 (D567). 하나라도 머지됐어야 하고, 세션이 일하는 중이면 다음에 턴을
+   * 끝낼 때 본다. 기록용 handoff를 쓰고 이 Work를 진행하는 쪽의 이름으로 승인해 전달 없이 완료한다
+   */
+  private async completeIfPrsDone(): Promise<void> {
+    if (!this.watchesSessionPrs() || this.work.parent) return
+    const reads = [...this.sessionPrReads.values()]
+    if (
+      !reads.length ||
+      reads.some((r) => r.read?.state !== 'MERGED' && r.read?.state !== 'CLOSED')
+    )
+      return
+    if (!reads.some((r) => r.read?.state === 'MERGED')) return
+    const task = this.sessionTask()
+    if (!task || !childTurnEnded(task.status)) return
+    await writeFileAtomic(
+      path.join(this.files.taskDir(task), HANDOFF_FILE),
+      mergedHandoff(reads.map((r) => ({ number: r.number, state: r.read?.state ?? '' }))),
+    )
+    await this.approve(task.id, { by: workDriver(this.work) })
   }
 
   /** 세션이 연 PR의 패널 (D565): PR 진행의 패널을 읽기 전용으로 만든다. 대응, 머지, 자동 대응은 없다 */
@@ -3062,6 +3183,7 @@ export class WorkRunner {
       })),
       canComplete: this.work.status === 'active' && childTurnEnded(task.status),
       prs: this.sessionPrViews(),
+      notify: this.prWatchOn(),
       openChildren: this.ctx.openChildren(this.key),
     }
   }

@@ -227,6 +227,7 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I211 | push 뒤(D560)는 PostToolUse의 셸 명령이 `git push`를 담으면 `afterPushSoon`이 줄 밖에서 `refreshSessionPrs`(브랜치마다 `ghOpenPr`)를 하고 `changed()`로 화면을 다시 읽게 한다. push한 브랜치는 `adapters/git.remoteBranchesAfter(worktree, 기준 커밋)`에서 머지 대상·기준·다른 Work의 브랜치를 뺀 것이다. 화면은 `ReviewView.session`(`SessionFactsView`)이다. [Work 완료]는 `WorkRunner.completeSession`(턴이 끝났는지 `childTurnEnded`, `sessionHandoff`를 쓰고 `approve(by: human)`)이고 IPC `work:complete-session`이다. 앱의 독립 리뷰(`sessionReview`, `runReview`의 `detached`, `session-reviews.json`)는 D562로 없앴다 | PR은 gh가 없거나 로그인하지 않았으면 비운다. PR 상태 변화(머지)는 아직 보지 않는다 |
 | I212 | 자율 의도 정리의 질문 방식(D563)은 `core/context.questionMode`의 `type` 인자다: Work 설정이 없고 `auto`의 `work-start`면 `AUTO_INTAKE_QUESTION_MODE`(confirm_each). `questionLine`이 그 까닭을 덧붙인다. 앱 설정 화면은 바꾸지 않았다 | 평가 도구의 `relay-ask` 쪽은 자율에서는 이제 relay와 같다 |
 | I213 | 세션이 연 PR(D565)은 `WorkRunner.sessionPrReads`(PR 주소 → 브랜치, 번호, `PrReadState`, `PrItem[]`, 오류, 읽는 중)다. `refreshSessionPrs`가 `ghOpenPr`로 찾은 PR을 더하고, `readSessionPrs`가 `readPr`과 `gatherItems`(갈라짐은 보지 않음)로 읽고 `pr_poll_interval_sec`마다 다시 건다(`stopPrTimers`가 멈춤). `sessionPrViews`가 `prView`에 합성한 `work`(status pr, pr 기록)를 넣어 PR 패널을 만들고 gate·respond·rerun·rounds를 비운다. 화면은 `SessionFactsView.prs`이고 `PrPanel`의 `watch`(보기 전용, [새로 고침]은 IPC `work:session-pr-refresh`)다. 앱을 켤 때는 `startPr`이 `watchSessionPrs`를 부른다 | gh JSON의 새 필드는 쓰지 않는다(PR 진행과 같은 읽기) |
+| I214 | 알리기(D566)는 `readSessionPrs`가 읽은 뒤 `queuePrWatch`(status new, gone 아님, `pr-watch.json`에 없는 항목, 코멘트는 작성자만 제목에 두고 본문은 text로)로 `prWatchPending`에 넣고 `deliverPrWatch`(세션이 살아 있고 `childTurnEnded`)가 `pr-watch.md`에 `core/children.prWatchSection`을 더하고 `prWatchLine`을 `sayToSession`(PTY에 글, 300ms 뒤 Enter)으로 보낸다. Stop 뒤 1초에 `watchSessionPrs`, `deliverPrWatch`, `completeIfPrsDone`을 부른다. 끝내기(D567)는 `completeIfPrsDone`: 읽은 PR이 모두 MERGED·CLOSED이고 하나 이상 MERGED면 `mergedHandoff`를 쓰고 `approve(by: workDriver)` | 가짜 claude는 받은 글을 `input` 기록으로 남긴다 |
 
 ## 3. 확인한 사실
 
@@ -1725,6 +1726,18 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 - **[단위]** `test/unit/git-guard.test.ts`(막지 않는 것, 지킬 브랜치, 강제 push·지우기·PR 머지, deny의 allowPush), `test/unit/autonomy.test.ts`(방식 줄과 계획 보기), `test/unit/children.test.ts`(세션이 하는 Work는 마무리가 아님).
 - **[흐름]** `test/flow/autonomous.test.ts`: '내보낸 것', main push 거절, 앱의 독립 리뷰 없음, 공용 규칙 없는 배포와 deny 없는 설정, [Work 완료]로 전달 없이 완료, 일하는 중의 [Work 완료] 거절.
+
+### M52. 세션이 연 PR 알리기와 끝내기 (D566, D567)
+
+- core: `children.prWatchLine`·`prWatchSection`·`mergedHandoff`, Work 설정 `session_pr_notify`.
+- 앱: `WorkRunner`의 `queuePrWatch`, `deliverPrWatch`, `sayToSession`, `completeIfPrsDone`.
+- 화면: PR 카드 위의 "세션에 알리기: 켬/끔".
+- 스킬: orchestrate.md의 PR 지켜보기와 끝내기 사실.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`(한 줄에 남의 글 없음, 인용, 기록용 handoff), `test/unit/config.test.ts`(설정 키).
+- **[흐름]** `test/flow/autonomous.test.ts`: 쉬는 세션에 한 줄, `pr-watch.md`의 인용, 다시 알리지 않음, 끄면 알리지 않음, PR 머지로 Work 완료.
 
 ### M51. 세션이 연 PR 보기 (D565)
 

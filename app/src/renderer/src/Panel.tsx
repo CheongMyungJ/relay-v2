@@ -567,6 +567,23 @@ function SessionBox({
           아직 push한 브랜치가 없습니다. 세션이 브랜치를 push하고 PR을 엽니다.
         </div>
       )}
+      {session.prs.length ? (
+        <div className="dim" aria-label="세션에 PR 알리기">
+          새 리뷰·코멘트·CI 실패·충돌을 세션에 알리기: {session.notify ? '켬' : '끔'}{' '}
+          <button
+            className="link"
+            onClick={() =>
+              void call(() =>
+                window.relay.updateWorkSettings(review.workKey, {
+                  session_pr_notify: !session.notify,
+                }),
+              )
+            }
+          >
+            {session.notify ? '끄기' : '켜기'}
+          </button>
+        </div>
+      ) : null}
       {work
         ? session.prs.map((pr) => (
             <PrPanel

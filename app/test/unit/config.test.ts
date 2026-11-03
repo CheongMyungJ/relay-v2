@@ -226,6 +226,18 @@ describe('설정 화면 (D70)', () => {
 })
 
 describe('Work별 설정 (D72)', () => {
+  it('세션에 PR 알리기(D566)는 true/false로 켜고 끄고 null이면 지워 기본(켬)으로 돌린다', () => {
+    expect(checkWorkSettings({ session_pr_notify: false })).toEqual({
+      ok: true,
+      value: { session_pr_notify: false },
+    })
+    expect(checkWorkSettings({ session_pr_notify: 'no' })).toMatchObject({ ok: false })
+    expect(mergeWorkSettings({}, { session_pr_notify: false })).toEqual({
+      session_pr_notify: false,
+    })
+    expect(mergeWorkSettings({ session_pr_notify: false }, { session_pr_notify: null })).toEqual({})
+  })
+
   it('스킬마다 질문 방식을, 단계마다 자동 승인을 덮어쓴다. 뺀 것은 앱 설정을 따른다', () => {
     expect(checkWorkSettings({ question_mode: { fix: 'confirm_each' } })).toEqual({
       ok: true,

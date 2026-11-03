@@ -929,6 +929,8 @@ export interface SessionFactsView {
   openChildren: string[]
   /** 세션이 연 PR의 패널 (D565): PR 진행의 패널과 같은 모양이고 읽기만 한다. repo 자리에 브랜치 이름이 있다 */
   prs: PrView[]
+  /** 세션이 연 PR의 새 항목을 세션에 알리는가 (D566) */
+  notify: boolean
 }
 
 /**

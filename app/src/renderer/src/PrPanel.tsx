@@ -155,8 +155,8 @@ export function PrPanel({
 
       {watch ? (
         <div className="dim" role="note">
-          세션이 연 PR입니다. relay는 읽어서 보여 주기만 합니다. 대응은 세션이 하고, 머지는
-          GitHub에서 사람이 합니다.
+          세션이 연 PR입니다. relay는 읽어서 보여 주고 새 항목을 세션에 알립니다(위의 줄에서 끌 수
+          있음). 대응은 세션이 하고, 머지는 GitHub에서 사람이 합니다.
         </div>
       ) : null}
 

@@ -177,6 +177,9 @@ const enterWaiters = []
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 process.stdin.resume()
 process.stdin.on('data', (d) => {
+  // 받은 글을 남긴다: 앱이 세션 터미널에 넣는 알림(relay D566)을 시험이 본다
+  const typed = d.toString('utf8').replace(/[\r\n]+$/, '')
+  if (typed.trim()) record({ type: 'input', text: typed })
   enters += (d.toString('utf8').match(/[\r\n]/g) ?? []).length
   while (enters > 0 && enterWaiters.length > 0) {
     enters--

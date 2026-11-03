@@ -116,6 +116,8 @@ export interface WorkSettings {
   respond_auto_start?: boolean
   /** 독립 리뷰의 코드 리뷰 (D497, 5.1.1) */
   code_review?: boolean
+  /** 세션이 연 PR의 새 항목을 세션에 알린다 (D566). 없으면 켬이다 */
+  session_pr_notify?: boolean
 }
 
 /**
@@ -129,6 +131,7 @@ export interface WorkSettingsPatch {
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   respond_auto_start?: boolean | null
   code_review?: boolean | null
+  session_pr_notify?: boolean | null
 }
 
 /**
