@@ -661,6 +661,8 @@ export interface ActivityView {
   phase?: string
   /** 독립 리뷰 중의 최근 도구 (오래된 것부터, 지금 것을 빼고). Codex는 도구를 받지 않아 없다 */
   recent?: readonly string[]
+  /** 지금 돌고 있는 서브에이전트 (D542): 띄운 차례대로. 없으면 없다 */
+  agents?: readonly { label: string; startedAt: number }[]
 }
 
 export interface ToolActivityView {
@@ -706,6 +708,8 @@ export interface WorkView {
   title: string
   /** Work를 진행하는 쪽 (D519). caller면 패널에 띠와 [직접 맡기]를 보이고 승인·답·전달 버튼을 끈다 (D523) */
   driver: WorkDriver
+  /** 자식 Work (D543): 부모 Work의 key, 부모의 task, 맡는 파일. 사이드바는 부모 아래에 둔다 */
+  parent?: { key: string; taskId: string; files: string[] }
   status: WorkStatus
   statusLabel: string
   /** Work를 완료한 때. 보관된 Work가 완료였는지도 이것으로 안다 */
@@ -850,6 +854,13 @@ export interface Artifact {
   text: string
 }
 
+/** 자율 진행의 계획 (D542). core/autonomy planView의 모양이다 */
+export interface PlanProgressView {
+  strategies: string[]
+  pieces: { id: string; goal: string; how: string; result: string; done: boolean }[]
+  changes: string[]
+}
+
 /** 승인 화면 (D83)과 Work 완료 화면 (시나리오 7-3)에 보일 것. 누를 때마다 다시 읽은 파일로 만든다 */
 export interface ReviewView {
   workKey: string
@@ -894,8 +905,32 @@ export interface ReviewView {
   autoApprove: { on: boolean; hold: string | null }
   /** verify: Work 완료 화면 (시나리오 7-3, D119, D120) */
   completion: Completion | null
+  /** 자율 진행의 계획 (D542): plan.md의 방식, 조각과 결과, 바뀐 계획. 자율 진행이 아니거나 plan.md가 없으면 없다 */
+  plan?: PlanProgressView
+  /** 세션이 하는 Work의 자율 진행 (D560): 내보낸 것, [Work 완료]. 그런 task가 아니면 없다 */
+  session?: SessionFactsView
   /** PR 대응 task의 승인 화면 (D172, D207). 대응 task가 아니면 null */
   respond: RespondReview | null
+}
+
+/** 세션이 push한 브랜치 하나 (D560). pr은 gh로 찾은 열린 PR이다(gh가 없거나 실패하면 null) */
+export interface PushedBranchView {
+  name: string
+  commit: string
+  pr: { number: number; url: string } | null
+}
+
+/** 세션이 하는 Work의 자율 진행 칸 (D560, D561) */
+export interface SessionFactsView {
+  branches: PushedBranchView[]
+  /** [Work 완료]를 누를 수 있나: 세션이 일하는 중이 아니다 */
+  canComplete: boolean
+  /** 끝나지 않은 자식 Work의 key */
+  openChildren: string[]
+  /** 세션이 연 PR의 패널 (D565): PR 진행의 패널과 같은 모양이고 읽기만 한다. repo 자리에 브랜치 이름이 있다 */
+  prs: PrView[]
+  /** 세션이 연 PR의 새 항목을 세션에 알리는가 (D566) */
+  notify: boolean
 }
 
 /**

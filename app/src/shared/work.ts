@@ -8,9 +8,10 @@ import type { HandoffStatus, NodeName, TaskNode } from './contracts'
  * 업무 유형 (D232, D236, D258, D302, D350): 버그 수정(bugfix), 기능 추가·변경(feature, D429), 리팩터링(refactor), 설계(spec),
  * 일반(general), 커스텀(custom, D447). 사람이 새 Work 대화상자에서 고르고, 의도 승인 전까지만 바꿀 수 있다 (D237). 유형마다 파이프라인이
  * 다르다 (core/pipeline PIPELINES). 설계는 구현 전에 설계만 정하는 큰 일에 쓰고(D353), 일반은 다른 유형에 맞지 않는
- * 일에 쓴다 (D303). 커스텀은 사람이 정의한 유형이고 어느 유형인지는 work.json의 custom_type에 있다 (D462)
+ * 일에 쓴다 (D303). 자율(auto)은 의도만 정하고 진행 방식과 나누기를 에이전트가 고르는 일에 쓴다 (D533). 커스텀은 사람이 정의한
+ * 유형이고 어느 유형인지는 work.json의 custom_type에 있다 (D462)
  */
-export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general' | 'custom'
+export type WorkType = 'bugfix' | 'feature' | 'refactor' | 'spec' | 'general' | 'auto' | 'custom'
 
 /** 기본 업무 유형: 커스텀이 아닌 유형 */
 export type BuiltinWorkType = Exclude<WorkType, 'custom'>
@@ -22,6 +23,7 @@ export const WORK_TYPE_LABEL: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  auto: '자율',
   custom: '커스텀',
 }
 
@@ -32,6 +34,7 @@ export const WORK_TYPE_SHORT: Readonly<Record<WorkType, string>> = {
   refactor: '리팩터',
   spec: '설계',
   general: '일반',
+  auto: '자율',
   custom: '커스텀',
 }
 
@@ -42,6 +45,7 @@ export const WORK_TYPES: readonly BuiltinWorkType[] = [
   'refactor',
   'spec',
   'general',
+  'auto',
 ]
 
 /** 커스텀 단계 하나 (5.6.13, 5.6.15, D449, D453, D457, D511) */
@@ -884,6 +888,11 @@ export interface WorkState {
   driver?: 'caller'
   /** caller Work에서 앱이 질문에 "알아서 해"로 답한다 (D521). 없으면 호출자에게 돌려준다 */
   caller_questions?: 'recommend'
+  /**
+   * 자식 Work (D543): 부모 Work와 그 자율 진행 task. 부모가 의도를 써서 만들었고(의도 정리 없이 자율 진행부터), 질문과 승인은
+   * 부모가 한다(driver: caller). 없으면 사람이나 바깥 호출자가 만든 Work다
+   */
+  parent?: { work_id: string; task_id: string; files?: string[] }
   tasks: TaskRecord[]
 }
 

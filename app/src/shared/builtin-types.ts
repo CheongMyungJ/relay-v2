@@ -18,7 +18,7 @@ const step = (
   step_base: false,
 })
 
-/** 기본 유형 다섯의 정의 (skills/types/<id>/type.json과 같다) */
+/** 기본 유형 여섯의 정의 (skills/types/<id>/type.json과 같다) */
 export const BUILTIN_TYPES: Readonly<Record<BuiltinWorkType, CustomTypeDef>> = {
   bugfix: {
     id: 'bugfix',
@@ -122,6 +122,25 @@ export const BUILTIN_TYPES: Readonly<Record<BuiltinWorkType, CustomTypeDef>> = {
       ),
     ],
   },
+  auto: {
+    id: 'auto',
+    name: '자율',
+    description:
+      '의도만 정하면 진행 방식과 나누기를 에이전트가 고르는 일: 작은 수정부터 여러 모듈에 걸친 기능까지',
+    request_hint: '할 일과 끝났다고 볼 조건을 적어 주세요. 어떻게 할지는 relay가 고릅니다',
+    branch_prefix: 'work',
+    check_method: true,
+    target: 'code',
+    steps: [
+      step(
+        'orchestrate',
+        '자율 진행',
+        // 세션이 하는 Work(D557)는 산출물 형식이 없다. plan.md는 있으면 보인다 (D560)
+        [],
+        [],
+      ),
+    ],
+  },
 }
 
 /**
@@ -130,6 +149,7 @@ export const BUILTIN_TYPES: Readonly<Record<BuiltinWorkType, CustomTypeDef>> = {
  */
 export const BUILTIN_ARTIFACT_NAMES: Readonly<Record<string, string>> = {
   execute: 'execution.md',
+  orchestrate: 'plan.md',
 }
 
 /** 커스텀 유형의 기본 요청 입력 안내 (D511) */

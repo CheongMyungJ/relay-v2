@@ -148,6 +148,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
       refactor: false,
       spec: false,
       execute: false,
+      orchestrate: false,
       respond: true,
     },
   }
@@ -177,6 +178,7 @@ describe('자동 승인의 방식 (4.2, D72)', () => {
       refactor: true,
       spec: true,
       execute: true,
+      orchestrate: true,
       respond: false,
     })
     expect(approvalMode(DEFAULT_CONFIG, {}, 'fix')).toBe('auto')
@@ -281,6 +283,7 @@ describe('자동 승인하지 않은 까닭 (D128~D131)', () => {
       refactor: true,
       spec: true,
       execute: true,
+      orchestrate: true,
       respond: false,
     },
   }

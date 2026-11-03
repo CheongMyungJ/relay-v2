@@ -868,6 +868,30 @@ export async function commitsWithParents(
   })
 }
 
+/**
+ * from에서 닿지 않고 to에서 닿는 커밋과 커밋마다 바뀐 파일 (git log --reverse --name-only from..to). 오래된 것이 먼저다.
+ * 병합 커밋은 바뀐 파일을 내지 않는다. 자율 진행의 관문(D536)이 시험 커밋의 차례를 본다
+ */
+export async function commitFiles(
+  dir: string,
+  from: string,
+  to: string,
+  opts?: GitOptions,
+): Promise<{ commit: string; files: string[] }[]> {
+  const out = await git(
+    dir,
+    ['log', '--reverse', '--no-renames', '--name-only', '--format=%x00%H', `${from}..${to}`],
+    opts,
+  )
+  return out
+    .split('\0')
+    .filter((chunk) => chunk.trim() !== '')
+    .map((chunk) => {
+      const [commit = '', ...files] = lines(chunk)
+      return { commit: commit.trim(), files: files.map((f) => f.trim()).filter(Boolean) }
+    })
+}
+
 /** 원격에 브랜치가 있는가 (git ls-remote --heads). 원격에 닿지 못하면 GitError (D178 정리 창) */
 export async function remoteBranchExists(
   repo: string,
@@ -896,4 +920,33 @@ export async function deleteRemoteBranch(
     ...opts,
     timeoutMs: opts?.timeoutMs ?? 300_000,
   })
+}
+
+/**
+ * 원격 추적 참조(refs/remotes/<remote>/*) 가운데 commit을 담고 그 뒤에 커밋이 있는 브랜치와 끝 커밋 (D560). push는 원격 추적
+ * 참조를 고치므로 세션이 push한 브랜치가 여기에 보인다. <remote>/HEAD는 뺀다
+ */
+export async function remoteBranchesAfter(
+  dir: string,
+  commit: string,
+  remote = 'origin',
+  opts?: GitOptions,
+): Promise<{ name: string; commit: string }[]> {
+  const out = await git(
+    dir,
+    [
+      'for-each-ref',
+      '--contains',
+      commit,
+      '--format=%(refname:short)%00%(objectname)',
+      `refs/remotes/${remote}`,
+    ],
+    opts,
+  )
+  return lines(out)
+    .map((l) => {
+      const [ref = '', sha = ''] = l.split('\0')
+      return { name: ref.replace(new RegExp(`^${remote}/`), ''), commit: sha }
+    })
+    .filter((b) => b.name && b.name !== 'HEAD' && b.name !== remote && b.commit !== commit)
 }

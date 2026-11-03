@@ -59,3 +59,26 @@ export function ActivityRecent({ activity }: { activity: ActivityView }) {
     </ul>
   )
 }
+
+/** 지금 돌고 있는 서브에이전트 (D542): 띄운 차례대로 이름과 짧은 인자, 경과 시간 */
+export function ActivityAgents({ activity }: { activity: ActivityView }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  if (!activity.agents?.length) return null
+  return (
+    <div className="activity-agents">
+      <div className="dim">서브에이전트 {activity.agents.length}개</div>
+      <ul>
+        {activity.agents.map((a, i) => (
+          <li key={i}>
+            {`${a.label} `}
+            <span data-tick="">{duration(now - a.startedAt)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}

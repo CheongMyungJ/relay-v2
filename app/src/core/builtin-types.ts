@@ -33,13 +33,15 @@ export function typeTarget(work: DefWork): TypeTarget {
 
 /**
  * 공용 스킬의 설정 구간(`<!-- if: … -->`)을 고르는 표시 (5.6.15, D508): 대상(code / document), 확인 방법(check-method /
- * no-check-method), 커스텀 유형인지(custom / builtin)
+ * no-check-method), 커스텀 유형인지(custom / builtin), 사람이 진행에 끼는지(guided / autonomous). 자율(auto)만
+ * autonomous다: 마무리에서 리뷰 지적을 스스로 고르고 사람에게 묻지 않는다 (D538)
  */
 export function assemblyFlags(work: DefWork): string[] {
   return [
     typeTarget(work),
     checkMethodOn(work) ? 'check-method' : 'no-check-method',
     workType(work) === 'custom' ? 'custom' : 'builtin',
+    workType(work) === 'auto' ? 'autonomous' : 'guided',
   ]
 }
 
@@ -51,4 +53,6 @@ export const ASSEMBLY_FLAGS: readonly string[] = [
   'no-check-method',
   'custom',
   'builtin',
+  'guided',
+  'autonomous',
 ]

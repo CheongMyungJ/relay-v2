@@ -9,7 +9,10 @@ import type { RespondRound, RespondStage, TaskRecord, WorkState } from '../share
 import type { PrReadState } from './pr'
 import { RESPOND } from './pipeline'
 import { cardDone, laneOf } from './repos'
+import { isTestPath } from './test-path'
 import { replySections } from './validate'
+
+export { isTestPath } from './test-path'
 
 // ---------- 대응 task와 라운드 ----------
 
@@ -332,23 +335,6 @@ export const GONE_SKIP = '코멘트가 없어져 게시하지 않음'
 // ---------- 기존 테스트 변경 (D180, D202) ----------
 
 /** 테스트 폴더 이름 (D202, 기본값). 대소문자는 가리지 않는다 */
-const TEST_DIRS: readonly string[] = ['test', 'tests', '__tests__', 'spec']
-
-/**
- * 테스트 파일 모양인가 (D202, 기본값): 경로에 test, tests, __tests__, spec 폴더가 있거나 이름이 *.test.*, *.spec.*,
- * *_test.*, test_*.*다
- */
-export function isTestPath(file: string): boolean {
-  const parts = file.replace(/\\/g, '/').split('/').filter(Boolean)
-  const name = parts.pop() ?? ''
-  if (parts.some((d) => TEST_DIRS.includes(d.toLowerCase()))) return true
-  return (
-    /\.(test|spec)\.[^.]+/i.test(name) ||
-    /_test\.[^.]+$/i.test(name) ||
-    /^test_.+\.[^.]+$/i.test(name)
-  )
-}
-
 /** 라운드 시작 커밋과 지금 작업 트리의 차이 한 줄: 상태(M, D, A, T 등)와 경로 (git diff --name-status --no-renames) */
 export interface NameStatus {
   status: string

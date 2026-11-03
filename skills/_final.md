@@ -19,14 +19,19 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- if: document -->
    A decision with a better alternative or a missed risk is not a finding: write it yourself in `## 다시 볼 결정`. It is not picked; the Work completion screen and `pr.md` only show it. To change it, the human tells you before approving: then decide it like a new decision.
 <!-- /if -->
+<!-- if: guided -->
 5. **Pick findings** (human decision below). Skip this if there are no findings.
+<!-- /if -->
+<!-- if: autonomous -->
+5. **Pick findings yourself** (rule under the finishing decisions below). Skip this if there are no findings.
+<!-- /if -->
 <!-- if: code -->
 6. **Apply** only the picked findings and commit. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
 <!-- /if -->
 <!-- if: document -->
 6. **Apply** only the picked findings to the target document and commit. Fill in `## 반영` and `## 반영하지 않은 지적`. Do not request the review again, and do not add new findings.
 <!-- /if -->
-7. **Fix the verdicts:** answer each item of `## 판정표 이의` in `independent-review.md`: if you accept it, fix the verdict or check again; if you do not, add why to that verdict's evidence. Run again every 완료조건 that the applied changes touch, and fix the table on the final code. Ask about 실패 and 판정 불가 as below.
+7. **Fix the verdicts:** answer each item of `## 판정표 이의` in `independent-review.md`: if you accept it, fix the verdict or check again; if you do not, add why to that verdict's evidence. Run again every 완료조건 that the applied changes touch, and fix the table on the final code. Handle 실패 and 판정 불가 as below.
 8. **The other sections:** fill in the rest of `verification.md`.
 <!-- if: code -->
 9. **Write `pr.md`** (template below). If the code review was off, write "독립 코드 리뷰를 하지 않음" in `## 테스트`.
@@ -50,7 +55,12 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 <!-- slot: finish -->
 <!-- if: check-method -->
 - **Check methods:** run the method at the end of each 완료조건 line on the final code. If it does not really check that 완료조건 (e.g. the command never runs that behavior), add your own check (read the code, run more), judge with both, write both in the evidence, and write in `남은 위험` that the check method fell short. Do not change the intent.
+<!-- /if -->
+<!-- if: check-method guided -->
 - **`확인: 사람` items:** judge them by asking the human (see the human decisions below). Before you ask, check what you can yourself and show it.
+<!-- /if -->
+<!-- if: check-method autonomous -->
+- **`확인: 사람` items:** do not ask. Check what you can yourself, judge the item 판정 불가, and write "사람 확인 필요:" and what the human should look at (file, diff location, run result) in the evidence. The human sees it on the Work completion screen.
 <!-- /if -->
 - **Verdicts:** 통과 / 실패 / 판정 불가. For 판정 불가, give the reason, and add useful facts if any.
 - **A finding says the change itself is wrong** (e.g. it only hides the symptom): if the human picks it, fix it here. If the intent, the cause or the design is wrong and the work must start over, ask the human: fix it here / start over as a new Work (see "When an earlier result is wrong" in the common rules). There is no going back to an earlier step.
@@ -58,29 +68,51 @@ This step is the last work step of this Work (`context.md` has `## 마무리`). 
 ### Finishing decisions
 
 - **Decision points:** how to fix a picked finding, whether to accept each objection to the verdicts, and the verdict of each 완료조건. With 결정마다 확인, ask before you change code and before you settle the verdicts.
+<!-- if: guided -->
 - **Which findings to apply** (only when there are findings): ask on the spot. In one question, list each finding in one line (number, severity, what). Offer: 차단·권장만 반영 / 모두 반영 / 반영하지 않음, and put the one you recommend first. The human can also type the numbers. Record what they picked and what they did not in `decisions` with `by: human`.
-<!-- if: check-method -->
+<!-- /if -->
+<!-- if: check-method guided -->
 - **`확인: 사람` items:** gather them all into one question. For each, show what to look at (file, diff location, run result). The human's answer decides 통과 or 실패. Write "사람 확인" and the answer in the evidence, and record the answer in `decisions` with `by: human`.
 <!-- /if -->
+<!-- if: guided -->
 - **Any 실패 or 판정 불가:** let the human choose:
   - Fix it here: fix and commit, and judge again on the final code. Write what you did in `반영`.
   - Go to the completion screen as is. The screen shows a warning.
   - Start over as a new Work: write a Work draft and close as `blocked` (see the common rules).
+<!-- /if -->
+<!-- if: autonomous -->
+- **This Work runs without the human until the completion screen.** Do not ask about findings, verdicts or `확인: 사람` items. Ask only what the step's own human decisions allow.
+- **Which findings to apply** (only when there are findings): decide yourself. Apply every 차단 and 권장 finding that is 확인됨, and each 가능성 one you can confirm by reading the code or running it. Leave 사소 ones unless the fix is a line or two. Record what you applied and what you did not, with the reason, in `decisions` with `by: ai`.
+- **Any 실패 or 판정 불가:** fix it here when you can within the intent: fix and commit, judge again on the final code, and write what you did in `반영`. Otherwise go to the completion screen as is (the screen shows a warning) and write why in `남은 위험`. Do not start over as a new Work on your own.
+<!-- /if -->
 
 ### Finishing done when
 
 <!-- if: code -->
 - When you request the review: this step's `Done when` is met, `verification.md` has `## 완료조건 판정`, and every change is committed.
+<!-- /if -->
+<!-- if: code guided -->
 - When you close with `awaiting_approval`: `verification.md` has all six template sections; if there were findings, the human picked and the picked ones are fixed and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final code.
+<!-- /if -->
+<!-- if: code autonomous -->
+- When you close with `awaiting_approval`: `verification.md` has all six template sections; if there were findings, you picked them by the rule above and the picked ones are fixed and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final code.
 <!-- /if -->
 <!-- if: document -->
 - When you request the review: this step's `Done when` is met, `verification.md` has `## 완료조건 판정` and `## 문서 밖 파일 변경`, and every change is committed.
 - When you close with `awaiting_approval`: `verification.md` has all seven template sections; if there were findings, the human picked and the picked ones are applied and committed; every objection is answered; every 완료조건 of the intent has a verdict and evidence on the final document and the diff; `다시 볼 결정` is written.
 <!-- /if -->
 - `pr.md` is written. If `context.md` has `## 레포`, a PR draft is written for every repo with commits, at the path given there.
+<!-- if: guided -->
 - Any 실패 or 판정 불가 was asked about, and the answer recorded in `decisions`.
-<!-- if: check-method -->
+<!-- /if -->
+<!-- if: autonomous -->
+- Any 실패 or 판정 불가 was fixed here, or its reason is in `남은 위험`.
+<!-- /if -->
+<!-- if: check-method guided -->
 - Every `확인: 사람` item was asked about, and the answer recorded in `decisions`.
+<!-- /if -->
+<!-- if: check-method autonomous -->
+- Every `확인: 사람` item is 판정 불가 with what the human should look at.
 <!-- /if -->
 
 ### Artifact template: `verification.md`

@@ -1,4 +1,5 @@
 // Codex의 훅과 relay MCP(ask_human), relay MCP로 묻는 Claude task(D521)의 ask_human 브리지.
+// 자율 Work의 자율 진행(D544)이면 자식 Work 도구도 내놓는다(RELAY_CHILD_TOOLS). 도구 이름은 app/src/main/children.ts와 같다.
 // 설치본은 Electron의 Node 실행 모드를 사용한다. 별도의 Node 설치나 외부 패키지가 필요하지 않다.
 import http from 'node:http'
 import fs from 'node:fs'
@@ -92,6 +93,72 @@ const tool = {
   },
 }
 
+const work = {
+  type: 'string',
+  minLength: 1,
+  description: '자식 Work의 key (spawn_child·list_children의 work)',
+}
+
+/** 자식 Work 도구 (D544~D546, D556) */
+const childTools = [
+  {
+    name: 'spawn_child',
+    description:
+      '자식 세션을 하나 만듭니다. 자식은 부모 브랜치의 지금 커밋에서 시작하는 자기 worktree와 브랜치에서 일하고, relay가 주는 것은 부모에게 닿는 법뿐이라 무엇을 어떻게 할지는 brief가 전부입니다. 자식과는 ListAgents(결과의 tree 폴더의 세션)와 SendMessage로 말합니다. 쉬고 있을 때 자식의 메시지가 오면 다음 턴이 열립니다. 부모 브랜치에 합쳐진 자식은 relay가 닫습니다.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['title', 'brief'],
+      properties: {
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 120,
+          description: '자식 Work의 제목 한 줄',
+        },
+        brief: {
+          type: 'string',
+          minLength: 1,
+          description: '자식에게 줄 지시(자유 글)',
+        },
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '이 자식이 맡는 파일이나 폴더',
+        },
+      },
+    },
+  },
+  {
+    name: 'list_children',
+    description: '이 Work의 자식 Work와 지금 상태, 브랜치, state_key를 봅니다.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+  },
+  {
+    name: 'answer_child',
+    description:
+      '자식의 질문에 답합니다. 사람만 아는 것이면 직접 답하지 말고 먼저 사람에게 물은 뒤 그 답을 전하세요.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['work', 'question_id'],
+      properties: {
+        work,
+        question_id: { type: 'string', minLength: 1 },
+        answers: {
+          type: 'object',
+          description: '질문 id → 고른 선택지 label(여럿이면 목록)이나 글',
+        },
+        cancel: { type: 'boolean' },
+      },
+    },
+  },
+]
+const childNames = childTools.map((t) => t.name)
+const withChildren = process.env.RELAY_CHILD_TOOLS === '1'
+// 사람이 진행하는 자율 진행은 터미널에서 묻는다: ask_human을 내놓지 않는다 (D544)
+const withAsk = process.env.RELAY_NO_ASK !== '1'
+
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 const textResult = (value, isError = false) => ({
   content: [{ type: 'text', text: JSON.stringify(value) }],
@@ -114,7 +181,9 @@ async function rpc(message) {
           ? fs.readFileSync(file, 'utf8')
           : process.env.RELAY_HOOK_TASK === 'cleanup'
             ? '정리 세션입니다. push/PR 및 앱 소유 파일 수정은 앱이 합니다. 질문은 ask_human을 사용하세요.'
-            : 'relay task의 질문 도구입니다. 사람에게 물을 것은 ask_human으로 묻고 답을 기다리세요.'
+            : withChildren
+              ? 'relay 자율 진행의 도구입니다. spawn_child로 자식 세션을 만들 수 있습니다. 자식과는 ListAgents와 SendMessage로 직접 말합니다.'
+              : 'relay task의 질문 도구입니다. 사람에게 물을 것은 ask_human으로 묻고 답을 기다리세요.'
         return respond({
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
@@ -125,8 +194,28 @@ async function rpc(message) {
       case 'ping':
         return respond({})
       case 'tools/list':
-        return respond({ tools: [tool] })
+        return respond({ tools: [...(withAsk ? [tool] : []), ...(withChildren ? childTools : [])] })
       case 'tools/call': {
+        if (withChildren && childNames.includes(message.params?.name)) {
+          const controller = new AbortController()
+          controllers.set(message.id, controller)
+          try {
+            const result = await request(
+              'child',
+              { tool: message.params.name, args: message.params.arguments ?? {} },
+              controller.signal,
+              QUESTION_TIMEOUT,
+            )
+            return respond(
+              textResult(
+                result?.ok === false ? { error: result.error } : (result?.result ?? result),
+                result?.ok === false,
+              ),
+            )
+          } finally {
+            controllers.delete(message.id)
+          }
+        }
         if (message.params?.name !== 'ask_human') throw new Error('지원하지 않는 relay 도구입니다.')
         const controller = new AbortController()
         controllers.set(message.id, controller)

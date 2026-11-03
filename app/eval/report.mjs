@@ -16,8 +16,13 @@ const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
   : path.resolve(import.meta.dirname, 'scenarios')
 
 /** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
-const ARMS = ['relay', 'relay-off', 'cli']
-const LABEL = { relay: 'relay', 'relay-off': 'relay (지식 끔)', cli: '맨 CLI' }
+const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli']
+const LABEL = {
+  relay: 'relay',
+  'relay-off': 'relay (지식 끔)',
+  'relay-ask': 'relay (결정마다 확인)',
+  cli: '맨 CLI',
+}
 const label = (k) => {
   // relay@<유형>은 그 유형으로 만든 Work다 (교차 비교, I93)
   const type = armType(k)

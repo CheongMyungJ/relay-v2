@@ -832,6 +832,8 @@ export type Effect =
   | { type: 'endSession'; taskId: string }
   /** intent 초안을 intent.md로 확정하고 이전 버전은 intent.history/에 둔다 (4.1) */
   | { type: 'confirmIntent'; taskId: string; version: number }
+  /** 부모가 쓴 의도를 intent.md로 쓴다 (D543): 의도 정리 없이 만든 자식 Work */
+  | { type: 'writeIntent'; text: string; version: number }
   /**
    * decisions.md에 handoff의 결정을 더한다 (5.4). by는 승인 방식이다(사람 승인, 자동 승인).
    * decisions가 null이면 [오류 무시하고 승인]에서 머리글을 읽지 못한 것이다 (D112)
@@ -1371,6 +1373,11 @@ export interface NewWork {
   driver?: WorkDriver
   /** caller Work의 질문 처리 (D521). 없으면 호출자에게 돌려준다 */
   callerQuestions?: CallerQuestions
+  /**
+   * 자식 Work (D543): 부모 Work와 task, 부모가 쓴 의도(intent 본문). 있으면 의도 정리 없이 의도를 확정하고 다음 단계부터
+   * 시작한다. 진행하는 쪽은 부모(caller)다
+   */
+  parent?: { workId: string; taskId: string; intent: string; files?: readonly string[] }
   at: string
 }
 
@@ -1402,14 +1409,29 @@ export function createWork(input: NewWork): Transition {
     ...(input.fromWork ? { from_work: input.fromWork } : {}),
     // 마지막 작업 단계가 마무리하는 파이프라인 (D493, D501)
     pipeline: PIPELINE_VERSION,
-    ...(input.driver === 'caller' ? { driver: 'caller' as const } : {}),
+    ...(input.driver === 'caller' || input.parent ? { driver: 'caller' as const } : {}),
     ...(input.driver === 'caller' && input.callerQuestions === 'recommend'
       ? { caller_questions: 'recommend' as const }
       : {}),
+    ...(input.parent
+      ? {
+          parent: {
+            work_id: input.parent.workId,
+            task_id: input.parent.taskId,
+            ...(input.parent.files?.length ? { files: [...input.parent.files] } : {}),
+          },
+        }
+      : {}),
+    ...(input.parent ? { intent: { version: 1 } } : {}),
     tasks: [],
   }
+  // 자식 Work는 부모가 의도를 썼으므로 의도 정리를 건너뛰고 그 다음 단계부터다 (D543)
+  const firstStage = input.parent
+    ? nextStage(empty, { node: 'intake' })
+    : { node: 'intake' as const }
+  if (firstStage === WORK_COMPLETE) throw new Error('의도 정리 뒤 단계가 없는 유형')
   const intake = {
-    ...newTask(empty, 'intake', input.at),
+    ...newTask(empty, firstStage, input.at),
     ...(input.agent ?? { engine: input.engine ?? 'claude' }),
   }
   const work = { ...empty, tasks: [intake] }
@@ -1438,7 +1460,13 @@ export function createWork(input: NewWork): Transition {
           : {}),
         ...(input.mainFixed ? { main_fixed: true } : {}),
         ...(input.fromWork ? { from_work: input.fromWork } : {}),
+        ...(input.parent
+          ? { parent: { work_id: input.parent.workId, task_id: input.parent.taskId } }
+          : {}),
       }),
+      ...(input.parent
+        ? [{ type: 'writeIntent' as const, text: input.parent.intent, version: 1 }]
+        : []),
       { type: 'startTask', taskId: intake.id, node: intake.node, reason: intake.reason },
     ],
   }

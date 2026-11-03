@@ -541,6 +541,7 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       refactor: ['refactor'],
       spec: ['spec'],
       general: ['execute'],
+      auto: ['orchestrate'],
     }
     for (const type of WORK_TYPES) {
       for (const skill of ['work-start', 'pr-respond', 'verify', ...(steps[type] ?? [])] as const) {
@@ -563,9 +564,12 @@ describe('[어댑터] 단계 절차 배포와 claude 실행 (5.6.3, D103, D105, 
       refactor: 'refactor.md',
       spec: 'spec.md',
       general: 'execution.md',
+      auto: 'plan.md',
     } as const
     for (const skill of ['work-start', 'verify', 'pr-respond'] as const) {
       for (const type of ASSEMBLY) {
+        // 자율(D533)은 옛 Work가 없어 옛 verify를 받지 않는다
+        if (skill === 'verify' && type === 'auto') continue
         const text = await skillText(SKILLS, skill, type, source(type))
         expect(text, `${skill} ${type}`).not.toMatch(/<!-- \/?(type|if|slot)/)
         // 옛 verify만 그 유형의 산출물을 이름으로 가리킨다. 다른 스킬은 단계 산출물을 일반 문구로 가리킨다

@@ -30,7 +30,7 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --scenarios <목록>       1,3 또는 01-slug,03-cart 또는 all (기본 all). all은 개발용(scenario.json의
                            dev, 25~27)을 빼고, 개발용은 번호나 이름으로만 고른다
   --runs <n>               시나리오와 쪽마다 돌릴 횟수 (기본 1)
-  --arms <목록>            relay, relay-off(지식을 끈 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
+  --arms <목록>            relay, relay-off(지식을 끈 relay), relay-ask(의도 정리의 질문 방식을 결정마다 확인으로 둔 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
                            그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
                            relay,relay-off, 나머지는 relay,cli). relay 쪽 뒤에 @<유형>을 붙이면(예: relay@general)
                            시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93)
@@ -93,20 +93,36 @@ async function ensureDisplay() {
   throw new Error('Xvfb를 띄우지 못했습니다')
 }
 
-const ARMS = ['relay', 'relay-off', 'cli']
+const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli']
 
 /** 쪽 이름이 쓸 앱 폴더. cli는 null */
 const appOf = (arm, apps) => {
   if (arm === 'cli') return null
   const build = armBase(arm).replace(/-off$/, '')
-  return build === 'relay' ? APP : (apps[build] ?? null)
+  return build === 'relay' || build === 'relay-ask' ? APP : (apps[build] ?? null)
+}
+
+/** 폴더 안 파일 가운데 가장 늦게 고친 때(ms). 없으면 0 */
+function newestMtime(dir) {
+  if (!fs.existsSync(dir)) return 0
+  let newest = 0
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    newest = Math.max(newest, e.isDirectory() ? newestMtime(p) : fs.statSync(p).mtimeMs)
+  }
+  return newest
 }
 
 function preflight(arms, apps) {
   const problems = []
   for (const dir of new Set(arms.map((a) => appOf(a, apps)).filter(Boolean))) {
-    if (!fs.existsSync(path.join(dir, 'out/main/index.js')))
-      problems.push(`앱 빌드(${dir}/out)가 없습니다`)
+    const built = path.join(dir, 'out/main/index.js')
+    if (!fs.existsSync(built)) problems.push(`앱 빌드(${dir}/out)가 없습니다`)
+    // 소스를 고치고 빌드하지 않으면 예전 앱으로 평가한다 (2026-11-03 평가에서 실제로 있었다)
+    else if (newestMtime(path.join(dir, 'src')) > fs.statSync(built).mtimeMs)
+      problems.push(
+        `앱 빌드(${dir}/out)가 src보다 오래됐습니다. ${dir}에서 npm run build를 돌리세요`,
+      )
     if (!fs.existsSync(path.join(dir, 'node_modules/electron/dist/electron')))
       problems.push('Electron 실행 파일이 없습니다')
   }

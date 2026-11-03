@@ -21,12 +21,14 @@ import type {
   ProjectView,
   RepoCompletion,
   RepoDiffView,
+  PlanProgressView,
+  SessionFactsView,
   ReviewView,
   TaskView,
   WorkView,
 } from '../../shared/views'
 import type { DeliveryChoice, UncommittedAction } from '../../shared/work'
-import { Activity, ActivityRecent } from './Activity'
+import { Activity, ActivityAgents, ActivityRecent } from './Activity'
 import { call } from './commands'
 import { ConfirmDialog, UncommittedDialog } from './dialogs'
 import { Modal } from './Modal'
@@ -174,7 +176,7 @@ export function Panel({
           onShowCleanup={onShowCleanup}
         />
       ) : (
-        <Progress review={review} task={task} />
+        <Progress review={review} task={task} work={work} />
       )}
     </div>
   )
@@ -195,12 +197,15 @@ function CallerBand({ work }: { work: WorkView }) {
     setBusy(false)
     if (!r.ok) setError(r.error)
   }
+  // 자식 Work는 부모 Work의 자율 진행과 함께 진행하고, 부모 브랜치에 합쳐지면 앱이 닫는다 (D543, D549, D556)
+  const parent = work.parent
   return (
-    <section className="notice caller-band" aria-label="MCP 호출자">
-      <strong>MCP 호출자가 진행하는 Work</strong>
+    <section className="notice caller-band" aria-label={parent ? '부모 Work' : 'MCP 호출자'}>
+      <strong>{parent ? '부모 Work가 진행하는 자식 Work' : 'MCP 호출자가 진행하는 Work'}</strong>
       <div className="dim">
-        질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운
-        [취소], [Work 포기]는 여기서도 할 수 있습니다.
+        {parent
+          ? `부모 Work(${parent.key.split('/')[1] ?? parent.key})의 자율 진행과 직접 말하며 일하고, 이 브랜치가 부모 브랜치에 합쳐지면 relay가 완료로 닫습니다. 터미널에서 직접 말할 수 있고, [즉시 중단], [Work 포기]도 여기서 할 수 있습니다.`
+          : '질문 답, 승인, 전달은 relay MCP로 이 Work를 맡긴 에이전트가 합니다. [즉시 중단], 카운트다운 [취소], [Work 포기]는 여기서도 할 수 있습니다.'}
       </div>
       {open ? (
         <div className="notice-actions">
@@ -456,7 +461,7 @@ function ReviewLine({
 }
 
 /** 진행 중: 형식 되돌림 안내(D220), 경과 시간과 마지막 동작(D216), handoff 상태, 형식 오류, 산출물 목록 */
-function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
+function Progress({ review, task, work }: { review: ReviewView; task: TaskView; work?: WorkView }) {
   return (
     <>
       {task.bounceNotice ? <div className="notice">{task.bounceNotice}</div> : null}
@@ -465,8 +470,20 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
           <h3>진행</h3>
           <Activity activity={task.activity} />
           <ActivityRecent activity={task.activity} />
+          <ActivityAgents activity={task.activity} />
         </section>
       ) : null}
+      {review.plan ? <PlanProgress plan={review.plan} /> : null}
+      {review.session ? <SessionBox review={review} session={review.session} work={work} /> : null}
+      {review.session ? null : <ProgressFiles review={review} task={task} />}
+    </>
+  )
+}
+
+/** 진행 중의 handoff 상태, 형식 오류, 산출물. 세션이 하는 Work(D557)에는 없다 */
+function ProgressFiles({ review, task }: { review: ReviewView; task: TaskView }) {
+  return (
+    <>
       <section>
         <h3>handoff</h3>
         <div>
@@ -490,6 +507,162 @@ function Progress({ review, task }: { review: ReviewView; task: TaskView }) {
         )}
       </section>
     </>
+  )
+}
+
+/**
+ * 세션이 하는 Work의 자율 진행 칸 (D560, D561): 세션이 push한 브랜치와 PR, [Work 완료].
+ * 끝나지 않은 자식이 있으면 [Work 완료]를 한 번 더 눌러야 한다
+ */
+function SessionBox({
+  review,
+  session,
+  work,
+}: {
+  review: ReviewView
+  session: SessionFactsView
+  work?: WorkView
+}) {
+  const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const complete = async () => {
+    if (session.openChildren.length && !confirming) {
+      setConfirming(true)
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const r = await call(() => window.relay.completeSession(review.workKey, review.taskId))
+    setBusy(false)
+    if (!r.ok) setError(r.error ?? '끝내지 못했습니다')
+  }
+  return (
+    <section className="session-box" aria-label="내보낸 것">
+      <h3>내보낸 것</h3>
+      {session.branches.length ? (
+        <ul className="session-branches">
+          {session.branches.map((b) => (
+            <li key={b.name}>
+              <code>{b.name}</code> <span className="dim">{b.commit.slice(0, 7)}</span>
+              {b.pr ? (
+                <>
+                  {' · '}
+                  <a
+                    href={b.pr.url}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void call(() => window.relay.openExternal(b.pr?.url ?? ''))
+                    }}
+                  >
+                    PR #{b.pr.number}
+                  </a>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="dim">
+          아직 push한 브랜치가 없습니다. 세션이 브랜치를 push하고 PR을 엽니다.
+        </div>
+      )}
+      {session.prs.length ? (
+        <div className="dim" aria-label="세션에 PR 알리기">
+          새 리뷰·코멘트·CI 실패·충돌을 세션에 알리기: {session.notify ? '켬' : '끔'}{' '}
+          <button
+            className="link"
+            onClick={() =>
+              void call(() =>
+                window.relay.updateWorkSettings(review.workKey, {
+                  session_pr_notify: !session.notify,
+                }),
+              )
+            }
+          >
+            {session.notify ? '끄기' : '켜기'}
+          </button>
+        </div>
+      ) : null}
+      {work
+        ? session.prs.map((pr) => (
+            <PrPanel
+              key={pr.url}
+              work={work}
+              pr={pr}
+              watch={() => window.relay.sessionPrRefresh(review.workKey)}
+            />
+          ))
+        : null}
+      <div className="actions">
+        <button
+          type="button"
+          className="primary"
+          disabled={!session.canComplete || busy}
+          title={session.canComplete ? undefined : '세션이 일하는 중입니다'}
+          onClick={() => void complete()}
+        >
+          {confirming ? '그래도 Work 완료' : 'Work 완료'}
+        </button>
+      </div>
+      {confirming ? (
+        <div className="notice">
+          끝나지 않은 자식 Work가 있습니다: {session.openChildren.join(', ')}. 그래도 끝내려면 다시
+          누르세요. 자식은 열린 채 남습니다.
+        </div>
+      ) : null}
+      {error ? <div className="error">{error}</div> : null}
+    </section>
+  )
+}
+
+/**
+ * 자율 진행의 계획 (D542): 고른 방식, 조각마다 실행 형태와 결과(끝남 표시), 바뀐 계획. 에이전트가 plan.md를 고칠 때마다 다시
+ * 읽는다
+ */
+function PlanProgress({ plan }: { plan: PlanProgressView }) {
+  const done = plan.pieces.filter((p) => p.done).length
+  return (
+    <section className="plan-progress">
+      <h3>계획</h3>
+      <div>
+        방식:{' '}
+        {plan.strategies.length ? (
+          plan.strategies.join(' + ')
+        ) : (
+          <span className="dim">아직 없음</span>
+        )}
+      </div>
+      {plan.pieces.length ? (
+        <>
+          <div className="dim">
+            조각 {done}/{plan.pieces.length} 끝남
+          </div>
+          <ul className="plan-pieces">
+            {plan.pieces.map((p, i) => (
+              <li key={`${p.id}-${i}`} className={p.done ? 'done' : undefined}>
+                <span className="plan-mark">{p.done ? '✓' : '·'}</span> {p.id} {p.goal}
+                <span className="dim">
+                  {' '}
+                  ({p.how}
+                  {p.result ? ` · ${p.result}` : ''})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {plan.changes.length ? (
+        <>
+          <div className="dim">바뀐 계획</div>
+          <ul>
+            {plan.changes.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
   )
 }
 
@@ -719,7 +892,11 @@ function Review({
         ) : null}
         {readOnly ? null : work?.driver === 'caller' ? (
           // 승인과 전달은 호출자가 한다 (D523). 사람은 패널 맨 위의 [직접 맡기]로 맡는다
-          <div className="notice caller-drives">MCP 호출자가 승인을 기다립니다</div>
+          <div className="notice caller-drives">
+            {work.parent
+              ? '이 브랜치가 부모 브랜치에 합쳐지면 relay가 닫습니다'
+              : 'MCP 호출자가 승인을 기다립니다'}
+          </div>
         ) : review.completion && work ? (
           <CompletionActions
             review={review}

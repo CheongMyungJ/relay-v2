@@ -731,6 +731,8 @@ export interface TaskCheckInput {
    * 마무리할 때의 필수 산출물이 다르고, 리뷰 요청은 task마다 한 번이다
    */
   finishing?: { requested: boolean }
+  /** 세션이 하는 Work의 task (D552, D557): 필수 산출물과 plan.md 관문이 없고 handoff가 있으면 그것만 본다 */
+  sessionDriven?: boolean
 }
 
 /**
@@ -811,7 +813,7 @@ export function checkTask(input: TaskCheckInput): TaskCheck {
   // 마무리 단계와 옛 Work의 verify가 Work 완료 화면의 판정표와 PR 초안을 쓴다 (D493, D500)
   const completing = node === 'verify' || finishing !== undefined
   const bundle = completing ? input.bundleDrafts : undefined
-  const own = step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
+  const own = input.sessionDriven ? [] : step ? [`${step.id}.md`] : NODE_INFO[node].artifacts
   const required = [
     ...own,
     ...(finishing && !own.includes(VERIFICATION_FILE) ? [VERIFICATION_FILE, PR_FILE] : []),

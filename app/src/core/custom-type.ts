@@ -286,6 +286,8 @@ const APP_FILES: readonly string[] = [
   'verification.md',
   'pr.md',
   'independent-review.md',
+  // 세션이 연 PR의 알림 (D566)
+  'pr-watch.md',
   'response.md',
   'replies.md',
 ]

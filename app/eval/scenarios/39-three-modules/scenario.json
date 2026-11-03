@@ -1,0 +1,40 @@
+{
+  "id": "39-three-modules",
+  "type": "feature",
+  "repoName": "shop-reports",
+  "title": "서로 다른 모듈 세 곳의 기능을 한 요청으로",
+  "purpose": "한 요청 안에 서로 다른 파일을 고치는 독립된 기능 셋(월별 판매 합계, 재고 부족 목록, 회원 CSV 내보내기)이 있을 때, 자율 유형(relay D533)이 조각을 나누고 자식 Work(D543)로 나란히 맡기는지, 그렇게 했을 때 시간과 사람의 수고, 결과가 전용 유형(기능 추가)과 맨 CLI에 견줘 어떤지 본다. 모듈마다 리뷰어가 달라 변경이 모듈별로 나뉘면 좋다는 선호가 있다.",
+  "report": "세 가지를 이번에 같이 해 주세요. (1) src/sales.js에 monthlyTotals(sales): 달(YYYY-MM)마다 금액 합계를 [{ month, total }]로, 달 오름차순. (2) src/inventory.js에 lowStock(items, threshold = 5): 재고가 기준 이하인 품목을 수량이 적은 차례로(같으면 이름 차례). (3) src/members.js에 exportMembers(members): 회원 목록을 CSV(id,name,email 머리글)로 내보내되 이메일은 개인정보라 앞 한 글자만 보이게 가린다(kim@example.com → k***@example.com).",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "환불은 음수 금액으로 들어온다. 월별 합계에서도 그 달 금액에서 뺀다."
+    },
+    {
+      "share": "on_ask",
+      "text": "재고가 기준값과 딱 같은 품목도 부족으로 본다(기준 이하)."
+    },
+    {
+      "share": "on_ask",
+      "text": "이름에 쉼표가 든 회원이 있다. CSV에서 그런 값은 따옴표로 감싸야 한다."
+    }
+  ],
+  "preferences": [
+    "세 가지를 새 Work 하나(또는 요청 하나)로 한 번에 맡기고 싶다. 어떻게 나눌지는 도구가 정하면 좋겠다.",
+    "세 모듈은 리뷰하는 사람이 달라서 변경이 모듈별로 나뉘어 있으면 좋다(따로 커밋이나 따로 PR). 꼭은 아니다.",
+    "셋 다 이번에 끝내고 싶다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/sales.js", "src/inventory.js", "src/members.js", "test/**"],
+  "checks": [
+    { "name": "월별 합계", "file": "sales.test.js", "bug": "sales" },
+    { "name": "재고 부족", "file": "inventory.test.js", "bug": "inventory" },
+    { "name": "회원 내보내기", "file": "members.test.js", "bug": "members" },
+    { "name": "기존 함수 그대로", "file": "existing.test.js", "guard": true }
+  ],
+  "limits": {
+    "minutes": 60,
+    "turns": 80
+  }
+}

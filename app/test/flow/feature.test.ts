@@ -28,6 +28,7 @@ const ALL_OFF = {
   refactor: false,
   spec: false,
   execute: false,
+  orchestrate: false,
   respond: false,
 }
 
@@ -194,6 +195,7 @@ describe('[흐름] 기능 추가 유형 (M14)', () => {
         refactor: false,
         spec: false,
         execute: false,
+        orchestrate: false,
         respond: false,
       },
       auto_approve_countdown_sec: 1,

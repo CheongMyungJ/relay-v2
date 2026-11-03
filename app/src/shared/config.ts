@@ -4,8 +4,8 @@ import type { AgentEngine, AgentStep } from './agent'
 import type { WorkType } from './work'
 
 /**
- * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가·변경, refactor는 리팩터링, spec은 설계, execute는 일반에만
- * 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187). custom은 커스텀 단계의
+ * relay 스킬 (5.6). fix는 버그 수정, design과 implement는 기능 추가·변경, refactor는 리팩터링, spec은 설계, execute는 일반,
+ * orchestrate는 자율(D533)에만 쓴다 (D232, D256, D278, D318, D372). pr-respond는 파이프라인 밖의 PR 대응 task다 (D168, D187). custom은 커스텀 단계의
  * 공통 바탕이고, 단계 절차는 유형 폴더에서 붙인다 (D452)
  */
 export type SkillName =
@@ -16,6 +16,7 @@ export type SkillName =
   | 'refactor'
   | 'spec'
   | 'execute'
+  | 'orchestrate'
   | 'verify'
   | 'pr-respond'
   | 'custom'
@@ -41,7 +42,7 @@ export type QuestionMode = 'draft_first' | 'confirm_each'
  * D315). respond는 PR 대응 task다 (D169)
  */
 export type AutoApproveNode =
-  'fix' | 'design' | 'implement' | 'refactor' | 'spec' | 'execute' | 'respond'
+  'fix' | 'design' | 'implement' | 'refactor' | 'spec' | 'execute' | 'orchestrate' | 'respond'
 
 /** 화면 테마 (D335). system은 OS 설정을 따른다 */
 export type ThemeChoice = 'system' | 'dark' | 'light'
@@ -115,6 +116,8 @@ export interface WorkSettings {
   respond_auto_start?: boolean
   /** 독립 리뷰의 코드 리뷰 (D497, 5.1.1) */
   code_review?: boolean
+  /** 세션이 연 PR의 새 항목을 세션에 알린다 (D566). 없으면 켬이다 */
+  session_pr_notify?: boolean
 }
 
 /**
@@ -128,11 +131,12 @@ export interface WorkSettingsPatch {
   question_mode?: Partial<Record<QuestionSkill, QuestionMode>>
   respond_auto_start?: boolean | null
   code_review?: boolean | null
+  session_pr_notify?: boolean | null
 }
 
 /**
  * 설정 목록의 묶음 (D256, D278, D318, D374): 모든 유형에 같이 쓰는 단계(common), 그 유형에만 있는 단계(bugfix, feature,
- * refactor, spec, general), PR 대응(pr).
+ * refactor, spec, general, auto), PR 대응(pr).
  * 설정 화면은 묶음마다 모아 보이고, Work 설정은 그 Work 유형의 단계와 공통, PR 대응만 보인다 (I57)
  */
 export type SettingGroup = 'common' | WorkType | 'pr'
@@ -145,6 +149,7 @@ export const SETTING_GROUP_LABEL: Readonly<Record<SettingGroup, string>> = {
   refactor: '리팩터링',
   spec: '설계',
   general: '일반',
+  auto: '자율',
   custom: '커스텀',
   pr: 'PR 대응',
 }
@@ -165,6 +170,7 @@ export const SKILL_TITLES: readonly (readonly [QuestionSkill, string, SettingGro
   ['implement', '구현', 'feature'],
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['execute', '실행', 'general'],
+  ['orchestrate', '자율 진행', 'auto'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
 ]
@@ -180,6 +186,7 @@ export const AUTO_APPROVE_TITLES: readonly (readonly [AutoApproveNode, string, S
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
+  ['orchestrate', '자율 진행', 'auto'],
   ['respond', 'PR 대응', 'pr'],
 ]
 
@@ -195,6 +202,7 @@ export const AGENT_STEP_TITLES: readonly (readonly [AgentStepName, string, Setti
   ['refactor', '계획과 리팩터링', 'refactor'],
   ['spec', '설계 문답', 'spec'],
   ['execute', '실행', 'general'],
+  ['orchestrate', '자율 진행', 'auto'],
   ['custom', '커스텀 단계', 'custom'],
   ['verify', '리뷰와 검증', 'common'],
   ['pr-respond', 'PR 대응', 'pr'],
@@ -230,6 +238,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     refactor: true,
     spec: true,
     execute: true,
+    orchestrate: true,
     respond: false,
   },
   auto_approve_countdown_sec: 15,
@@ -240,6 +249,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     implement: 'draft_first',
     refactor: 'draft_first',
     execute: 'draft_first',
+    orchestrate: 'draft_first',
     verify: 'draft_first',
     'pr-respond': 'draft_first',
   },

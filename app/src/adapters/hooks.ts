@@ -35,8 +35,13 @@ export interface ControlRequest {
 /** 돌려준 값을 JSON으로 답한다. 던지면 500과 { error }다 */
 export type ControlHandler = (req: ControlRequest, signal: AbortSignal) => Promise<unknown>
 
+/** 자식 Work 도구의 호출 하나 (D544): 본문 { tool, args }를 받아 결과를 JSON으로 돌려준다 */
+export type ChildHandler = (body: Record<string, unknown>, signal: AbortSignal) => Promise<unknown>
+
 export interface HookRouteOptions {
   question?: QuestionHandler
+  /** 자율 Work의 자율 진행 task가 부르는 자식 Work 도구 (D544). 없으면 /child를 받지 않는다 */
+  child?: ChildHandler
   /** Codex 도구 보호 훅은 main의 오류를 빈 성공으로 번역하지 않는다. */
   failClosed?: boolean
 }
@@ -44,6 +49,7 @@ export interface HookRouteOptions {
 const MAX_BODY = 8 * 1024 * 1024
 const HOOK_PATH = /^\/hook\/([^/?#]+)\/([^/?#]+)$/
 const QUESTION_PATH = /^\/question\/([^/?#]+)$/
+const CHILD_PATH = /^\/child\/([^/?#]+)$/
 const CONTROL_PATH = '/control'
 
 function isHookEvent(s: string): s is HookRequest['event'] {
@@ -124,17 +130,22 @@ export class HookServer {
     if (req.method === 'POST' && req.url === CONTROL_PATH) return this.handleControl(req, res)
     const m = req.method === 'POST' ? HOOK_PATH.exec(req.url ?? '') : null
     const q = req.method === 'POST' ? QUESTION_PATH.exec(req.url ?? '') : null
-    if (!m && !q) return end(res, 404)
+    const c = req.method === 'POST' ? CHILD_PATH.exec(req.url ?? '') : null
+    if (!m && !q && !c) return end(res, 404)
     let taskId: string
     try {
-      taskId = decodeURIComponent(m?.[1] ?? q?.[1] ?? '')
+      taskId = decodeURIComponent(m?.[1] ?? q?.[1] ?? c?.[1] ?? '')
     } catch {
       return end(res, 400)
     }
     const event = m?.[2] ?? ''
     const token = bearer(req)
     const route = token ? this.routes.get(token) : undefined
-    if (!route || route.taskId !== taskId || (m ? !isHookEvent(event) : !route.options.question))
+    if (
+      !route ||
+      route.taskId !== taskId ||
+      (m ? !isHookEvent(event) : q ? !route.options.question : !route.options.child)
+    )
       return end(res, 403)
 
     let body: Record<string, unknown>
@@ -150,15 +161,18 @@ export class HookServer {
     res.once('close', closed)
     try {
       reply =
-        q && route.options.question
-          ? await route.options.question(body, controller.signal)
-          : isHookEvent(event)
-            ? await route.handler({ taskId, event, body })
-            : null
+        c && route.options.child
+          ? ((await route.options.child(body, controller.signal)) as HookReply)
+          : q && route.options.question
+            ? await route.options.question(body, controller.signal)
+            : isHookEvent(event)
+              ? await route.handler({ taskId, event, body })
+              : null
     } catch (e) {
       // 앱의 처리 오류로 CLI를 막지 않는다. 빈 본문은 결정 없음이다.
       console.error(`훅 처리 실패 (${taskId} ${event}):`, e)
-      if (q) reply = { cancelled: true, reason: e instanceof Error ? e.message : String(e) }
+      if (c) reply = { ok: false, error: e instanceof Error ? e.message : String(e) } as HookReply
+      else if (q) reply = { cancelled: true, reason: e instanceof Error ? e.message : String(e) }
       else if (route.options.failClosed && event === 'PreToolUse')
         reply = {
           hookSpecificOutput: {

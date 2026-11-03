@@ -1,0 +1,265 @@
+diff --git a/src/cron.js b/src/cron.js
+index c213576..a242534 100644
+--- a/src/cron.js
++++ b/src/cron.js
+@@ -1,3 +1,72 @@
+ // cron 도구. 지금은 필드 이름만 있다.
+ 
+ export const FIELDS = ['minute', 'hour', 'dayOfMonth', 'month', 'dayOfWeek']
++
++const RANGES = { minute: [0, 59], hour: [0, 23], dayOfMonth: [1, 31], month: [1, 12], dayOfWeek: [0, 7] }
++const NAMES = {
++  month: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'],
++  dayOfWeek: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
++}
++
++function value(field, text) {
++  const names = NAMES[field]
++  const up = text.toUpperCase()
++  if (names && names.includes(up)) return names.indexOf(up) + (field === 'month' ? 1 : 0)
++  if (!/^\d+$/.test(text)) throw new Error(`${field}: 숫자가 아님 (${text})`)
++  return Number(text)
++}
++
++function parseField(field, text) {
++  const [lo, hi] = RANGES[field]
++  const out = new Set()
++  for (const part of text.split(',')) {
++    const m = /^(\*|[^/-]+(?:-[^/]+)?)(?:\/(\d+))?$/.exec(part)
++    if (!m) throw new Error(`${field}: 형식이 틀림 (${part})`)
++    const step = m[2] ? Number(m[2]) : 1
++    if (step < 1) throw new Error(`${field}: 간격은 1 이상 (${part})`)
++    let a = lo
++    let b = hi
++    if (m[1] !== '*') {
++      const [x, y] = m[1].split('-')
++      a = value(field, x)
++      b = y === undefined ? (m[2] ? hi : a) : value(field, y)
++    }
++    if (a < lo || b > hi || a > b) throw new Error(`${field}: 범위 밖 (${part})`)
++    for (let v = a; v <= b; v += step) out.add(field === 'dayOfWeek' && v === 7 ? 0 : v)
++  }
++  return [...out].sort((x, y) => x - y)
++}
++
++// cron 식(분 시 일 월 요일)을 필드마다 값 목록으로 읽는다. 틀리면 그 필드 이름을 담아 던진다
++export function parseCron(expr) {
++  const parts = String(expr).trim().split(/\s+/)
++  if (parts.length !== 5) throw new Error(`필드가 다섯이어야 함 (${parts.length}개)`)
++  return Object.fromEntries(FIELDS.map((f, i) => [f, parseField(f, parts[i])]))
++}
++
++// from 뒤의 첫 실행 시각(UTC, 분 단위). 날짜와 요일을 둘 다 정했으면 둘 중 하나만 맞아도 된다
++export function nextRun(expr, from) {
++  const c = parseCron(expr)
++  const parts = String(expr).trim().split(/\s+/)
++  const domAny = parts[2] === '*'
++  const dowAny = parts[4] === '*'
++  const start = new Date(from.getTime())
++  start.setUTCSeconds(0, 0)
++  start.setUTCMinutes(start.getUTCMinutes() + 1)
++  const day = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()))
++  for (let n = 0; n < 366 * 8; n++, day.setUTCDate(day.getUTCDate() + 1)) {
++    if (!c.month.includes(day.getUTCMonth() + 1)) continue
++    const dom = c.dayOfMonth.includes(day.getUTCDate())
++    const dow = c.dayOfWeek.includes(day.getUTCDay())
++    const ok = domAny && dowAny ? true : domAny ? dow : dowAny ? dom : dom && dow
++    if (!ok) continue
++    for (const h of c.hour) {
++      for (const m of c.minute) {
++        const t = new Date(day.getTime())
++        t.setUTCHours(h, m)
++        if (t >= start) return t
++      }
++    }
++  }
++  return null
++}
+diff --git a/src/expr.js b/src/expr.js
+index 3acde43..5cc4f06 100644
+--- a/src/expr.js
++++ b/src/expr.js
+@@ -3,3 +3,99 @@
+ export function isNumber(text) {
+   return /^\d+(\.\d+)?$/.test(String(text).trim())
+ }
++
++const FUNCTIONS = {
++  min: (...a) => Math.min(...a),
++  max: (...a) => Math.max(...a),
++  abs: (x) => Math.abs(x),
++  round: (x, d = 0) => {
++    const f = 10 ** d
++    return Math.round(x * f) / f
++  },
++}
++
++function tokens(text) {
++  const out = []
++  const re = /\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*|[-+*/%^(),])/y
++  let i = 0
++  const s = String(text)
++  while (i < s.length) {
++    if (/^\s+$/.test(s.slice(i))) break
++    re.lastIndex = i
++    const m = re.exec(s)
++    if (!m) throw new Error(`syntax: 읽을 수 없는 글 (${s.slice(i).trim()})`)
++    out.push(m[1])
++    i = re.lastIndex
++  }
++  return out
++}
++
++// 수식을 계산한다: + - * / % ^(오른쪽부터, 단항 마이너스보다 먼저), 괄호, 변수, min·max·abs·round
++export function evaluate(text, vars = {}) {
++  const t = tokens(text)
++  let p = 0
++  const peek = () => t[p]
++  const take = (x) => {
++    if (x !== undefined && t[p] !== x) throw new Error(`syntax: ${x} 자리에 ${t[p] ?? '끝'}`)
++    return t[p++]
++  }
++  const expr = () => {
++    let v = term()
++    while (peek() === '+' || peek() === '-') v = take() === '+' ? v + term() : v - term()
++    return v
++  }
++  const term = () => {
++    let v = unary()
++    while (['*', '/', '%'].includes(peek())) {
++      const op = take()
++      const r = unary()
++      if ((op === '/' || op === '%') && r === 0) throw new Error('division by zero')
++      v = op === '*' ? v * r : op === '/' ? v / r : v % r
++    }
++    return v
++  }
++  const unary = () => (peek() === '-' ? (take(), -unary()) : peek() === '+' ? (take(), unary()) : power())
++  const power = () => {
++    const base = atom()
++    if (peek() === '^') {
++      take()
++      return base ** unary()
++    }
++    return base
++  }
++  const atom = () => {
++    const x = peek()
++    if (x === undefined) throw new Error('syntax: 식이 끝남')
++    if (x === '(') {
++      take()
++      const v = expr()
++      take(')')
++      return v
++    }
++    if (/^\d/.test(x)) return Number(take())
++    if (/^[A-Za-z_]/.test(x)) {
++      take()
++      if (peek() === '(') {
++        take()
++        const args = []
++        if (peek() !== ')') {
++          args.push(expr())
++          while (peek() === ',') {
++            take()
++            args.push(expr())
++          }
++        }
++        take(')')
++        const f = FUNCTIONS[x]
++        if (!f) throw new Error(`unknown function: ${x}`)
++        return f(...args)
++      }
++      if (!(x in vars)) throw new Error(`unknown variable: ${x}`)
++      return Number(vars[x])
++    }
++    throw new Error(`syntax: ${x}`)
++  }
++  const v = expr()
++  if (p < t.length) throw new Error(`syntax: 남은 글 (${t.slice(p).join(' ')})`)
++  return v
++}
+diff --git a/src/markdown.js b/src/markdown.js
+index cf0a3b3..50eba41 100644
+--- a/src/markdown.js
++++ b/src/markdown.js
+@@ -3,3 +3,79 @@
+ export function escapeHtml(text) {
+   return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+ }
++
++// 줄 안의 꾸밈: 코드(안은 바꾸기만), 링크, 굵게, 기울임. 나머지 글은 HTML을 바꾼다
++function inline(text) {
++  const out = []
++  let rest = text
++  const rules = [
++    [/^`([^`]+)`/, (m) => `<code>${escapeHtml(m[1])}</code>`],
++    [/^\[([^\]]+)\]\(([^)\s]+)\)/, (m) => `<a href="${escapeHtml(m[2])}">${inline(m[1])}</a>`],
++    [/^\*\*(.+?)\*\*/, (m) => `<strong>${inline(m[1])}</strong>`],
++    [/^\*([^*]+)\*/, (m) => `<em>${inline(m[1])}</em>`],
++  ]
++  let plain = ''
++  while (rest) {
++    const hit = rules.map(([re, f]) => [re.exec(rest), f]).find(([m]) => m)
++    if (hit) {
++      out.push(escapeHtml(plain))
++      plain = ''
++      out.push(hit[1](hit[0]))
++      rest = rest.slice(hit[0][0].length)
++    } else {
++      plain += rest[0]
++      rest = rest.slice(1)
++    }
++  }
++  out.push(escapeHtml(plain))
++  return out.join('')
++}
++
++// Markdown을 HTML로: 제목, 문단, 목록, 코드 블록, 인용. 블록은 줄바꿈으로 잇는다
++export function renderMarkdown(text) {
++  const lines = String(text).replace(/\r\n?/g, '\n').split('\n')
++  const blocks = []
++  let i = 0
++  const isBlockStart = (l) => /^(#{1,6} |```|> ?|- |\d+\. )/.test(l)
++  while (i < lines.length) {
++    const line = lines[i]
++    if (!line.trim()) {
++      i++
++      continue
++    }
++    const fence = /^```(\S*)\s*$/.exec(line)
++    if (fence) {
++      const body = []
++      i++
++      while (i < lines.length && !/^```\s*$/.test(lines[i])) body.push(lines[i++])
++      i++
++      const cls = fence[1] ? ` class="language-${escapeHtml(fence[1])}"` : ''
++      blocks.push(`<pre><code${cls}>${escapeHtml(body.join('\n'))}</code></pre>`)
++      continue
++    }
++    const heading = /^(#{1,6}) (.*)$/.exec(line)
++    if (heading) {
++      blocks.push(`<h${heading[1].length}>${inline(heading[2].trim())}</h${heading[1].length}>`)
++      i++
++      continue
++    }
++    if (/^> ?/.test(line)) {
++      const body = []
++      while (i < lines.length && /^> ?/.test(lines[i])) body.push(lines[i++].replace(/^> ?/, ''))
++      blocks.push(`<blockquote><p>${inline(body.join(' ').trim())}</p></blockquote>`)
++      continue
++    }
++    const list = /^- /.test(line) ? 'ul' : /^\d+\. /.test(line) ? 'ol' : null
++    if (list) {
++      const re = list === 'ul' ? /^- (.*)$/ : /^\d+\. (.*)$/
++      const items = []
++      while (i < lines.length && re.test(lines[i])) items.push(`<li>${inline(re.exec(lines[i++])[1])}</li>`)
++      blocks.push(`<${list}>\n${items.join('\n')}\n</${list}>`)
++      continue
++    }
++    const para = []
++    while (i < lines.length && lines[i].trim() && !(para.length && isBlockStart(lines[i]))) para.push(lines[i++].trim())
++    blocks.push(`<p>${inline(para.join(' '))}</p>`)
++  }
++  return blocks.join('\n')
++}

@@ -1,6 +1,6 @@
 # relay-v2 구현 계획
 
-- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195), v0.36의 설정 화면 정리(M41, I196)
+- 대상 설계: `docs/design.md` v0.4 (MVP, M0~M7)와 v0.5의 확장(리뷰 단계와 PR 진행, M8~M11, I41), v0.6~v0.7(M12, M13), v0.8의 기능 추가 유형(M14, I57~I62), v0.9의 리팩터링 유형(M15, I63~I67), v0.10의 공용 스킬 조립(M16, I68), v0.13의 일반 유형(M18, I85~I94), v0.16의 이슈 기록(M19, I96~I102), v0.17의 설계 유형(M20, I103~I113), v0.18의 곁 세션(M21, I125~I131), v0.19의 기본 세션(M23, I132~I136), v0.20의 서브모듈 Work(M24, I146~I149), v0.23의 단계 절차를 시스템 프롬프트로(M28, I158~I160), v0.24의 다시 연 곁·기본 세션의 안내(M29, I161), v0.25의 커스텀 유형(M30, I162~I164), v0.27의 오른쪽 패널 너비(M32, I168), v0.28의 여러 레포를 고치는 Work(M33, I169~I177), v0.29의 verify 코드 리뷰 방법(M34, I178), v0.31의 마무리 단계와 독립 리뷰(M36, I182~I186), v0.32의 독립 리뷰 진행 표시(M37, I187, I188), v0.33의 intent 기본 항목과 약화 판정 줄이기(M38), v0.34의 유형 정의 통일(M39), v0.35의 relay MCP(M40, I190~I195), v0.36의 설정 화면 정리(M41, I196), v0.37의 자율 유형(M42~M44, I197~I204)
 - 상태: 정함. 주제마다 사람과 문답으로 정했다(설계 부록 A의 진행 규칙). 바꾸려면 사용자와 다시 정한다.
 
 Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서는 [engines.md](engines.md)에서 관리한다. 이 문서의 기존 Claude 동작은 확장 중 회귀 시험의 기준이다.
@@ -210,6 +210,24 @@ Claude/Codex 선택 실행 확장의 결정·호환 스파이크·구현 순서�
 | I194 | `revise`(D524): `WorkRunner.revise`가 지금 task이고 턴이 끝난 상태(`REVISABLE`)이며 같은 대화를 다시 열 수 있을 때(대화 ID가 있고 아는 엔진)만 받는다: 세션을 끝낸 뒤에 열지 못하거나 새 세션이 되면 글이 닿지 않는다. 글은 task 디렉터리의 `revise-<n>.txt`(산출물로 보이지 않게 `.md`가 아님)에 쓰고 첫 입력은 그 경로를 가리키는 한 줄(`revisePrompt`)이다: 여러 줄 인자는 Windows의 `.cmd` 래퍼(npm 설치 claude, 가짜 claude)에서 첫 줄 뒤가 잘렸고(Windows CI), '-'로 시작하는 목록은 옵션으로 읽힌다. 새 세션을 띄울 때는 남은 글을 지운다. 처리 줄 안에서 살아 있는 세션을 `endSession`으로 끝내고, 그 줄이 끝난 뒤의 줄에서 `resumeMessage`를 적고 `resume` 이벤트를 넣는다(끝낸 세션의 `pty.exit`가 그 사이에 들어가 세션이 살아 있지 않게 된다). `resumeSession`은 그 글을 다른 첫 입력(이어서 하라, 리뷰 결과)보다 먼저 쓰고 한 번만 쓴다 | 1.2(실행 중인 세션에 글을 넣지 않음)를 지키며 사람이 터미널에서 말하는 것과 같은 효과를 낸다 | |
 | I195 | `get_work`의 모양(D526, `core/mcp.workSummary`): `state`는 끊긴 작업이면 `operation`, 끝난 Work면 그 상태, 질문이 있으면 `question`, PR 진행에서 대응 task가 없으면 `pr`, 아니면 지금 task 상태(승인됨은 `working`). `review`·`completion`은 승인 화면을 보일 상태(`ReviewView.reviewable`)일 때만이고, 산출물은 task 디렉터리의 경로, 바뀐 파일은 diff의 `diff --git` 줄에서 읽고, diff는 `include_diff`일 때 10만 자까지다. `state_key`는 진행하는 쪽, 상태, 지금 task와 그 상태·세션·질문·카운트다운·오류 수, 전달, PR 상태·CI·항목 수, 끊긴 작업이다(진행 표시와 revision은 넣지 않음). `wait`는 `seen`이 지금과 다르면 바로 돌려준다. 첫 턴 힌트는 `ActivityView`의 `turn: false`가 60초를 넘을 때다 | 호출자는 앱 화면 대신 이것을 읽는다. 일하는 동안 도구마다 바뀌는 값으로 `wait`가 깨지 않게 한다 | |
 | I196 | 설정 화면의 짜임(D527~D531)은 렌더러의 순수 모듈 `renderer/settingsView`에 둔다: 구역(`SETTINGS_SECTIONS`), 하나짜리 칸의 목록(`SETTING_ENTRIES`: 키, 구역, 이름, 한 줄 설명. 이름이 입력의 aria-label), 단계별 진행 표의 줄(`STEP_ROWS`: `AGENT_STEP_TITLES`의 차례, 자동 승인 노드는 `AUTO_APPROVE_TITLES`에서 이름이 같은 것이고 PR 대응만 스킬 `pr-respond` ↔ 노드 `respond`, 질문 방식은 `SKILL_TITLES`), 찾기(`matches`: 찾는 말을 빈칸으로 나눈 낱말이 띄어쓰기를 뺀 글에 모두 들어 있음. 찾는 글은 이름, 설명, 구역 이름과 선택지 이름(테마, 엔진, 질문 방식)), 구역별로 보일 것(`sectionViews`. 바꾼 설정만 보기를 켤 때 `changedIds`를 `kept`로 담아 고치는 동안 기본값을 지나도 칸을 남기고, [기본값으로]가 그 id를 뺌), 기본값(`DEFAULT_CONFIG`)과 다른 칸·줄(`scalarChanged`, `stepChanged`, `changedCounts`)과 되돌리기(`resetScalar`: 기본 엔진·모델은 `changeDefaultEngine`·`changeDefaultModel`로 단계별 설정도 맞춤, `resetStep`: 그 단계의 자동 승인·질문 방식·`agent_steps` 항목), 진행 방식 묶음(`applyPreset`, `presetOf`: PR 묶음의 노드와 스킬은 건드리지 않고 비교에서도 뺌), Work 설정의 줄(`workStepRows`: 자동 승인이나 질문 방식이 있고 `groupShown`인 줄, 커스텀 단계는 부르는 쪽이 유형 정의에서 넣음)과 저장할 값(`shownOverrides`: 같은 줄의 노드와 스킬만 남김. 보이는 줄과 저장하는 값을 한 목록으로 정함). 새 Work는 만들기에 실패하면 접힌 브랜치 칸을 펼친다. 화면은 `renderer/Settings`(`SettingsDialog`, `WorkSettingsDialog`, 새 Work의 고급 설정도 쓰는 `WorkStepOverrides`·`CodeReviewOverride`)이고 `Modal`은 `renderer/Modal`로 옮기고 쓰는 곳이 바로 가져온다(`Settings`와 `dialogs`가 서로 가져오지 않게). `config.json`과 Work 설정의 모양, 저장 명령은 그대로다(묶음은 저장하지 않음). PR 패널의 [대응 자동 시작 켜기·끄기](D532)는 `updateWorkSettings`에 `respond_auto_start`만 보낸다 | 칸 목록을 데이터로 두어야 찾기, 바꾼 수, 구역 나누기를 한 곳에서 정하고 [단위]로 본다. 모든 앱 설정 키가 칸이나 표에 한 번씩 있는지도 [단위]가 본다 | |
+| I197 | 자율 유형(D533)은 기본 유형 여섯째로 표를 넓혀 넣는다: `WorkType`·`WORK_TYPES`(맨 뒤)·화면 이름, `PIPELINES`(`intake, orchestrate`), `STEP_NODES`·`NODE_INFO`(orchestrate, "자율 진행", `plan.md`), handoff 스키마의 옛 `recommended_next.node`(ALL_NODES와 같아야 함), `SkillName`·`AutoApproveNode`와 설정 표, `BUILTIN_TYPES`(원본 `skills/types/auto/type.json`), `skills/assemble.mjs`의 유형·단계 표. 자율 진행은 커스텀 유형의 기반 단계로 내놓지 않는다(관문과 자율 마무리는 노드 orchestrate와 유형 auto에만 붙음) | 일반 유형(I85~I89)과 같은 길이라 새 구조가 없다. 표에서 나오는 화면(새 Work의 유형 버튼, 설정 묶음)은 고치지 않아도 따라온다 | |
+| I198 | 관문(D535~D537)은 `core/autonomy`에 둔다: 방식 줄 읽기(`readStrategy`), plan.md 관문(`planIssues`), 커밋 관문(`commitIssues`). `checkTask`가 노드 orchestrate의 plan.md가 있으면 방식 줄을 늘 보고, 리뷰 요청과 마무리 때 절과 커밋을 본다. 커밋은 `WorkRunner.autonomyFacts`가 `git log --reverse --name-only base..HEAD`(`adapters/git.commitFiles`)로 읽어 `TaskCheckInput.autonomy`로 넘긴다. 읽지 못하면 넘기지 않아 커밋 관문을 건너뛴다(D541). 시험 파일 모양(`isTestPath`, D202)은 `core/test-path`로 옮겨 PR 대응과 같이 쓴다(`core/respond`는 다시 내보냄) | core는 git을 부르지 않는다(I9). 형식 검사와 같은 길이라 되돌림, 상한, [오류 무시하고 승인]이 그대로다. `core/autonomy`가 `core/respond`를 부르면 `respond → validate → autonomy → respond`로 돌아 나눴다 | |
+| I199 | 자율 마무리(D538)는 공용 글의 설정 구간 표시 `guided`/`autonomous`로 고른다. `assemblyFlags`와 `skills/assemble.mjs`의 `flagsOf`가 넷째 표시로 내고(자율만 autonomous, 커스텀 포함 나머지는 guided), `_final.md`의 지적 고르기·실패와 판정 불가·`확인: 사람`·완료조건 줄을 두 구간으로 나눈다. 겹친 구간이 안 되므로 `code guided`처럼 표시를 함께 쓴다 | 유형 이름 대신 설정으로 고른다는 D508을 그대로 따른다. 다른 유형의 조립 결과는 바뀌지 않는다(스킬 검사가 guided 유형에 자율 글이 없음을 본다) | |
+| I200 | 계획 표시(D542)는 `core/autonomy.planView`가 plan.md를 읽어(표의 머리 줄에서 id·목표·실행 형태·결과 칸을 찾음) `ReviewView.plan`으로 넣고, 패널의 진행 중 화면(`Progress`)이 그린다. 서브에이전트는 `LiveSession.agents`(tool_use_id → 이름과 시작 시각)에 바깥 대화의 Agent·Task 도구를 PreToolUse에서 넣고 Post에서 빼며, 새 턴(UserPromptSubmit)에서 비운다. `ActivityView.agents`로 보내고 수가 바뀌면 진행 표시를 다시 보낸다 | 새 훅 필드를 쓰지 않는다(tool_name, tool_use_id, tool_input은 진행 표시가 이미 씀). 화면은 core를 부르지 않으므로(렌더러는 shared만) main이 모양을 만든다 | |
+| I201 | 자식 Work 만들기(D543)는 `createWork`의 `parent`(부모 Work·task, 의도, 맡는 파일)다: `intent: { version: 1 }`과 `driver: caller`로 만들고 첫 task는 `nextStage(intake)`(자율 진행)이며, 효과 `writeIntent`가 `confirmedIntent`로 intent.md를 쓴 뒤 `startTask`다. `Relay.createWork`의 셋째 인자 `WorkCaller`에 `parent`를 더하고, 자식은 첫 task의 엔진을 orchestrate 설정으로 고르고 이슈를 만들지 않는다. 기준 브랜치는 부모 작업 브랜치(로컬)다 | 의도 승인 효과(confirmIntent)는 의도 정리 task의 초안을 읽으므로 따로 둔다. 표에서 나오는 다음 단계를 쓰면 자율 밖의 유형에도 같은 길이 된다 | |
+| I202 | 자식 도구(D544~D547)는 `main/children.ChildService`가 받는다. 브리지(`scripts/codex-bridge.mjs`)는 `RELAY_CHILD_TOOLS=1`이면 다섯 도구를 내놓고 `/child/<task>`로 `{ tool, args }`를 보낸다(`RELAY_NO_ASK=1`이면 ask_human을 빼고). 훅 서버는 그 task의 경로에 `child` 처리가 있을 때만 받는다(`HookRouteOptions.child`). `WorkRunner.spawnsChildren`(자식이 아닌 자율 Work의 Claude 자율 진행)이 MCP 설정(`relayMcpConfig`의 `children`·`noAsk`)과 `keepAskTool`(사람이 진행하면 `--disallowedTools`를 주지 않음)을 정한다. 자식의 답·승인·전달·고칠 점·포기는 `McpService.call`을 부르고, 기다림은 0.5초마다 자식 스냅샷의 state_key를 본다 | 처리를 relay MCP와 같이 써 caller Work의 막기(사람 승인 막기, 질문을 호출자에게)가 그대로 자식에 붙는다. 기다림은 메모리의 스냅샷을 보므로 가볍다 | |
+| I203 | 부모 마무리의 관문(D548)은 `TaskCheckInput.openChildren`(`RunnerContext.openChildren` → `ChildService.openChildren`, `core/children.isOpenChild`)이다. 자식의 절차 끝 안내는 `CHILD_ASK_NOTE`(`deploySkill`의 `callerAnswers: 'parent'`)다 | 관문은 형식 오류와 같은 길(D541)이다 | |
+| I204 | 화면(D549)은 `WorkView.parent`(부모 key, task, 맡는 파일)로 정한다: `sidebar.nestChildren`이 자식을 부모 아래에 두고, 사이드바 항목은 `child-work`로 들여 쓰며 "자식" 표시를 붙이고, `CallerBand`와 승인 자리의 글을 바꾼다. 가짜 claude는 `mcpCall` 단계(결과를 vars에 두고 until로 다시 부름)와 자식 task의 `<스킬>#child` 시나리오 키(자식 안내로 앎), `git` 단계의 vars 채우기를 더했다 | 녹화본에 없는 필드를 지어내지 않는다: MCP 도구 호출은 claude의 훅 모양을 바꾸지 않는다 | |
+| I205 | 방식 줄(D535)은 이름 뒤의 괄호 설명(`TDD(자식 안에서)`, 전각 괄호 포함)을 떼고 읽는다 | 평가 40에서 부모가 괄호 설명을 붙여 형식 오류로 되돌려졌다. 이름을 고르는 규칙은 그대로이고 설명만 받는다 | |
+| I206 | 자식 세션(D552)은 `deploySkill`의 `childRules`(`core/children.childRules`)로 시스템 프롬프트를, `childContext`로 context.md를 쓴다. 부모의 지시는 intent.md 본문에 둔다(`createWork`의 `parent.intent`). `finishesWork`가 자식 Work면 거짓이고 `TaskCheckInput.child`가 필수 산출물과 plan.md 관문을 끈다. 부모 세션의 폴더는 `RunnerContext.workInfo`로 찾는다. PR 전 리뷰(D554)는 `runReview`의 `standalone`(상태를 바꾸지 않고 결과를 돌려줌)을 `WorkRunner.reviewChildForPr`이 부르고, `writeChildPr`이 pr.md를 쓴 뒤 relay MCP의 deliver를 부른다. 자식의 첫 task 엔진은 Claude다(`claudeAgent`). 가짜 claude는 자식을 연결 규칙의 첫 줄(`# relay: child session`)로 안다 | 독립 리뷰의 호출과 결과 글은 마무리와 같은 것을 쓰고, 세션을 다시 여는 상태 전이만 뺀다 | |
+| I207 | 끝 신호(D555): `core/children.childRules`의 끝 절은 SendMessage로 부모에게 말하고 턴을 끝내라는 것이고 handoff 예시가 없다. `childTurnEnded`(대기, 승인 대기, 세션 끝남)이면 `decide_child`를 받고, merge·pr 전에 `WorkRunner.writeChildHandoff`가 `childHandoff`(형식 검사를 통과하는 기록용 handoff)를 쓴 뒤 relay MCP의 approve·deliver를 부른다. `wait_children`는 브리지와 `ChildService`에서 뺐다. [흐름] 시험의 가짜 부모는 `list_children`를 자식이 대기가 될 때까지 다시 부른다(가짜 claude는 SendMessage를 흉내 내지 않음) | 쉬는 세션의 상태(대기)는 relay가 Stop 훅으로 이미 안다. 승인 경로를 새로 만들지 않고 기록만 채운다 | |
+| I208 | 자식 닫기(D556)는 `ChildService.closeMerged`다: `active`인 자식마다 `childTurnEnded`(지금 task 상태), 자식 worktree의 `headCommit`, 기준 커밋, `isAncestor(부모 worktree, head, HEAD)`를 `core/children.childMerged`로 판정하고, 참이면 `writeChildHandoff(childHandoff())`와 `approve`로 닫는다. `RunnerContext.closeMergedChildren`을 부모 자율 진행의 `checkOf`가 Stop에서(`opts.stop`), `list_children`이 결과를 만들기 전에 부른다. 자식 하나의 실패는 건너뛴다. `TaskCheckInput.openChildren`(I203), `decide_child`, `reviewChildForPr`·`writeChildPr`, `runReview`의 `standalone`은 없앴다 | 부모가 합친 뒤 할 일이 없으면 턴을 끝내므로 Stop이 합친 직후에 온다. 커밋 없는 자식의 끝은 기준 커밋이라 늘 담기므로 기준과 같으면 닫지 않는다 |
+| I209 | 세션이 하는 Work(D557)는 `core/pipeline.sessionDriven`(자율이고 옛 파이프라인이 아님)이다. `finishesWork`가 거짓이고 `TaskCheckInput.sessionDriven`이면 필수 산출물과 plan.md 관문을 보지 않는다(`core/autonomy`의 관문 함수는 없앴고 `planView`·`readStrategy`만 남음). 배포는 `WorkRunner.bareRules`가 공용 규칙 없이 `skills/types/auto/orchestrate.md`(자식은 `childRules`)를 `deploySkill`의 `bareRules`로 넘긴다. 유형 정의의 단계 절과 [요약] 절은 비었다 | 자식과 부모가 같은 길(handoff 없음, 형식 없음)을 쓴다 |
+| I210 | git 보호(D558)는 `core/git-guard.riskyGitCommand(명령, 지킬 브랜치)`이고 `WorkRunner.gitGuardReply`가 PreToolUse의 셸 명령(Claude `Bash`의 `command`, Codex 명령)에 부른다. 지킬 브랜치는 머지 대상과 기준 브랜치에 main·master를 더한 것이다. task 설정은 `DenyInput.allowPush`로 `git push`·`gh pr` deny를 뺀다(Codex는 `codexToolDenial`의 `allowPush`) | 훅은 진행 표시의 빠른 응답 경로에서 답한다 |
+| I211 | push 뒤(D560)는 PostToolUse의 셸 명령이 `git push`를 담으면 `afterPushSoon`이 줄 밖에서 `refreshSessionPrs`(브랜치마다 `ghOpenPr`)를 하고 `changed()`로 화면을 다시 읽게 한다. push한 브랜치는 `adapters/git.remoteBranchesAfter(worktree, 기준 커밋)`에서 머지 대상·기준·다른 Work의 브랜치를 뺀 것이다. 화면은 `ReviewView.session`(`SessionFactsView`)이다. [Work 완료]는 `WorkRunner.completeSession`(턴이 끝났는지 `childTurnEnded`, `sessionHandoff`를 쓰고 `approve(by: human)`)이고 IPC `work:complete-session`이다. 앱의 독립 리뷰(`sessionReview`, `runReview`의 `detached`, `session-reviews.json`)는 D562로 없앴다 | PR은 gh가 없거나 로그인하지 않았으면 비운다. PR 상태 변화(머지)는 아직 보지 않는다 |
+| I212 | 자율 의도 정리의 질문 방식(D563)은 `core/context.questionMode`의 `type` 인자다: Work 설정이 없고 `auto`의 `work-start`면 `AUTO_INTAKE_QUESTION_MODE`(confirm_each). `questionLine`이 그 까닭을 덧붙인다. 앱 설정 화면은 바꾸지 않았다 | 평가 도구의 `relay-ask` 쪽은 자율에서는 이제 relay와 같다 |
+| I213 | 세션이 연 PR(D565)은 `WorkRunner.sessionPrReads`(PR 주소 → 브랜치, 번호, `PrReadState`, `PrItem[]`, 오류, 읽는 중)다. `refreshSessionPrs`가 `ghOpenPr`로 찾은 PR을 더하고, `readSessionPrs`가 `readPr`과 `gatherItems`(갈라짐은 보지 않음)로 읽고 `pr_poll_interval_sec`마다 다시 건다(`stopPrTimers`가 멈춤). `sessionPrViews`가 `prView`에 합성한 `work`(status pr, pr 기록)를 넣어 PR 패널을 만들고 gate·respond·rerun·rounds를 비운다. 화면은 `SessionFactsView.prs`이고 `PrPanel`의 `watch`(보기 전용, [새로 고침]은 IPC `work:session-pr-refresh`)다. 앱을 켤 때는 `startPr`이 `watchSessionPrs`를 부른다 | gh JSON의 새 필드는 쓰지 않는다(PR 진행과 같은 읽기) |
+| I214 | 알리기(D566)는 `readSessionPrs`가 읽은 뒤 `queuePrWatch`(status new, gone 아님, `pr-watch.json`에 없는 항목, 코멘트는 작성자만 제목에 두고 본문은 text로)로 `prWatchPending`에 넣고 `deliverPrWatch`(세션이 살아 있고 `childTurnEnded`)가 `pr-watch.md`에 `core/children.prWatchSection`을 더하고 `prWatchLine`을 `sayToSession`(PTY에 글, 300ms 뒤 Enter)으로 보낸다. Stop 뒤 1초에 `watchSessionPrs`, `deliverPrWatch`, `completeIfPrsDone`을 부른다. 끝내기(D567)는 `completeIfPrsDone`: 읽은 PR이 모두 MERGED·CLOSED이고 하나 이상 MERGED면 `mergedHandoff`를 쓰고 `approve(by: workDriver)` | 가짜 claude는 받은 글을 `input` 기록으로 남긴다 |
 
 ## 3. 확인한 사실
 
@@ -1596,6 +1614,141 @@ S8에서 다시 연 곁·기본 세션이 처음 연 때의 안내를 압축 전
 
 - **[단위]** `test/unit/settings-view.test.ts`: 모든 앱 설정 키가 칸이나 표에 한 번씩 있음, 표의 줄과 자동 승인·질문 방식 잇기와 고를 수 없는 칸의 까닭, 보이는 글에 결정 번호 없음, 찾기(낱말, 띄어쓰기, 구역 가로지르기), 바꾼 설정만 보기와 구역별 수, 칸·줄 되돌리기(기본 엔진은 모델·추론 수준도), 묶음 셋과 PR 대응 줄을 건드리지 않음, 직접 고름, Work 설정의 줄.
 - **[스모크]** `test/smoke/agent-settings.spec.ts`: [에이전트] 구역의 기본 모델·추론 수준과 [단계별 진행] 표의 [단계마다 고르기], 바꾼 줄 표시와 구역의 수, 다시 켠 뒤 접힌 요약. 설정 찾기와 Escape, 진행 방식 묶음(맡기기, 꼼꼼히, 직접 고름), 바꾼 설정만 보기와 [기본값으로]. `app.spec.ts`: 구역을 옮기며 고친 값이 저장됨, 표의 유형별 묶음, PR·고급 구역, 새 Work의 브랜치 요약과 [바꾸기]. `codex.spec.ts`, `knowledge-tidy.spec.ts`, `session.spec.ts`, `side.spec.ts`, `theme.spec.ts`는 구역과 브랜치 요약에 맞췄다.
+
+### M42. 자율 유형 (D533~D541)
+
+사람이 "사람이든 다른 에이전트든 relay에 지시하면 의도 정리만 먼저 하고 그 뒤는 relay가 알아서 적절한 방식으로 하는" 모습을 바랐고, 고정된 유형과 단계 대신 결과를 검사하는 하네스와 재귀하는 Work를 제안했다(`docs/autonomous-work.md`). 기존 유형을 플레이북으로 쓰는 것과 자식 Work를 바깥용 relay MCP로 만드는 것은 사람이 빼라고 했다. 이 마일스톤은 제안의 A1(자식 없는 자율 Work와 관문)이다. 자식 Work와 PR 나누기(A4, A5)는 따로 한다. 설계 v0.37.
+
+- core: `autonomy`(방식 줄, plan.md·커밋 관문, I198), `test-path`, `validate`의 `autonomy` 입력과 plan.md 절, `pipeline`·`builtin-types`·`review`(`stageLead`의 plan.md)의 표, `assemblyFlags`의 `guided`/`autonomous`(I199).
+- 어댑터: `git.commitFiles`.
+- 앱: `WorkRunner.autonomyFacts`. 화면은 표에서 따라온다(새 Work의 유형 버튼 여섯, 설정 묶음 "자율").
+- 스킬: `skills/types/auto/`(type.json, intake.md, orchestrate.md), `_final.md`의 자율 구간, work-start·`_common.md`의 유형 목록, `skills/check.mjs`의 자율 대조(D533~D540, 5.6.16).
+- 넣지 않은 것: 자식 Work와 부모·자식 도구, PR 나누기, 계획 탭과 서브에이전트 활동 표시, 평가 시나리오(제안 14절의 A2~A6).
+
+**시험**
+
+- **[단위]** `test/unit/autonomy.test.ts`: 방식 이름 여섯과 `+`, 줄이 없거나 모르는 이름, 설계 먼저의 `## 설계`, 필수 절, 동작 파일 판정, 시험 먼저 방식의 커밋 차례(같은 커밋과 뒤 커밋은 오류), `(테스트 못 더함)` 줄, 문서만 바꾼 커밋, `checkTask`에서 리뷰 요청 때만 커밋을 보고 커밋을 읽지 못하면 건너뜀. 표가 바뀐 기존 시험(pipeline, config, builtin-types, settings-view, templates, draft, session, side, validate).
+- **[흐름]** `test/flow/autonomous.test.ts`: 자율 Work가 intake → orchestrate(마무리) → 완료로 가고 plan.md·시험 뒤 구현 커밋·자율 마무리 절차가 배포됨, 방식이 TDD인데 구현을 먼저 커밋하면 리뷰 요청에서 되돌리고 방식을 고치면 이어 감.
+- **[정적]** `skills/check.mjs` 모두 통과(자율 구간, orchestrate 대조, 유형 폴더 여섯).
+- **[실제]** 이 환경에서 실제 claude로 자율 Work를 돌리지 않았다. 남은 검증이다.
+
+### M43. 자율 진행 지켜보기 (D542)
+
+제안의 A2. 진행 중 패널의 계획과 서브에이전트 표시. 설계 v0.37.
+
+- core: `autonomy.planView`. 앱: `ReviewView.plan`, `LiveSession.agents`, `ActivityView.agents`. 화면: `Panel`의 `PlanProgress`, `Activity`의 `ActivityAgents`.
+- 넣지 않은 것: 관문 표(관문 오류는 지금처럼 형식 오류 목록으로 보인다), 자식 Work 트리.
+
+**시험**
+
+- **[단위]** `test/unit/autonomy.test.ts`: 방식, 조각과 결과(끝남 판정), 바뀐 계획, 형식이 틀린 plan.md.
+- **[흐름]** `test/flow/activity.test.ts`: Task 도구가 도는 동안 돌고 있는 서브에이전트로 보이고 끝나면 빠짐.
+- **[화면]** `npm run shot`으로 자율 Work의 진행 중 패널(방식, 조각 1/3, 바뀐 계획, 서브에이전트 1개)을 찍어 봤다.
+
+### M44. 자식 Work와 PR 나누기 (D543~D549)
+
+제안의 A4·A5. 사람이 자식 작업도 "부모에게 의도를 전달받아 진행하는 Work 같은 단위"로 보자고 했고, 들어가 보고 대화할 수 있기를 바랐다. 설계 v0.37.
+
+- core: `children`(상한, 정하지 않은 자식, 겹침), `machine.createWork`의 `parent`와 `writeIntent`, `validate`의 `openChildren`, `settings`의 `CHILD_ASK_NOTE`·`keepAskTool`·`relayMcpConfig`의 `children`·`noAsk`.
+- 어댑터: `hooks`의 `/child/<task>`, `claude`·`codex`의 `callerAnswers: 'parent'`.
+- 앱: `main/children.ChildService`, `Relay.children`·`WorkCaller.parent`·`appConfig`, `WorkRunner`의 `spawnsChildren`·`childCall`·`writeParentIntent`, `RunnerContext.children`·`openChildren`. 브리지의 자식 도구.
+- 화면: 사이드바의 자식 자리와 표시, 패널 띠와 승인 자리의 글.
+- 스킬: orchestrate.md의 `## Child Works`와 실행 형태 `자식 Work`.
+- 넣지 않은 것: 쌓인 PR, Codex 부모, 사람이 자식 터미널에 말한 것을 부모에게 알리기(사람 입력 알림), 자식의 토큰 예산.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 상한, 정하지 않은 자식, 겹침, 자식 Work 만들기의 전이(첫 task, intent, 효과 차례), 부모 마무리의 관문, 사이드바의 자리.
+- **[흐름]** `test/flow/children.test.ts`: spawn → wait → merge와 `git merge`(자식은 자율 진행 하나, 부모가 승인, 전달 없음, 자식 안내, 자식 도구 없음, 부모는 AskUserQuestion을 남김), 정하지 않은 자식이 부모 리뷰 요청을 되돌리고 discard 뒤 이어 감, 부모 기준 커밋에서 시작한 자식의 pr(가짜 gh), 부모가 커밋한 뒤의 자식은 pr 거절, 깊이 1.
+
+### M45. 자율 유형의 첫 평가와 의도 정리 보완 (D550)
+
+제안의 A3·A6 중 첫 평가. 평가 도구에 `relay@auto` 쪽을 더하고(`eval/lib/kind.mjs`의 낱말, `guides/relay.md`, `relay-eval` 스킬의 "자율 비교", `eval/test/measure.test.mjs`), 01·07을 relay·relay@auto·맨 CLI로 한 번씩 돌렸다(`app/eval/reports/2026-11-02-auto-01-07.md`). 07에서 자율의 의도 정리가 요청 옆의 틀린 동작을 묻지 않고 비목표에 넣어 실패해, 묻게 고치고(D550, `skills/types/auto/intake.md`, `skills/check.mjs`) 07을 relay@auto로 두 번 다시 돌렸다(`app/eval/reports/2026-11-02-auto-07-recheck.md`, 2/2 통과).
+
+- 넣지 않은 것: 자식 Work가 나올 시나리오, 회차를 늘린 비교(`docs/autonomous-work.md` 15.1).
+
+### M46. 자식 Work 시나리오와 나누기 보완 (D551)
+
+평가 시나리오 39(`39-three-modules`)와 40(`40-three-libraries`)을 더하고(`check-scenario.mjs` 통과, 정답 패치와 함정 패치) relay·relay@auto·맨 CLI로 두 번씩 돌렸다. 40에서 의도 정리가 요청을 Work 셋으로 쪼개 의도 정리가 쪼개지 않고 자율 진행이 부분마다 자식 Work를 두게 고치고(D551, `skills/types/auto/intake.md`, `orchestrate.md`, `skills/check.mjs`), 방식 줄의 괄호 설명을 받게 했다(I205, `test/unit/autonomy.test.ts`). 고친 뒤 40을 relay@auto로 두 번 다시 돌려 자식 Work 셋이 나란히 돌고 합쳐지는 것을 봤다. 보고서는 `app/eval/reports/2026-11-02-auto-39.md`, `-40.md`, `-40-recheck.md`, `docs/autonomous-work.md` 15.2.
+
+### M47. 지시만 받는 자식 세션과 세션 간 메시지 (D552~D554)
+
+사람이 자식 세션을 쓸지와 넘길 것을 주 세션이 정하고, 일하는 도중에 둘이 대화하기를 바랐고, 대화 길로 Claude Code 내장 메시지를 골랐다.
+
+- core: `children.childRules`·`childContext`, `pipeline.finishesWork`의 자식, `validate`의 `child`.
+- 어댑터: `claude.deploySkill`의 `childRules`.
+- 앱: `WorkRunner.childLink`·`parentBrief`·`reviewChildForPr`·`writeChildPr`, `runReview`의 `standalone`, `RunnerContext.workInfo`, `ChildService`의 `brief`·`tree`·`pr_title`·`pr_body`와 PR 전 리뷰, `wait_children` 기본 120초. 브리지의 도구 설명.
+- 스킬: orchestrate.md의 `## Child sessions`.
+- 넣지 않은 것: relay 자체 메시지와 그 화면(사람이 고르지 않음), 받기 정책 바꾸기(`crossSessionInbound`는 Claude Code 기본).
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 연결 규칙(어디서, push 금지, 부모 폴더, SendMessage, ask_human, handoff, 절차 없음), 자식 컨텍스트, 자식 Work의 마무리 아님과 handoff만 보는 검사.
+- **[흐름]** `test/flow/children.test.ts`: 자식이 연결 규칙과 지시만 받고 plan.md·독립 리뷰·pr.md가 없음, merge, pr(앱이 독립 리뷰를 돌린 뒤 PR), 부모 변경 위 자식의 pr 거절, 정하지 않은 자식의 되돌림, 깊이 1.
+- **[실제]** 세션 간 메시지는 가짜 claude가 흉내 내지 않는다. 평가 40으로 실제 claude에서 본다.
+
+### M48. 자식의 끝 신호도 직접 (D555)
+
+사람이 자식의 끝 신호를 앱이 중계하게 한 까닭을 묻고, 둘이 직접 하게 바꾸라고 했다. 자식은 끝나면 부모에게 SendMessage로 말하고 턴을 끝내며, 부모는 기다리는 도구 없이 턴을 끝내고 쉰다. `decide_child`는 턴을 끝낸 자식을 받고 앱이 기록용 handoff를 쓴다. `wait_children`를 없앴다.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 연결 규칙(끝나면 부모에게 말함, handoff 없음), 기록용 handoff가 형식 검사를 통과함, 턴이 끝난 상태.
+- **[흐름]** `test/flow/children.test.ts`: 자식이 handoff 없이 턴을 끝내면 부모가 merge하고 앱이 기록용 handoff를 남김, pr, 부모 변경 위 자식의 pr 거절, discard, 깊이 1.
+
+### M49. 자식 닫기만 앱이 (D556)
+
+평가 43에서 `decide_child`가 자식의 턴이 끝나기 전에 불려 거절당하는 경합이 나왔고, 사람이 Claude Code 데스크톱 앱처럼 지침을 줄이고 합치기와 내보내기를 두 세션에 맡기자고 했다.
+
+- core: `children.childMerged`, `childHandoff()`(한 가지), `childRules`를 사실만으로. `openChildrenIssue`와 `validate`의 `openChildren`을 없앰. `settings.CHILD_ASK_NOTE`에서 정하기·push 금지를 뺌.
+- 앱: `ChildService.closeMerged`, `RunnerContext.closeMergedChildren`, `decide_child`와 자식 PR 리뷰를 없앰.
+- 브리지: 자식 도구 셋(`spawn_child`, `list_children`, `answer_child`).
+- 스킬: orchestrate.md의 `## Child sessions`를 사실만으로, intake.md의 나누기 줄, `skills/check.mjs`.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`: 연결 규칙에 절차·커밋·push·PR 규칙이 없음, 기록용 handoff, 닫는 조건(턴 끝, 기준 뒤 커밋, 부모에 담김).
+- **[흐름]** `test/flow/children.test.ts`: 부모가 자식 브랜치를 합치고 턴을 끝내면 앱이 자식을 닫음, 합치지 않아도 부모가 마무리하고 자식은 열린 채 남음, 깊이 1.
+
+### M50. 세션이 하고 앱은 보는 자율 Work (D557~D561)
+
+사람이 "앱이 PR 등을 제어하는 컨셉이 제약을 만든다, 동작은 세션이 하고 앱은 감지하고 보여 주자"고 했다. 설계는 `docs/session-driven.md`. 자율 유형만 바꿨다.
+
+- core: `pipeline.sessionDriven`, `git-guard`, `children.sessionHandoff`, `settings.DenyInput.allowPush`. `autonomy`의 관문과 `validate`의 plan.md 관문을 없앰.
+- 어댑터: `git.remoteBranchesAfter`, `claude.deploySkill`의 `bareRules`.
+- 앱: `WorkRunner`의 `gitGuardReply`, `afterPush`, `completeSession`, `sessionView`, `bareRules`. IPC 하나.
+- 화면: 진행 중 패널의 '내보낸 것'과 [Work 완료]. 세션이 하는 Work에는 handoff·산출물 칸을 보이지 않는다.
+- 처음에는 push하면 앱이 독립 리뷰를 돌렸으나(D559) 평가 뒤 D562로 없앴다.
+- 스킬: `orchestrate.md`를 사실만으로 다시 씀, 유형 정의의 절을 비움, `skills/check.mjs`.
+- 평가 안내(`app/eval/guides/relay.md`)의 자율 줄.
+
+**시험**
+
+- **[단위]** `test/unit/git-guard.test.ts`(막지 않는 것, 지킬 브랜치, 강제 push·지우기·PR 머지, deny의 allowPush), `test/unit/autonomy.test.ts`(방식 줄과 계획 보기), `test/unit/children.test.ts`(세션이 하는 Work는 마무리가 아님).
+- **[흐름]** `test/flow/autonomous.test.ts`: '내보낸 것', main push 거절, 앱의 독립 리뷰 없음, 공용 규칙 없는 배포와 deny 없는 설정, [Work 완료]로 전달 없이 완료, 일하는 중의 [Work 완료] 거절.
+
+### M52. 세션이 연 PR 알리기와 끝내기 (D566, D567)
+
+- core: `children.prWatchLine`·`prWatchSection`·`mergedHandoff`, Work 설정 `session_pr_notify`.
+- 앱: `WorkRunner`의 `queuePrWatch`, `deliverPrWatch`, `sayToSession`, `completeIfPrsDone`.
+- 화면: PR 카드 위의 "세션에 알리기: 켬/끔".
+- 스킬: orchestrate.md의 PR 지켜보기와 끝내기 사실.
+
+**시험**
+
+- **[단위]** `test/unit/children.test.ts`(한 줄에 남의 글 없음, 인용, 기록용 handoff), `test/unit/config.test.ts`(설정 키).
+- **[흐름]** `test/flow/autonomous.test.ts`: 쉬는 세션에 한 줄, `pr-watch.md`의 인용, 다시 알리지 않음, 끄면 알리지 않음, PR 머지로 Work 완료.
+
+### M51. 세션이 연 PR 보기 (D565)
+
+사람이 세션이 연 PR의 CI, 리뷰, 충돌을 기존 PR 패널처럼 보기를 바랐다. PR 진행의 읽기와 패널을 보기 전용으로 쓴다.
+
+- 앱: `WorkRunner`의 `sessionPrReads`, `watchSessionPrs`, `readSessionPrs`, `sessionPrViews`. push 감지에 `gh pr` 명령을 더함. IPC 하나.
+- 화면: `PrPanel`의 `watch`, 진행 중 패널의 '내보낸 것' 아래 PR 카드, [Work 완료]는 그 아래.
+
+**시험**
+
+- **[흐름]** `test/flow/autonomous.test.ts`: 세션 브랜치에 가짜 gh로 PR을 열고 CI 실패와 대화 코멘트를 넣으면 [새로 고침]으로 PR 패널(상태, CI, 항목)이 보이고, 대응·머지는 꺼져 있고, Work는 PR 진행이 되지 않는다.
 
 ## 8. 테스트 전략
 

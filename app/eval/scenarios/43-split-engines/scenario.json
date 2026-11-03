@@ -1,0 +1,56 @@
+{
+  "id": "43-split-engines",
+  "type": "feature",
+  "repoName": "toolkit",
+  "title": "42와 같은 기능 셋, 사람이 모듈마다 나눠 나란히 진행하라고 요청",
+  "purpose": "42와 같은 레포·기능이지만 요청에 \"모듈마다 나눠서 동시에 진행\"을 적는다. 42에서 자율 진행은 스스로 나누지 않았으므로(조각이 작고 npm test가 이미 나란히 돈다), 나누기를 요청받았을 때 자식 세션(D552)을 실제로 쓰는지, 부모와 자식이 일하는 중에 SendMessage로 말하는지(D553), 자식이 끝을 직접 알리고 턴을 끝낸 부모가 그 말로 깨어나는지(D555), decide_child merge 뒤 부모가 합치고 마무리하는지, 시간·토큰·결과를 본다.",
+  "report": "공용 도구 세 개를 이번에 같이 만들어 주세요. 서로 전혀 관계없는 모듈이고 맡는 팀도 다릅니다. 모듈마다 시험을 더해 주세요(레포 README의 시험 규칙대로 픽스처를 씁니다). 시험이 오래 걸리니 모듈마다 따로 나눠서 동시에 진행해 주세요. 결과는 브랜치 하나로 합쳐 주면 됩니다. (1) src/markdown.js에 renderMarkdown(text): Markdown을 HTML로. 제목(# ~ ######), 문단(빈 줄로 나누고 문단 안의 줄은 공백으로 이음), **굵게**, *기울임*, `코드`, [링크](주소), 순서 없는 목록(- )과 순서 있는 목록(1. ), ``` 코드 블록(언어 표시는 class=\"language-…\"), > 인용. 글 속 HTML 글자(& < > \")는 escapeHtml처럼 바꾸고, 블록은 줄바꿈 하나로 잇는다. (2) src/cron.js에 parseCron(expr)와 nextRun(expr, from): 다섯 필드(분 시 일 월 요일), *, 범위, /간격, 쉼표 목록, 달과 요일 이름(JAN, MON 등, 대소문자 무관), 요일 7은 일요일. parseCron은 필드마다 정렬된 값 목록을 돌려주고 틀리면 그 필드 이름(FIELDS의 이름)을 담아 던진다. nextRun은 from보다 뒤의 첫 실행 시각(UTC, 분 단위 Date). (3) src/expr.js에 evaluate(text, vars = {}): + - * / %, ^(거듭제곱), 괄호, 단항 마이너스, 변수(vars), 함수 min·max·abs·round(x, 자릿수). 오류는 메시지에 'unknown variable: 이름', 'unknown function: 이름', 'division by zero', 'syntax'를 담아 던진다.",
+  "knowledge": [
+    {
+      "share": "on_ask",
+      "text": "cron에서 날짜(일)와 요일을 둘 다 정하면 둘 중 하나만 맞아도 실행한다(표준 cron). 하나가 *면 다른 하나만 본다."
+    },
+    {
+      "share": "on_ask",
+      "text": "거듭제곱은 오른쪽부터 묶고(2^3^2는 512) 단항 마이너스보다 먼저다(-2^2는 -4)."
+    },
+    {
+      "share": "on_ask",
+      "text": "round는 0.5를 0에서 먼 쪽으로 올린다(round(-2.5)는 -3)."
+    }
+  ],
+  "preferences": [
+    "세 가지를 새 Work 하나(또는 요청 하나)로 한 번에 맡기고 싶다.",
+    "모듈마다 따로 나눠 동시에 진행하길 원한다. 결과는 브랜치(또는 PR) 하나로 합쳐지면 된다.",
+    "셋 다 이번에 끝내고 싶다. 모듈마다 시험이 있으면 좋겠다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/markdown.js", "src/cron.js", "src/expr.js", "test/**"],
+  "checks": [
+    {
+      "name": "Markdown 변환",
+      "file": "markdown.test.js",
+      "bug": "markdown"
+    },
+    {
+      "name": "cron 계산",
+      "file": "cron.test.js",
+      "bug": "cron"
+    },
+    {
+      "name": "수식 계산",
+      "file": "expr.test.js",
+      "bug": "expr"
+    },
+    {
+      "name": "있던 것 그대로",
+      "file": "existing.test.js",
+      "guard": true
+    }
+  ],
+  "limits": {
+    "minutes": 120,
+    "turns": 150
+  }
+}

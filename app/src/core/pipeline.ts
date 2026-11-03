@@ -19,7 +19,8 @@ export interface NodeInfo {
 /**
  * 유형별 파이프라인 순서 (3.1, D227, D232, D493). Work는 그 유형의 순서를 앞으로만 모두 지난다 (D418). fix는 재현과 원인 분석을 함께 하고(D228), design은 설계와 구현 계획을 함께 하고(D232),
  * refactor는 계획, 안전망, 구조 변경을 함께 하고(D258), spec은 주제 목록과 문답과 설계 문서 쓰기를 함께 하고(D350, D352),
- * execute는 진행 방식을 정하지 않고 계획과 작업을 함께 한다(D302). 마지막 단계가 리뷰 반영과 최종 판정을 함께 한다 (D493)
+ * execute는 진행 방식을 정하지 않고 계획과 작업을 함께 한다(D302). orchestrate는 전략과 조각을 스스로 골라 plan.md에 남기고 일한다
+ * (D533). 마지막 단계가 리뷰 반영과 최종 판정을 함께 한다 (D493)
  */
 export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   bugfix: ['intake', 'fix'],
@@ -27,6 +28,7 @@ export const PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> = {
   refactor: ['intake', 'refactor'],
   spec: ['intake', 'spec'],
   general: ['intake', 'execute'],
+  auto: ['intake', 'orchestrate'],
   // 커스텀 단계는 단계마다 custom이 하나씩 든다. 실제 순서는 stagesOf가 Work의 custom_type에서 만든다
   custom: ['intake', 'custom'],
 }
@@ -38,6 +40,8 @@ export const LEGACY_PIPELINES: Readonly<Record<WorkType, readonly NodeName[]>> =
   refactor: [...PIPELINES.refactor, 'verify'],
   spec: [...PIPELINES.spec, 'verify'],
   general: [...PIPELINES.general, 'verify'],
+  // 자율(D533)은 D501 뒤에 생겨 옛 Work가 없다. 표의 모양을 맞추려고만 둔다
+  auto: [...PIPELINES.auto, 'verify'],
   custom: [...PIPELINES.custom, 'verify'],
 }
 
@@ -72,6 +76,7 @@ export const STEP_NODES: readonly NodeName[] = [
   'refactor',
   'spec',
   'execute',
+  'orchestrate',
 ]
 
 /** 기본 유형의 단계 노드인가 */
@@ -104,6 +109,13 @@ export const NODE_INFO: Readonly<Record<TaskNode, NodeInfo>> = {
   },
   spec: { node: 'spec', skill: 'spec', title: '설계 문답', artifacts: ['spec.md'] },
   execute: { node: 'execute', skill: 'execute', title: '실행', artifacts: ['execution.md'] },
+  // 자율 진행 (D533): 전략과 조각을 고르고 일한 기록이 plan.md다
+  orchestrate: {
+    node: 'orchestrate',
+    skill: 'orchestrate',
+    title: '자율 진행',
+    artifacts: ['plan.md'],
+  },
   // 산출물은 단계마다 <단계 id>.md다 (D453). taskArtifacts가 task의 step으로 정한다
   custom: { node: 'custom', skill: 'custom', title: '커스텀 단계', artifacts: [] },
   verify: {
@@ -189,7 +201,9 @@ export const stageOf = (task: Pick<TaskRecord, 'node' | 'step'>): Stage | null =
     ? { node: task.node, ...(task.step !== undefined ? { step: task.step } : {}) }
     : null
 
-type PipelineWork = Pick<WorkState, 'type' | 'custom_type' | 'pipeline'>
+type PipelineWork = Pick<WorkState, 'type' | 'custom_type' | 'pipeline'> & {
+  parent?: WorkState['parent']
+}
 
 /**
  * 승인 화면이 Work 완료 화면인 task인가 (시나리오 7-3): 다음 자리가 Work 완료인 파이프라인 task. 새 Work는 마무리 단계이고
@@ -205,11 +219,25 @@ export function completesWork(
 }
 
 /**
+ * 세션이 하고 앱은 보는 Work인가 (D557): 자율 유형이다. 자율 진행에 마무리 단계, 산출물 형식, plan.md 관문이 없고, 세션이
+ * push와 PR을 직접 하며, 사람이 [Work 완료]로 끝낸다. 자식 Work(D543)도 자율이라 같다
+ */
+export function sessionDriven(work: Pick<WorkState, 'type' | 'pipeline'>): boolean {
+  return !legacyPipeline(work) && workType(work) === 'auto'
+}
+
+/**
  * 마무리 단계 task인가 (D493): 새 Work의 마지막 작업 단계다. 판정표를 쓰고 독립 리뷰를 받아 반영한 뒤 pr.md와 지식을 쓴다
  * (5.6.14). 옛 Work의 verify와 깨진 기록이 보낸 verify는 아니다
  */
 export function finishesWork(work: PipelineWork, task: Pick<TaskRecord, 'node' | 'step'>): boolean {
-  return !legacyPipeline(work) && task.node !== 'verify' && completesWork(work, task)
+  // 세션이 하는 Work(자율, D557)와 그 자식(D552)은 마무리 절차(판정표, pr.md, 전달)를 하지 않는다
+  return (
+    !legacyPipeline(work) &&
+    task.node !== 'verify' &&
+    !sessionDriven(work) &&
+    completesWork(work, task)
+  )
 }
 
 /** 커스텀 단계 task의 단계 정의. 커스텀 단계가 아니거나 정의에 없으면 undefined다 */

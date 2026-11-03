@@ -64,6 +64,7 @@ describe('config.json 읽기 (5.1.1)', () => {
       refactor: true,
       spec: true,
       execute: true,
+      orchestrate: true,
       respond: false,
     })
     expect(DEFAULT_CONFIG.question_mode).toEqual({
@@ -73,6 +74,7 @@ describe('config.json 읽기 (5.1.1)', () => {
       implement: 'draft_first',
       refactor: 'draft_first',
       execute: 'draft_first',
+      orchestrate: 'draft_first',
       verify: 'draft_first',
       'pr-respond': 'draft_first',
     })
@@ -150,6 +152,7 @@ describe('설정 화면 (D70)', () => {
         refactor: true,
         spec: true,
         execute: true,
+        orchestrate: true,
         respond: true,
       },
     }
@@ -165,6 +168,7 @@ describe('설정 화면 (D70)', () => {
           refactor: true,
           spec: true,
           execute: true,
+          orchestrate: true,
           respond: true,
         },
         auto_approve_countdown_sec: 30,
@@ -222,6 +226,18 @@ describe('설정 화면 (D70)', () => {
 })
 
 describe('Work별 설정 (D72)', () => {
+  it('세션에 PR 알리기(D566)는 true/false로 켜고 끄고 null이면 지워 기본(켬)으로 돌린다', () => {
+    expect(checkWorkSettings({ session_pr_notify: false })).toEqual({
+      ok: true,
+      value: { session_pr_notify: false },
+    })
+    expect(checkWorkSettings({ session_pr_notify: 'no' })).toMatchObject({ ok: false })
+    expect(mergeWorkSettings({}, { session_pr_notify: false })).toEqual({
+      session_pr_notify: false,
+    })
+    expect(mergeWorkSettings({ session_pr_notify: false }, { session_pr_notify: null })).toEqual({})
+  })
+
   it('스킬마다 질문 방식을, 단계마다 자동 승인을 덮어쓴다. 뺀 것은 앱 설정을 따른다', () => {
     expect(checkWorkSettings({ question_mode: { fix: 'confirm_each' } })).toEqual({
       ok: true,
@@ -291,6 +307,7 @@ describe('화면의 스킬 이름', () => {
       ['implement', '구현', 'feature'],
       ['refactor', '계획과 리팩터링', 'refactor'],
       ['execute', '실행', 'general'],
+      ['orchestrate', '자율 진행', 'auto'],
       ['verify', '리뷰와 검증', 'common'],
       ['pr-respond', 'PR 대응', 'pr'],
     ])
@@ -317,6 +334,7 @@ describe('화면의 스킬 이름', () => {
       'refactor',
       'spec',
       'execute',
+      'orchestrate',
       'respond',
     ])
     expect(AUTO_APPROVE_TITLES.map(([n, title]) => [n, title])).toEqual(
@@ -337,6 +355,7 @@ describe('화면의 스킬 이름', () => {
       refactor: true,
       spec: true,
       execute: true,
+      orchestrate: true,
       respond: true,
     })
     expect(config.question_mode.design).toBe('draft_first')
@@ -577,7 +596,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
     })
   })
 
-  it('단계 목록은 의도 정리부터 PR 대응까지 열 단계(커스텀 단계 포함, D461)이고 이름은 노드의 화면 이름이다. 끝은 곁 세션과 기본 세션이다 (F3, D391, D399)', () => {
+  it('단계 목록은 의도 정리부터 PR 대응까지 열한 단계(커스텀 단계 포함, D461, D533)이고 이름은 노드의 화면 이름이다. 끝은 곁 세션과 기본 세션이다 (F3, D391, D399)', () => {
     expect(AGENT_STEP_TITLES.slice(0, -2).map(([skill, title]) => [skill, title])).toEqual(
       [...ALL_NODES, RESPOND].map((n) => [NODE_INFO[n].skill, NODE_INFO[n].title]),
     )
@@ -593,6 +612,7 @@ describe('[단위] 기본 모델·추론 수준과 단계별 실행 설정', () 
       '계획과 리팩터링',
       '설계 문답',
       '실행',
+      '자율 진행',
       '커스텀 단계',
       '리뷰와 검증',
       'PR 대응',

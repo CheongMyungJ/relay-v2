@@ -54,13 +54,13 @@ describe('Work 초안 읽기 (D404)', () => {
       base: null,
       request: '',
       errors: [
-        '모르는 유형: hotfix (bugfix | feature | refactor | spec | general | custom 중 하나)',
+        '모르는 유형: hotfix (bugfix | feature | refactor | spec | general | auto | custom 중 하나)',
         '요청(본문)이 비어 있음',
       ],
     })
     expect(parseDraft(draft([], '요청'), PROJECTS).errors).toEqual([
       'project(프로젝트 id)가 없음',
-      'type(bugfix | feature | refactor | spec | general | custom)이 없음',
+      'type(bugfix | feature | refactor | spec | general | auto | custom)이 없음',
     ])
   })
 

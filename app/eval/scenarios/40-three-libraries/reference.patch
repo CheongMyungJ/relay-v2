@@ -1,0 +1,103 @@
+diff --git a/src/csv.js b/src/csv.js
+index 7af37bd..44b5695 100644
+--- a/src/csv.js
++++ b/src/csv.js
+@@ -8,3 +8,44 @@ function cell(value) {
+ export function toCsv(rows) {
+   return rows.map((r) => r.map(cell).join(',')).join('\n')
+ }
++
++// CSV 글을 표로 읽는다: 쉼표, 큰따옴표로 감싼 칸(안의 쉼표·줄바꿈·"" 포함), LF와 CRLF, 끝의 줄바꿈은 무시
++export function parseCsv(text) {
++  const rows = []
++  let row = []
++  let field = ''
++  let quoted = false
++  let i = 0
++  const endRow = () => {
++    row.push(field)
++    rows.push(row)
++    row = []
++    field = ''
++  }
++  while (i < text.length) {
++    const c = text[i]
++    if (quoted) {
++      if (c === '"' && text[i + 1] === '"') {
++        field += '"'
++        i += 2
++        continue
++      }
++      if (c === '"') quoted = false
++      else field += c
++      i++
++      continue
++    }
++    if (c === '"') quoted = true
++    else if (c === ',') {
++      row.push(field)
++      field = ''
++    } else if (c === '\r' && text[i + 1] === '\n') {
++      endRow()
++      i++
++    } else if (c === '\n') endRow()
++    else field += c
++    i++
++  }
++  if (field !== '' || row.length) endRow()
++  return rows
++}
+diff --git a/src/money.js b/src/money.js
+index e52ae92..9c55575 100644
+--- a/src/money.js
++++ b/src/money.js
+@@ -3,3 +3,18 @@
+ export function isWon(value) {
+   return Number.isInteger(value)
+ }
++
++// ₩1,234,567 꼴. 원 미만은 0 쪽으로 버리고, 음수는 기호 앞에 -
++export function formatKrw(amount) {
++  const won = Math.trunc(amount)
++  const digits = String(Math.abs(won)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
++  return `${won < 0 ? '-' : ''}₩${digits}`
++}
++
++// 글을 원으로 읽는다. 기호, 쉼표, 앞뒤 공백, 음수를 받는다. 읽지 못하면 null
++export function parseKrw(text) {
++  const m = /^(-)?₩?(\d{1,3}(?:,\d{3})*|\d+)$/.exec(String(text).trim())
++  if (!m) return null
++  const value = Number(m[2].replace(/,/g, ''))
++  return m[1] ? -value : value
++}
+diff --git a/src/workdays.js b/src/workdays.js
+index 9827d99..c7f4464 100644
+--- a/src/workdays.js
++++ b/src/workdays.js
+@@ -4,3 +4,26 @@ export function isWeekend(date) {
+   const day = new Date(`${date}T00:00:00Z`).getUTCDay()
+   return day === 0 || day === 6
+ }
++
++const DAY = 24 * 60 * 60 * 1000
++const toTime = (date) => Date.parse(`${date}T00:00:00Z`)
++const toDate = (time) => new Date(time).toISOString().slice(0, 10)
++const isWorkday = (date, holidays) => !isWeekend(date) && !holidays.includes(date)
++
++// start부터 end까지(양 끝 포함) 주말과 공휴일을 뺀 날 수. start가 end보다 뒤면 0
++export function workdaysBetween(start, end, holidays = []) {
++  let count = 0
++  for (let t = toTime(start); t <= toTime(end); t += DAY) if (isWorkday(toDate(t), holidays)) count++
++  return count
++}
++
++// date에서 근무일 n일 뒤의 날짜. 주말과 공휴일을 건너뛴다. n이 0이면 그날
++export function addWorkdays(date, n, holidays = []) {
++  let t = toTime(date)
++  let left = n
++  while (left > 0) {
++    t += DAY
++    if (isWorkday(toDate(t), holidays)) left--
++  }
++  return toDate(t)
++}

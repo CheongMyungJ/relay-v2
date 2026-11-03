@@ -20,13 +20,14 @@ import type { NodeName } from '../../src/shared/contracts'
 import type { WorkType } from '../../src/shared/work'
 
 describe('노드 (3.1)', () => {
-  it('버그 수정은 intake → fix, 기능 추가는 intake → design → implement, 리팩터링은 intake → refactor, 설계는 intake → spec, 일반은 intake → execute다. 마지막 단계가 마무리한다 (D227, D232, D258, D302, D350, D493)', () => {
+  it('버그 수정은 intake → fix, 기능 추가는 intake → design → implement, 리팩터링은 intake → refactor, 설계는 intake → spec, 일반은 intake → execute, 자율은 intake → orchestrate다. 마지막 단계가 마무리한다 (D227, D232, D258, D302, D350, D493, D533)', () => {
     expect(PIPELINES).toEqual({
       bugfix: ['intake', 'fix'],
       feature: ['intake', 'design', 'implement'],
       refactor: ['intake', 'refactor'],
       spec: ['intake', 'spec'],
       general: ['intake', 'execute'],
+      auto: ['intake', 'orchestrate'],
       // 커스텀은 단계 수만큼 custom이 든다 (stagesOf, D447)
       custom: ['intake', 'custom'],
     })
@@ -51,6 +52,7 @@ describe('노드 (3.1)', () => {
       'refactor',
       'spec',
       'execute',
+      'orchestrate',
       'custom',
       'verify',
     ])
@@ -72,6 +74,7 @@ describe('노드 (3.1)', () => {
       ['refactor', 'refactor', '계획과 리팩터링', ['refactor.md']],
       ['spec', 'spec', '설계 문답', ['spec.md']],
       ['execute', 'execute', '실행', ['execution.md']],
+      ['orchestrate', 'orchestrate', '자율 진행', ['plan.md']],
       ['custom', 'custom', '커스텀 단계', []],
       ['verify', 'verify', '리뷰와 검증', ['verification.md', 'pr.md']],
     ])

@@ -351,7 +351,7 @@ export function App() {
     return (
       <button
         key={w.key}
-        className={`work-item${w.key === selectedWork ? ' selected' : ''}`}
+        className={`work-item${w.key === selectedWork ? ' selected' : ''}${w.parent && !inArchive ? ' child-work' : ''}`}
         onClick={() => selectWorkKey(w.key)}
         onContextMenu={
           w.canShelve || w.canDelete
@@ -371,8 +371,14 @@ export function App() {
           <span className="type-tag" title={w.customType?.name ?? WORK_TYPE_LABEL[w.type]}>
             {WORK_TYPE_SHORT[w.type]}
           </span>{' '}
-          {/* relay MCP 호출자가 진행하는 Work (D519) */}
-          {w.driver === 'caller' ? (
+          {/* relay MCP 호출자가 진행하는 Work (D519). 자식 Work는 부모가 진행한다 (D549) */}
+          {w.parent ? (
+            <>
+              <span className="type-tag caller-tag" title="부모 Work가 진행하는 자식 Work">
+                자식
+              </span>{' '}
+            </>
+          ) : w.driver === 'caller' ? (
             <>
               <span className="type-tag caller-tag" title="MCP 호출자가 진행하는 Work">
                 MCP

@@ -516,6 +516,7 @@ const WORK_KEYS = [
   'question_mode',
   'respond_auto_start',
   'code_review',
+  'session_pr_notify',
 ] as const
 
 /** 커스텀 단계의 자동 승인 (D457). 키는 단계 id 모양이어야 한다. 그 Work에 있는 단계인지는 보지 않는다(없는 단계는 쓰이지 않음) */
@@ -545,9 +546,10 @@ export function checkWorkSettings(input: unknown): Checked<WorkSettingsPatch> {
       return { ok: false, error: `Work 설정에서 바꿀 수 없는 값: ${key}` }
     }
     if (v === undefined) continue
-    if (key === 'respond_auto_start' || key === 'code_review') {
+    if (key === 'respond_auto_start' || key === 'code_review' || key === 'session_pr_notify') {
       if (v !== null && typeof v !== 'boolean') {
-        return { ok: false, error: `${NAMES[key]}: true/false나 null이어야 함` }
+        const name = key === 'session_pr_notify' ? '세션에 PR 알리기' : NAMES[key]
+        return { ok: false, error: `${name}: true/false나 null이어야 함` }
       }
       out[key] = v
     } else if (key === 'question_mode') {
@@ -578,16 +580,18 @@ export function mergeWorkSettings(current: WorkSettings, patch: WorkSettingsPatc
   const auto = pick(current.auto_approve, patch.auto_approve)
   const custom = pick(current.custom_auto_approve, patch.custom_auto_approve)
   const modes = pick(current.question_mode, patch.question_mode)
-  const flag = (key: 'respond_auto_start' | 'code_review') =>
+  const flag = (key: 'respond_auto_start' | 'code_review' | 'session_pr_notify') =>
     patch[key] === undefined ? current[key] : (patch[key] ?? undefined)
   const start = flag('respond_auto_start')
   const review = flag('code_review')
+  const notify = flag('session_pr_notify')
   return {
     ...(auto ? { auto_approve: auto } : {}),
     ...(custom ? { custom_auto_approve: custom } : {}),
     ...(modes ? { question_mode: modes } : {}),
     ...(start === undefined ? {} : { respond_auto_start: start }),
     ...(review === undefined ? {} : { code_review: review }),
+    ...(notify === undefined ? {} : { session_pr_notify: notify }),
   }
 }
 

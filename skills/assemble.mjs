@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'custom'];
+export const TYPES = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'auto', 'custom'];
 
 // 스킬 원본 맨 앞의 머리글(`---`로 감싼 YAML)과 그 뒤의 빈 줄을 뗀다 (docs/design.md D440, D444). 앱의
 // stripFrontMatter(app/src/adapters/claude.ts)와 같은 결과인지 app/test/adapters/store.test.ts가 비교한다.
@@ -50,12 +50,12 @@ export function assemble(text, type) {
 // app/test/adapters/store.test.ts가 비교한다.
 
 
-export const FLAGS = ['code', 'document', 'check-method', 'no-check-method', 'custom', 'builtin'];
+export const FLAGS = ['code', 'document', 'check-method', 'no-check-method', 'custom', 'builtin', 'guided', 'autonomous'];
 export const SLOTS = ['finish', 'pr-template'];
 // 기본 유형 (skills/types/<id>/)
-export const BUILTIN = ['bugfix', 'feature', 'refactor', 'spec', 'general'];
+export const BUILTIN = ['bugfix', 'feature', 'refactor', 'spec', 'general', 'auto'];
 // 기본 유형의 단계 (절차 파일 skills/types/<유형>/<단계>.md)
-export const STEPS = { bugfix: ['fix'], feature: ['design', 'implement'], refactor: ['refactor'], spec: ['spec'], general: ['execute'] };
+export const STEPS = { bugfix: ['fix'], feature: ['design', 'implement'], refactor: ['refactor'], spec: ['spec'], general: ['execute'], auto: ['orchestrate'] };
 
 const FLAG_OPEN = /^<!-- if: ([a-z-]+(?: [a-z-]+)*) -->$/;
 const FLAG_CLOSE = '<!-- /if -->';
@@ -102,10 +102,15 @@ export function fillSlots(text, slots) {
 }
 
 // 유형의 설정 구간 표시 (app/src/core/builtin-types의 assemblyFlags). 커스텀은 기록에 따라 다르고, 표시를 주지 않으면 1판
-// 커스텀 유형(확인 방법을 켠 코드 유형)이다
+// 커스텀 유형(확인 방법을 켠 코드 유형)이다. 자율(auto)만 사람에게 묻지 않고 마무리한다(autonomous, D538)
 export function flagsOf(type, def) {
   const d = def ?? (type === 'custom' ? { check_method: true, target: 'code' } : readType(type));
-  return [d.target ?? 'code', (d.check_method ?? true) ? 'check-method' : 'no-check-method', type === 'custom' ? 'custom' : 'builtin'];
+  return [
+    d.target ?? 'code',
+    (d.check_method ?? true) ? 'check-method' : 'no-check-method',
+    type === 'custom' ? 'custom' : 'builtin',
+    type === 'auto' ? 'autonomous' : 'guided',
+  ];
 }
 
 // fileURLToPath: Windows의 드라이브 문자와 경로의 공백·한글을 바르게 읽는다
@@ -115,7 +120,7 @@ export function readType(type, root = skillsDir) {
   return JSON.parse(readFileSync(join(root, 'types', type, 'type.json'), 'utf8'));
 }
 
-const STEP_SKILLS = ['fix', 'design', 'implement', 'refactor', 'spec', 'execute', 'custom'];
+const STEP_SKILLS = ['fix', 'design', 'implement', 'refactor', 'spec', 'execute', 'orchestrate', 'custom'];
 const section = (head, text) => `\n\n${head}\n\n${lf(text).trim()}\n`;
 const merge = (a, b) => `${lf(a).trimEnd()}\n${lf(b)}`;
 

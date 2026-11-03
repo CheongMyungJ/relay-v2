@@ -40,14 +40,25 @@ const ITEM_ACTION: Partial<Record<PrItemView['status'], [PrItemAction, string]>>
   not_accepted: ['accept', '받기'],
 }
 
-export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
+/**
+ * watch가 있으면 세션이 연 PR을 보기만 한다 (D565): 대응, 머지, 자동 대응, 항목 바꾸기가 없고 [새로 고침]은 watch를 부른다
+ */
+export function PrPanel({
+  work,
+  pr,
+  watch,
+}: {
+  work: WorkView
+  pr: PrView
+  watch?: () => Promise<{ ok: true } | { ok: false; error: string }>
+}) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
   const [ending, setEnding] = useState(false)
   const [instruction, setInstruction] = useState('')
   // PR 카드가 여럿이면 머지했거나 끝낸 카드는 Work가 PR 진행이어도 끝났다 (D480)
-  const active = work.status === 'pr' && pr.merged === null && pr.ended === null
+  const active = !watch && work.status === 'pr' && pr.merged === null && pr.ended === null
   const cut = work.operation !== null
   // 도는 PR 대응 task가 있으면 [머지 없이 끝내기] 전에 [즉시 중단]한다
   const current = work.tasks.find((t) => t.id === work.current)
@@ -128,10 +139,12 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
                 : '아직 읽지 않음'}
             {pr.closed && active ? ' · 닫혀 자동 읽기를 멈춤' : ''}
           </span>
-          {active ? (
+          {active || watch ? (
             <button
-              disabled={!!busy || pr.reading || cut}
-              onClick={() => void run('새로 고침', () => window.relay.prRefresh(work.key, repo))}
+              disabled={!!busy || pr.reading || (!watch && cut)}
+              onClick={() =>
+                void run('새로 고침', () => watch?.() ?? window.relay.prRefresh(work.key, repo))
+              }
             >
               새로 고침
             </button>
@@ -139,6 +152,13 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
         </div>
         {pr.error ? <div className="error">{pr.error}</div> : null}
       </section>
+
+      {watch ? (
+        <div className="dim" role="note">
+          세션이 연 PR입니다. relay는 읽어서 보여 주고 새 항목을 세션에 알립니다(위의 줄에서 끌 수
+          있음). 대응은 세션이 하고, 머지는 GitHub에서 사람이 합니다.
+        </div>
+      ) : null}
 
       {active && pr.closed ? (
         <div className="notice fail" role="status">
@@ -282,6 +302,7 @@ export function PrPanel({ work, pr }: { work: WorkView; pr: PrView }) {
                   <Item
                     key={i.id}
                     item={i}
+                    readOnly={!!watch}
                     busy={!!busy || !active || cut}
                     onAction={(action) =>
                       void run(ITEM_ACTION[i.status]?.[1] ?? '항목', () =>
@@ -402,13 +423,15 @@ function Round({ round }: { round: RoundView }) {
 function Item({
   item,
   busy,
+  readOnly,
   onAction,
 }: {
   item: PrItemView
   busy: boolean
+  readOnly?: boolean
   onAction: (action: PrItemAction) => void
 }) {
-  const action = item.gone ? undefined : ITEM_ACTION[item.status]
+  const action = item.gone || readOnly ? undefined : ITEM_ACTION[item.status]
   return (
     <div className={`pr-item st-${item.status}`} aria-label={`${item.kindLabel} ${item.id}`}>
       <div className="pr-item-head">

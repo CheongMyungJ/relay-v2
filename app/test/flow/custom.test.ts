@@ -286,6 +286,7 @@ describe('[흐름] 커스텀 유형 (M30)', () => {
       'refactor',
       'spec',
       'general',
+      'auto',
     ])
     const step = await s.h.relay.baseStep('general', 'execute')
     expect(step?.procedure).toMatch(/^# relay: execute/)

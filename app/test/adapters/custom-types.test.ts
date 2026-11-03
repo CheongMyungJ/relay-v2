@@ -461,7 +461,7 @@ describe('[어댑터] 커스텀 Work의 절차 조립 (D452, D456, D507, D508)',
 })
 
 describe('[어댑터] 기본 유형 폴더 (D506, D512)', () => {
-  it('기본 유형 다섯을 읽고, 모두 형식에 맞다', async () => {
+  it('기본 유형 여섯을 읽고, 모두 형식에 맞다', async () => {
     const types = await listBuiltinTypes(path.join(SKILLS, TYPES_DIR))
     expect(types.map((t) => [t.id, t.source, t.errors])).toEqual([
       ['bugfix', 'builtin', []],
@@ -469,6 +469,7 @@ describe('[어댑터] 기본 유형 폴더 (D506, D512)', () => {
       ['refactor', 'builtin', []],
       ['spec', 'builtin', []],
       ['general', 'builtin', []],
+      ['auto', 'builtin', []],
     ])
   })
 

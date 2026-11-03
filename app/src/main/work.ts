@@ -78,6 +78,7 @@ import {
   refCommit,
   refNames,
   remoteBranchExists,
+  remoteBranchesAfter,
   remoteUrl,
   removeWorktree,
   repairSubmoduleWorktree,
@@ -165,6 +166,7 @@ import {
   customSections,
   customStep,
   finishesWork,
+  sessionDriven,
   isPipelineNode,
   isStepNode,
   nodeTitle,
@@ -233,6 +235,7 @@ import {
   mergeGate,
   prBadgeKind,
   prLocation,
+  prItemView,
   prView,
   preferredMethod,
   repoArg,
@@ -351,6 +354,19 @@ import {
   type TaskCheck,
   type TaskCheckInput,
 } from '../core/validate'
+import { PLAN_FILE, planView } from '../core/autonomy'
+import { riskyGitCommand } from '../core/git-guard'
+import {
+  childContext,
+  childRules,
+  childTurnEnded,
+  mergedHandoff,
+  prWatchLine,
+  prWatchSection,
+  sessionHandoff,
+  type ChildLink,
+  type PrWatchItem,
+} from '../core/children'
 import type { AppConfig, WorkSettingsPatch } from '../shared/config'
 import {
   EMPTY_PR_ITEMS,
@@ -412,6 +428,7 @@ import type {
   RespondReview,
   RespondStartInput,
   ReviewView,
+  SessionFactsView,
   TaskView,
   TerminalBacklog,
   ToolActivityView,
@@ -541,7 +558,24 @@ export interface RunnerContext {
   at(): string
   /** 새 PTY의 크기. 탭이 크기를 알리면 그 크기를 쓴다 */
   size(): { cols: number; rows: number }
+  /** 자식 Work 도구의 호출 (D544, main/children) */
+  children(
+    parentKey: string,
+    taskId: string,
+    tool: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<unknown>
+  /** 부모 브랜치에 합쳐진 자식 Work를 닫는다 (D556) */
+  closeMergedChildren(parentKey: string): Promise<void>
+  /** 끝나지 않은 자식 Work의 key (D561) */
+  openChildren(parentKey: string): string[]
+  /** 같은 프로젝트의 다른 Work의 제목과 worktree (D553: 자식이 부모 세션을 찾는다). 없으면 null */
+  workInfo(projectId: string, workId: string): { title: string; tree: string } | null
 }
+
+/** 서브에이전트를 띄우는 도구 이름 (D542). Claude Code는 Agent로 바꿨고 옛 판은 Task다 */
+const SUBAGENT_TOOLS: readonly string[] = ['Agent', 'Task']
 
 interface LiveSession {
   question?: PendingHumanQuestion
@@ -565,6 +599,11 @@ interface LiveSession {
   /** 진행 표시 (D216): 이번 턴이 시작한 때(UserPromptSubmit)와 마지막 도구. 기록하지 않고 살아 있는 동안만 둔다 */
   turnStartedAt: number | null
   tool: (ToolActivityView & { id?: string; name: string }) | null
+  /**
+   * 돌고 있는 서브에이전트 (D542): 바깥 대화의 서브에이전트 도구(PreToolUse ~ PostToolUse)를 tool_use_id로 둔다. 기록하지
+   * 않고 살아 있는 동안만 둔다
+   */
+  agents: Map<string, { label: string; startedAt: number }>
 }
 
 interface PendingHumanQuestion {
@@ -628,6 +667,28 @@ const TOOL_HOOKS: readonly string[] = ['PreToolUse', 'PostToolUse', 'PostToolUse
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+
+/** 세션에 알린 PR 항목의 내용 (D566). task 디렉터리에 둔다 */
+const PR_WATCH_FILE = 'pr-watch.md'
+/** 세션에 알렸거나 알릴 줄에 넣은 PR 항목 id (D566) */
+const PR_WATCH_STATE = 'pr-watch.json'
+
+/** 훅 본문의 셸 명령 (Claude의 Bash, Codex의 명령). 셸 도구가 아니면 undefined */
+function bashCommand(body: Record<string, unknown>): string | undefined {
+  const input = body['tool_input']
+  if (typeof input !== 'object' || input === null) return undefined
+  const command = (input as Record<string, unknown>)['command']
+  if (typeof command === 'string') return command
+  if (Array.isArray(command) && command.every((c) => typeof c === 'string'))
+    return command.join(' ')
+  return undefined
+}
+
+/** git push나 gh pr을 부른 셸 명령인가 (D560, D565). 세션은 push한 뒤 gh pr create로 PR을 연다. 낱말만 본다 */
+function pushCommand(body: Record<string, unknown>): boolean {
+  const c = bashCommand(body) ?? ''
+  return /\bgit\b[^;&|\n]*\bpush\b/.test(c) || /\bgh\b[^;&|\n]*\bpr\b/.test(c)
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const exists = (p: string) =>
   fsp.stat(p).then(
@@ -1083,6 +1144,9 @@ export class WorkRunner {
         await this.ownedWritten('decisions.md', written)
         return
       }
+      case 'writeIntent':
+        await this.writeParentIntent(e.text, e.version)
+        return
       case 'confirmIntent':
         await this.confirmIntent(e.taskId, e.version)
         return
@@ -1154,6 +1218,7 @@ export class WorkRunner {
       ...(knowledge?.warnings.length ? { knowledgeWarnings: knowledge.warnings } : {}),
       ...(step ? { customStep: { id: step.id, sections: customSections(step) } } : {}),
       ...(bundleDrafts ? { bundleDrafts } : {}),
+      ...(this.pushesItself(task) ? { sessionDriven: true } : {}),
       // 마무리 단계는 리뷰 요청 때와 마무리 때의 필수 산출물이 다르다 (D494)
       ...(finishesWork(this.work, task)
         ? { finishing: { requested: task.review !== undefined } }
@@ -1190,6 +1255,23 @@ export class WorkRunner {
     opts: { stop?: boolean } = {},
   ): Promise<TaskCheck> {
     const f = files ?? (await this.files.taskFiles(task))
+    // 자율 진행이 턴을 끝낼 때 부모 브랜치에 합쳐진 자식을 닫는다 (D556)
+    if (opts.stop && task.node === 'orchestrate' && !this.work.parent)
+      await this.ctx.closeMergedChildren(this.key).catch(() => undefined)
+    // 세션이 턴을 끝낼 때 push한 브랜치와 PR을 다시 보고, 쉬는 동안 쌓인 알림을 보내고, PR이 다 끝났으면 Work를 끝낸다
+    // (D565~D567). 턴이 끝난 상태가 반영된 뒤에 하도록 잠깐 둔다. 기다리지 않는다
+    if (opts.stop && this.pushesItself(task) && !this.closing) {
+      if (this.sessionStopTimer) clearTimeout(this.sessionStopTimer)
+      this.sessionStopTimer = setTimeout(() => {
+        this.sessionStopTimer = null
+        if (this.closing) return
+        this.sessionPrTrack(
+          this.watchSessionPrs()
+            .then(() => this.deliverPrWatch())
+            .then(() => this.completeIfPrsDone()),
+        )
+      }, 1000)
+    }
     return this.check(
       task,
       f,
@@ -1359,7 +1441,7 @@ export class WorkRunner {
       .then(() =>
         controller.signal.aborted
           ? undefined
-          : this.runReview(taskId, codeReview, controller.signal),
+          : this.runReview(taskId, codeReview, controller.signal).then(() => undefined),
       )
       .catch(async (e: unknown) => {
         // 리뷰를 돌리지 못해도(지침을 읽지 못함, 변경 파일을 쓰지 못함 등) 끝난 것으로 넣는다: 독립 리뷰 중에 머물지 않고
@@ -1452,9 +1534,13 @@ export class WorkRunner {
    * 독립 리뷰 (D495): 변경 파일을 만들고, 찾기(codeReview일 때)와 확인을 차례로 부르고, 결과 글과 기록을 쓴 뒤
    * review.finished를 넣는다. 호출이 실패해도 결과 글에 까닭을 적고 이어 간다. [Work 포기]로 끊기면 아무것도 넣지 않는다
    */
-  private async runReview(taskId: string, codeReview: boolean, signal: AbortSignal): Promise<void> {
+  private async runReview(
+    taskId: string,
+    codeReview: boolean,
+    signal: AbortSignal,
+  ): Promise<ReviewResult | undefined> {
     const task = this.task(taskId)
-    if (!task) return
+    if (!task) return undefined
     const started = Date.now()
     const { env } = this.ctx
     const dir = this.files.taskDir(task)
@@ -1560,7 +1646,7 @@ export class WorkRunner {
       const last = calls[calls.length - 1]
       if (last) last.count = found?.candidates.length ?? 0
     }
-    if (signal.aborted) return
+    if (signal.aborted) return undefined
     const candidates = found?.candidates ?? []
     const verification = path.join(dir, VERIFICATION_FILE)
     const verificationText = (await readText(verification)) ?? ''
@@ -1572,7 +1658,7 @@ export class WorkRunner {
       }),
       CHECK_SCHEMA,
     )
-    if (signal.aborted) return
+    if (signal.aborted) return undefined
     const checked = r.error ? null : readCheck(r.data, candidates)
     const checkError = r.error ?? (checked ? null : '구조화된 출력을 읽지 못함')
     const last = calls[calls.length - 1]
@@ -1600,6 +1686,14 @@ export class WorkRunner {
       objections: result.objections.length,
       ms: Date.now() - started,
     })
+    return result
+  }
+
+  /** 자식 task의 기록용 handoff를 쓴다 (D555, D556): 자식을 닫을 때 앱이 대신 쓴다 */
+  async writeChildHandoff(text: string): Promise<void> {
+    const task = currentTask(this.work)
+    if (!task) throw new Error('지금 task가 없음')
+    await writeFileAtomic(path.join(this.files.taskDir(task), HANDOFF_FILE), text)
   }
 
   /**
@@ -1886,6 +1980,8 @@ export class WorkRunner {
       // relay MCP 호출자가 진행하는 Work의 Claude task는 relay MCP로 묻는다 (D521). 시작할 때 정해 task에 남긴다
       const caller = workDriver(this.work) === 'caller'
       const ask = asksViaMcp({ ask: caller ? 'mcp' : undefined }, driver.engine)
+      // 자식 세션은 단계 절차 대신 연결 규칙만 받고, context.md는 부모의 지시뿐이다 (D552)
+      const link = this.work.parent ? this.childLink(dir) : null
       const deployed = await driver.deploySkill({
         source: this.ctx.skills,
         workDir: this.files.dir,
@@ -1896,19 +1992,27 @@ export class WorkRunner {
         ...this.typeSource(task),
         finishing: finishesWork(this.work, task),
         askViaMcp: ask,
-        callerAnswers: caller,
+        callerAnswers: caller && this.work.parent ? 'parent' : caller,
+        ...(await this.bareRules(task, dir)),
       })
       const version = await driver.version(bin, env)
 
       // Work 완료 화면이 되는 task의 마무리 안내 문구(D104)와 전달 버튼이 쓸 점검을 새로 한다 (D118, D500)
       if (completesWork(this.work, task)) await this.recheckProject()
       const settingsPath = await this.writeSettings(task)
-      await writeFileAtomic(contextPath, await this.context(task, dir, this.approvedBefore(task)))
+      await writeFileAtomic(
+        contextPath,
+        link
+          ? childContext({ ...link, brief: await this.parentBrief() })
+          : await this.context(task, dir, this.approvedBefore(task)),
+      )
 
       // Codex의 id는 SessionStart/턴 훅에서 받는다. 임의의 UUID로 재개하지 않는다.
       const sessionId = driver.engine === 'claude' ? randomUUID() : ''
       const token = randomBytes(32).toString('hex')
       const claudeAsk = ask && driver.engine === 'claude'
+      // 자율 Work의 자율 진행은 자식 Work 도구를 받는다 (D544). 사람이 진행하면 질문은 지금처럼 터미널에서 묻는다
+      const children = this.spawnsChildren(task, driver.engine)
       const args = await driver.launchArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1919,10 +2023,14 @@ export class WorkRunner {
         skill,
         contextPath,
         ...pinnedAgent(task),
-        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(claudeAsk || children
+          ? { mcpConfigPath: await this.writeMcpConfig(task, children, !claudeAsk) }
+          : {}),
+        ...(children && !claudeAsk ? { keepAskTool: true } : {}),
       })
       const session = this.launch(task, bin, token, args, turnSnapshot(task, {}), startMark(task), {
         ask: claudeAsk,
+        children,
       })
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -1984,6 +2092,7 @@ export class WorkRunner {
         driver.engine === 'claude' ? await this.instructionsFor(task) : undefined
       // 시작할 때 relay MCP로 묻게 띄운 task는 재개도 같은 길이다 (D521)
       const claudeAsk = driver.engine === 'claude' && task.ask === 'mcp'
+      const children = this.spawnsChildren(task, driver.engine)
       const args = await driver.resumeArgs({
         sessionId,
         workDir: this.files.dir,
@@ -1992,7 +2101,10 @@ export class WorkRunner {
         ...(instructionsPath ? { instructionsPath } : {}),
         ...pinnedAgent(task),
         ...(prompt ? { prompt } : {}),
-        ...(claudeAsk ? { mcpConfigPath: await this.writeMcpConfig(task) } : {}),
+        ...(claudeAsk || children
+          ? { mcpConfigPath: await this.writeMcpConfig(task, children, !claudeAsk) }
+          : {}),
+        ...(children && !claudeAsk ? { keepAskTool: true } : {}),
       })
       const session = this.launch(
         task,
@@ -2001,7 +2113,7 @@ export class WorkRunner {
         args,
         await this.turnState(task, files),
         RESUME_MARK,
-        { ask: claudeAsk },
+        { ask: claudeAsk, children },
       )
       const processStartedAt = await processStartTime(session.pty.pid)
       await this.feed({
@@ -2038,7 +2150,9 @@ export class WorkRunner {
       ...this.typeSource(task),
       finishing: finishesWork(this.work, task),
       askViaMcp: task.ask === 'mcp',
-      callerAnswers: workDriver(this.work) === 'caller',
+      callerAnswers:
+        workDriver(this.work) === 'caller' ? (this.work.parent ? 'parent' : true) : false,
+      ...(await this.bareRules(task, dir)),
     })
     return deployed.file
   }
@@ -2047,7 +2161,7 @@ export class WorkRunner {
    * relay MCP로 묻는 Claude task의 MCP 설정 파일 (D521). 훅 서버의 포트가 바뀔 수 있어 띄울 때마다 새로 쓴다(I13과 같음).
    * 브리지는 Codex task와 같은 것이다
    */
-  private async writeMcpConfig(task: TaskRecord): Promise<string> {
+  private async writeMcpConfig(task: TaskRecord, children = false, noAsk = false): Promise<string> {
     const file = path.join(this.files.taskDir(task), MCP_CONFIG_FILE)
     await writeJson(
       file,
@@ -2056,9 +2170,42 @@ export class WorkRunner {
         bridge: codexBridgePath(),
         port: this.ctx.hooks.port,
         taskId: task.id,
+        ...(children ? { children: true } : {}),
+        ...(noAsk ? { noAsk: true } : {}),
       }),
     )
     return file
+  }
+
+  /**
+   * 자식 Work 도구를 받는 task인가 (D544, D545): 자식이 아닌 자율 Work의 자율 진행이고 Claude다. 자식 Work는 받지 않아 깊이가
+   * 1이다. Codex는 서브에이전트와 MCP 설정 길이 달라 아직 받지 않는다
+   */
+  private spawnsChildren(task: TaskRecord, engine: string): boolean {
+    return (
+      engine === 'claude' &&
+      task.node === 'orchestrate' &&
+      workType(this.work) === 'auto' &&
+      this.work.parent === undefined
+    )
+  }
+
+  /** 자식 Work 도구의 호출 (D544): 처리 줄 밖에서 Relay의 ChildService로 넘긴다 */
+  private async childCall(
+    taskId: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    const tool = typeof body['tool'] === 'string' ? body['tool'] : ''
+    const raw = body['args']
+    const args =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : {}
+    return (await this.ctx.children(this.key, taskId, tool, args, signal)) as Record<
+      string,
+      unknown
+    >
   }
 
   /**
@@ -2103,6 +2250,8 @@ export class WorkRunner {
         skill: NODE_INFO[task.node].skill,
         workDir: this.files.dir,
         previousTaskDirs: earlier.map((t) => this.files.taskDir(t)),
+        // 세션이 하는 Work의 자율 진행은 push와 PR을 직접 한다. 위험한 것만 훅이 막는다 (D557, D558)
+        ...(this.pushesItself(task) ? { allowPush: true } : {}),
         ...pinnedAgent(task),
       }),
     )
@@ -2436,7 +2585,7 @@ export class WorkRunner {
     args: string[],
     turnFiles: string,
     mark?: string,
-    opts: { ask?: boolean } = {},
+    opts: { ask?: boolean; children?: boolean } = {},
   ): LiveSession {
     const { cols, rows } = this.ctx.size()
     const pty = startPty({
@@ -2446,8 +2595,8 @@ export class WorkRunner {
       env: {
         ...this.agentEnv(),
         ...agentRuntime(taskEngine(task)).launchEnv(token, this.ctx.hooks.port, task.id),
-        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521)
-        ...(opts.ask ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
+        // relay MCP의 질문은 호출자의 답을 기다린다: Codex의 도구 제한 시간(하루)과 맞춘다 (D521). 자식 도구도 같은 값을 쓴다
+        ...(opts.ask || opts.children ? { MCP_TOOL_TIMEOUT: String(ASK_TIMEOUT_MS) } : {}),
       },
       cols,
       rows,
@@ -2475,6 +2624,7 @@ export class WorkRunner {
       sawHook: false,
       turnStartedAt: null,
       tool: null,
+      agents: new Map(),
     }
     const write = (data: string) => {
       log.write(data)
@@ -2504,9 +2654,14 @@ export class WorkRunner {
             failClosed: true,
             question: (body, signal) => this.askHuman(task.id, session, body, signal),
           }
-        : opts.ask
-          ? { question: (body, signal) => this.askHuman(task.id, session, body, signal) }
-          : {},
+        : {
+            ...(opts.ask
+              ? { question: (body, signal) => this.askHuman(task.id, session, body, signal) }
+              : {}),
+            ...(opts.children
+              ? { child: (body, signal) => this.childCall(task.id, body, signal) }
+              : {}),
+          },
     )
     session.unwatch = watchDir(this.files.taskDir(task), () => {
       void this.enqueue(() => this.onWatch(task.id))
@@ -2656,6 +2811,449 @@ export class WorkRunner {
     )
   }
 
+  /** 세션이 push와 PR을 직접 하는 task인가 (D557): 세션이 하는 Work의 자율 진행 */
+  private pushesItself(task: Pick<TaskRecord, 'node'>): boolean {
+    return sessionDriven(this.work) && task.node === 'orchestrate'
+  }
+
+  /** 막을 git·gh 명령이면 PreToolUse 거절 (D558): 지킬 브랜치는 머지 대상과 기준 브랜치다 */
+  private gitGuardReply(req: HookRequest, task?: TaskRecord): HookReply {
+    if (!task || !this.pushesItself(task)) return null
+    const command = bashCommand(req.body)
+    if (command === undefined) return null
+    const reason = riskyGitCommand(
+      command,
+      [this.work.target_branch, this.work.base_branch].filter((b): b is string => !!b),
+    )
+    return reason
+      ? {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: reason,
+          },
+        }
+      : null
+  }
+
+  /** push한 브랜치마다 찾은 열린 PR (D560). gh가 없거나 실패하면 null. 메모리에만 둔다 */
+  private sessionPrs = new Map<string, { number: number; url: string } | null>()
+
+  /** 줄 밖의 세션 PR 일을 기다릴 수 있게 적어 둔다 (D565) */
+  private sessionPrTrack(p: Promise<unknown>): void {
+    const tracked = p.catch((e: unknown) =>
+      console.error(`[${this.key}] 세션 PR 처리 실패: ${message(e)}`),
+    )
+    this.sessionPrBusy.add(tracked)
+    void tracked.finally(() => this.sessionPrBusy.delete(tracked))
+  }
+
+  /** push 뒤의 처리를 줄 밖에서 한다 (D560) */
+  private afterPushSoon(taskId: string): void {
+    if (this.closing) return
+    this.sessionPrTrack(this.afterPush(taskId))
+  }
+
+  /** 세션이 push한 뒤 (D560): push한 브랜치의 PR을 다시 찾고 화면을 다시 그린다 */
+  private async afterPush(taskId: string): Promise<void> {
+    const task = this.task(taskId)
+    if (!task || !this.pushesItself(task)) return
+    await this.watchSessionPrs()
+  }
+
+  /**
+   * 세션이 연 PR을 읽은 것 (D565): PR 주소마다 마지막 읽기, 모은 항목, 오류. PR 진행(D158)의 읽기와 같은 것을 읽기만 한다:
+   * fast-forward, pr-items.json, 상태 바꾸기, 알림이 없다. 메모리에만 둔다(앱을 켜면 다시 읽는다)
+   */
+  private sessionPrReads = new Map<
+    string,
+    {
+      branch: string
+      number: number
+      url: string
+      read: PrReadState | null
+      items: PrItem[]
+      error: string | null
+      reading: boolean
+      headSeen: Map<string, number>
+      runEvents: Map<number, string>
+    }
+  >()
+  private sessionPrTimer: ReturnType<typeof setTimeout> | null = null
+  /** 세션 PR을 찾고 읽고 알리는 줄 밖의 일 (D565~D567). 앱을 끝내거나 시험 도구가 폴더를 지우기 전에 기다린다 */
+  private readonly sessionPrBusy = new Set<Promise<unknown>>()
+  /** 세션이 턴을 끝낸 뒤의 처리를 미룬 타이머 (D565) */
+  private sessionStopTimer: ReturnType<typeof setTimeout> | null = null
+  /** 도는 세션 PR 읽기 (D565). 읽는 동안 다시 부르면 끝난 뒤 한 번 더 읽는다(타이머가 둘이 되지 않게) */
+  private sessionPrReading: Promise<CommandResult> | null = null
+  private sessionPrAgain: { force: boolean } | null = null
+  /** 세션에 알릴 새 PR 항목 (D566). 세션이 쉬면 보낸다 */
+  private prWatchPending: PrWatchItem[] = []
+  /** 이미 알렸거나 알릴 줄에 넣은 항목 id (D566). task 디렉터리의 pr-watch.json에 남겨 앱을 다시 켜도 다시 알리지 않는다 */
+  private prWatchSeen: Set<string> | null = null
+
+  /** 세션이 연 PR을 읽고 있는 Work인가: 세션이 하는 Work이고 아직 끝나지 않았다 (D565) */
+  private watchesSessionPrs(): boolean {
+    return sessionDriven(this.work) && this.work.status === 'active' && !this.closing
+  }
+
+  /** 앱을 켤 때와 push 뒤: PR을 찾고 읽고 주기 읽기를 건다 (D565) */
+  private async watchSessionPrs(): Promise<void> {
+    if (!this.watchesSessionPrs()) return
+    await this.refreshSessionPrs()
+    await this.readSessionPrs()
+  }
+
+  /**
+   * 세션이 연 PR을 모두 한 번 읽는다 (D565). 닫히거나 머지된 PR은 [새로 고침]으로만 다시 읽는다. 읽는 중이면 그 읽기가 끝난
+   * 뒤 한 번 더 읽는다: 겹친 읽기가 주기 타이머를 둘 걸지 않게 한다
+   */
+  readSessionPrs(force = false): Promise<CommandResult> {
+    if (this.sessionPrReading) {
+      this.sessionPrAgain = { force: force || (this.sessionPrAgain?.force ?? false) }
+      return this.sessionPrReading
+    }
+    const run = (async (): Promise<CommandResult> => {
+      let r = await this.readSessionPrsOnce(force)
+      while (this.sessionPrAgain) {
+        const again = this.sessionPrAgain
+        this.sessionPrAgain = null
+        r = await this.readSessionPrsOnce(again.force)
+      }
+      return r
+    })().finally(() => {
+      this.sessionPrReading = null
+    })
+    this.sessionPrReading = run
+    return run
+  }
+
+  private async readSessionPrsOnce(force: boolean): Promise<CommandResult> {
+    if (this.closing) return { ok: false, error: '앱을 끝내는 중' }
+    if (!sessionDriven(this.work)) return { ok: false, error: '세션이 하는 Work가 아님' }
+    // [새로 고침]은 새로 열린 PR도 찾는다
+    if (force) await this.refreshSessionPrs()
+    if (this.sessionPrTimer) clearTimeout(this.sessionPrTimer)
+    this.sessionPrTimer = null
+    const rules = this.prRules('')
+    for (const r of this.sessionPrReads.values()) {
+      if (!force && r.read && r.read.state !== 'OPEN') continue
+      const location = prLocation(r.url)
+      if (!location) {
+        r.error = `PR 주소를 읽지 못함: ${r.url}`
+        continue
+      }
+      r.reading = true
+      this.changed()
+      try {
+        const f = await readPr(
+          {
+            ghBin: this.ctx.ghBin,
+            env: this.ctx.env,
+            repo: this.project.repo_path,
+            worktree: this.worktree,
+            ignore: this.laneIgnore(''),
+            branch: r.branch,
+            location,
+            runEvents: r.runEvents,
+          },
+          (id, job) => ciLogRead(r.items, id, job),
+        )
+        const now = Date.now()
+        const seen = r.headSeen.get(f.view.head) ?? now
+        r.headSeen.set(f.view.head, seen)
+        r.items = gatherItems(
+          r.items,
+          {
+            at: this.ctx.at(),
+            head: f.view.head,
+            comments: f.comments,
+            failing: f.checks.filter((c) => c.bucket === 'fail'),
+            conflict: f.conflict,
+            // 세션의 브랜치와 원격을 맞추는 일은 세션이 한다: 갈라짐은 보지 않는다
+            diverged: undefined,
+            logs: f.logs,
+          },
+          rules,
+        ).items
+        r.read = {
+          at: this.ctx.at(),
+          state: f.view.state,
+          head: f.view.head,
+          headRef: f.view.headRef,
+          baseRef: f.view.baseRef,
+          isDraft: f.view.isDraft,
+          mergeable: f.view.mergeable,
+          mergeStateStatus: f.view.mergeStateStatus,
+          reviewDecision: f.view.reviewDecision,
+          checks: f.checks,
+          ci: ciState(f.checks, now - seen >= CHECK_WAIT_MS),
+          sync: null,
+        }
+        r.error = f.warnings.length ? f.warnings.join(' / ') : null
+        await this.queuePrWatch(r.number, r.branch, r.items, rules)
+      } catch (e) {
+        r.error = `PR을 읽지 못함: ${message(e)}`
+      } finally {
+        r.reading = false
+      }
+    }
+    this.changed()
+    await this.deliverPrWatch()
+    await this.completeIfPrsDone()
+    // 열린 PR이 남아 있으면 PR 진행과 같은 간격으로 다시 읽는다 (D158)
+    if (
+      this.watchesSessionPrs() &&
+      [...this.sessionPrReads.values()].some(
+        (r) => r.read?.state !== 'MERGED' && r.read?.state !== 'CLOSED',
+      )
+    ) {
+      this.sessionPrTimer = setTimeout(() => {
+        this.sessionPrTimer = null
+        void this.readSessionPrs()
+      }, this.ctx.config().pr_poll_interval_sec * 1000)
+    }
+    return { ok: true }
+  }
+
+  /** 이 Work의 자율 진행 task (세션이 하는 Work) */
+  private sessionTask(): TaskRecord | undefined {
+    return this.work.tasks.find((t) => this.pushesItself(t) && t.status !== 'approved')
+  }
+
+  /** 세션에 PR을 알리는가 (D566): Work 설정, 없으면 켬 */
+  private prWatchOn(): boolean {
+    return this.work.settings.session_pr_notify !== false
+  }
+
+  /** 새 항목(받은 것)을 알릴 줄에 넣는다 (D566). 알리기를 껐으면 넣지 않는다(켜면 그때 새 항목을 알린다) */
+  private async queuePrWatch(
+    pr: number,
+    branch: string,
+    items: readonly PrItem[],
+    rules: ItemRules,
+  ): Promise<void> {
+    if (!this.prWatchOn()) return
+    const task = this.sessionTask()
+    if (!task) return
+    const file = path.join(this.files.taskDir(task), PR_WATCH_STATE)
+    if (!this.prWatchSeen) {
+      const text = await readText(file)
+      let ids: unknown
+      try {
+        ids = text ? JSON.parse(text) : []
+      } catch {
+        ids = []
+      }
+      this.prWatchSeen = new Set(Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [])
+    }
+    const seen = this.prWatchSeen
+    const queued = new Set(this.prWatchPending.map((p) => p.id))
+    const fresh = items.filter(
+      (i) => i.status === 'new' && !i.gone && !seen.has(i.id) && !queued.has(i.id),
+    )
+    if (!fresh.length) return
+    for (const i of fresh) {
+      const v = prItemView(i, rules)
+      // 남이 쓴 글(코멘트 본문)은 제목에 넣지 않고 인용으로만 둔다
+      const comment = i.body !== undefined
+      this.prWatchPending.push({
+        id: i.id,
+        pr,
+        branch,
+        kind: v.kindLabel,
+        title: comment ? `${i.author?.login ?? '?'}${i.path ? ` · ${i.path}` : ''}` : v.title,
+        url: v.url,
+        text: comment ? (i.body ?? '') : (i.log ?? v.text),
+      })
+    }
+  }
+
+  /**
+   * 알릴 줄을 세션에 보낸다 (D566): 세션이 살아 있고 턴을 끝냈을 때만. pr-watch.md에 내용을 더하고, 터미널에는 수와 종류,
+   * 파일 경로만 한 줄로 넣는다. 일하는 중이면 다음에 턴을 끝낼 때 보낸다
+   */
+  private async deliverPrWatch(): Promise<void> {
+    if (!this.prWatchPending.length || !this.prWatchOn()) return
+    const task = this.sessionTask()
+    if (!task || !this.live.get(task.id)?.pty || !childTurnEnded(task.status)) return
+    const items = this.prWatchPending
+    this.prWatchPending = []
+    // 보낸 항목만 알린 것으로 남긴다: 보내기 전에 앱이 꺼지면 다음에 다시 모아 보낸다
+    const seen = this.prWatchSeen ?? new Set<string>()
+    for (const i of items) seen.add(i.id)
+    this.prWatchSeen = seen
+    await writeJson(path.join(this.files.taskDir(task), PR_WATCH_STATE), [...seen])
+    const file = path.join(this.files.taskDir(task), PR_WATCH_FILE)
+    const before = (await readText(file)) ?? '# relay: 세션이 연 PR의 새 항목\n\n'
+    await writeFileAtomic(file, `${before}${prWatchSection(items, this.ctx.at())}\n`)
+    this.sayToSession(task.id, prWatchLine(items, file))
+  }
+
+  /** 살아 있는 세션의 터미널에 한 줄을 넣고 보낸다 (D566) */
+  private sayToSession(taskId: string, text: string): void {
+    const pty = this.live.get(taskId)?.pty
+    if (!pty) return
+    pty.write(text)
+    setTimeout(() => pty.write('\r'), 300)
+  }
+
+  /**
+   * 세션이 연 PR이 모두 머지되거나 닫혔으면 Work를 끝낸다 (D567). 하나라도 머지됐어야 하고, 세션이 일하는 중이면 다음에 턴을
+   * 끝낼 때 본다. 기록용 handoff를 쓰고 이 Work를 진행하는 쪽의 이름으로 승인해 전달 없이 완료한다
+   */
+  private async completeIfPrsDone(): Promise<void> {
+    if (!this.watchesSessionPrs() || this.work.parent) return
+    const reads = [...this.sessionPrReads.values()]
+    if (
+      !reads.length ||
+      reads.some((r) => r.read?.state !== 'MERGED' && r.read?.state !== 'CLOSED')
+    )
+      return
+    if (!reads.some((r) => r.read?.state === 'MERGED')) return
+    // 끝나지 않은 자식이 있으면 끝내지 않는다: 자식의 질문에 답할 부모가 없어진다. 사람이 [Work 완료]로 정한다
+    if (this.ctx.openChildren(this.key).length) return
+    const task = this.sessionTask()
+    if (!task || !childTurnEnded(task.status)) return
+    await writeFileAtomic(
+      path.join(this.files.taskDir(task), HANDOFF_FILE),
+      mergedHandoff(reads.map((r) => ({ number: r.number, state: r.read?.state ?? '' }))),
+    )
+    await this.approve(task.id, { by: workDriver(this.work) })
+  }
+
+  /** 세션이 연 PR의 패널 (D565): PR 진행의 패널을 읽기 전용으로 만든다. 대응, 머지, 자동 대응은 없다 */
+  private sessionPrViews(): PrView[] {
+    const out: PrView[] = []
+    for (const r of this.sessionPrReads.values()) {
+      const view = prView({
+        work: {
+          status: 'pr',
+          tasks: [],
+          settings: this.work.settings,
+          pr: {
+            number: r.number,
+            url: r.url,
+            head: r.read?.head ?? '',
+            gh_version: null,
+            started_at: r.read?.at ?? this.ctx.at(),
+            ...(r.read ? { read_at: r.read.at } : {}),
+            ...(r.read?.state === 'CLOSED' ? { closed_at: r.read.at } : {}),
+          },
+        },
+        config: this.ctx.config(),
+        read: r.read,
+        file: { ...EMPTY_PR_ITEMS, items: r.items },
+        rules: this.prRules(''),
+        localHead: null,
+        reading: r.reading,
+        error: r.error,
+      })
+      if (!view) continue
+      out.push({
+        ...view,
+        repo: r.branch,
+        gate: { enabled: false, reasons: [] },
+        respond: { enabled: false, reason: null, items: [] },
+        rerun: null,
+        rounds: [],
+        offerClean: false,
+      })
+    }
+    return out
+  }
+
+  /** push한 브랜치마다 열린 PR을 gh로 찾는다 (D560). 실패하면 null로 둔다 */
+  private async refreshSessionPrs(): Promise<void> {
+    const env = this.ctx.env
+    const branches = await this.pushedBranches()
+    const origin = await remoteUrl(this.worktree, 'origin', { env }).catch(() => null)
+    for (const b of branches) {
+      try {
+        if (!origin) throw new Error('origin 원격이 없음')
+        const open = await ghOpenPr(this.ctx.ghBin, {
+          repo: ghRepo(origin),
+          cwd: this.worktree,
+          env,
+          head: b.name,
+          // 앱이 꺼진 동안 머지된 PR도 찾는다 (D567)
+          state: 'all',
+        })
+        this.sessionPrs.set(b.name, open ? { number: open.number, url: open.url } : null)
+        // 찾은 PR은 닫히거나 머지돼도 패널에 남긴다 (D565)
+        if (open && !this.sessionPrReads.has(open.url))
+          this.sessionPrReads.set(open.url, {
+            branch: b.name,
+            number: open.number,
+            url: open.url,
+            read: null,
+            items: [],
+            error: null,
+            reading: false,
+            headSeen: new Map(),
+            runEvents: new Map(),
+          })
+      } catch {
+        this.sessionPrs.set(b.name, null)
+      }
+    }
+  }
+
+  /** 세션이 push한 브랜치 (D560): 기준 커밋 뒤에 커밋이 있는 원격 브랜치 가운데 머지 대상·기준과 다른 Work의 브랜치가 아닌 것 */
+  private async pushedBranches(): Promise<{ name: string; commit: string }[]> {
+    const own = workBranch(this.work)
+    const others = this.ctx.workBranches(this.project.project_id).filter((b) => b !== own)
+    const skip = new Set([this.work.target_branch, this.work.base_branch, ...others])
+    const env = { env: this.ctx.env }
+    try {
+      const remote = (
+        await remoteBranchesAfter(this.worktree, this.work.base_commit, 'origin', env)
+      ).filter((b) => !skip.has(b.name) && b.name !== 'main' && b.name !== 'master')
+      // 세션이 push한 브랜치만: 같은 이름의 로컬 브랜치가 있고 원격 끝을 담는다. 팀원의 브랜치는 원격 추적 참조뿐이다
+      const out: { name: string; commit: string }[] = []
+      for (const b of remote) {
+        const local = await refCommit(this.worktree, `refs/heads/${b.name}`, env)
+        if (!local) continue
+        if (
+          local === b.commit ||
+          (await isAncestor(this.worktree, b.commit, local, env).catch(() => false))
+        )
+          out.push(b)
+      }
+      return out
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * [Work 완료] (D561): 세션이 하는 Work의 자율 진행을 사람이 끝낸다. 세션이 일하는 중이면 거절한다. 앱이 기록용 handoff를 쓰고
+   * 사람의 승인으로 Work를 전달 없이 완료한다
+   */
+  async completeSession(taskId: string): Promise<CommandResult> {
+    const task = this.task(taskId)
+    if (!task || !this.pushesItself(task) || this.work.status !== 'active')
+      return { ok: false, error: '세션이 하는 Work의 자율 진행이 아닙니다' }
+    if (!childTurnEnded(task.status))
+      return { ok: false, error: '세션이 일하는 중입니다. 턴이 끝난 뒤에 끝내세요' }
+    await writeFileAtomic(path.join(this.files.taskDir(task), HANDOFF_FILE), sessionHandoff())
+    return this.approve(taskId, { by: 'human' })
+  }
+
+  /** 세션이 하는 Work의 자율 진행 칸 (D560, D561) */
+  private async sessionView(task: TaskRecord): Promise<SessionFactsView> {
+    return {
+      branches: (await this.pushedBranches()).map((b) => ({
+        ...b,
+        pr: this.sessionPrs.get(b.name) ?? null,
+      })),
+      canComplete: this.work.status === 'active' && childTurnEnded(task.status),
+      prs: this.sessionPrViews(),
+      notify: this.prWatchOn(),
+      openChildren: this.ctx.openChildren(this.key),
+    }
+  }
+
   /** Codex의 도구 보호는 진행 표시의 빠른 응답 경로에서도 먼저 판정한다. */
   private codexToolReply(req: HookRequest, task?: TaskRecord, allowPush = false): HookReply {
     const b = req.body
@@ -2702,16 +3300,35 @@ export class WorkRunner {
     if (req.event === 'UserPromptSubmit' && str(b['agent_id']) === undefined) {
       session.turnStartedAt = now
       session.tool = null
+      session.agents.clear()
     }
+    // 턴이 끝나면 끝나지 않은 서브에이전트도 없다(Esc로 끊으면 PostToolUse가 오지 않음, D542)
+    if (req.event === 'Stop' && str(b['agent_id']) === undefined) session.agents.clear()
     if (TOOL_HOOKS.includes(req.event)) {
       const task = this.task(taskId)
       const denial =
-        task?.engine === 'codex' && req.event === 'PreToolUse'
-          ? this.codexToolReply(req, task)
+        req.event === 'PreToolUse'
+          ? (this.gitGuardReply(req, task) ??
+            (task?.engine === 'codex'
+              ? this.codexToolReply(req, task, task ? this.pushesItself(task) : false)
+              : null))
           : null
+      // 세션이 push하면 push한 브랜치와 PR을 다시 본다 (D560)
+      if (req.event === 'PostToolUse' && task && this.pushesItself(task) && pushCommand(b))
+        this.afterPushSoon(task.id)
       const name = str(b['tool_name']) ?? ''
       const id = str(b['tool_use_id'])
       const before = session.tool
+      // 바깥 대화의 서브에이전트 도구는 끝날 때까지 따로 센다 (D542): 여럿을 나란히 띄우면 마지막 도구만으로는 보이지 않는다
+      const agentsBefore = session.agents.size
+      if (str(b['agent_id']) === undefined && SUBAGENT_TOOLS.includes(name) && id) {
+        if (req.event === 'PreToolUse' && !denial)
+          session.agents.set(id, {
+            label: toolLabel(name, b['tool_input'], str(b['cwd'])),
+            startedAt: now,
+          })
+        else if (req.event !== 'PreToolUse') session.agents.delete(id)
+      }
       // 서브에이전트 안의 도구(agent_id가 있음)는 바깥 도구(Task 등)가 도는 동안이다. 바깥 도구를 덮지 않는다
       if (str(b['agent_id']) === undefined) {
         if (req.event === 'PreToolUse') {
@@ -2731,7 +3348,10 @@ export class WorkRunner {
         }
       }
       if (name !== ASK_TOOL) {
-        if (session.tool !== before && this.live.get(taskId) === session) {
+        if (
+          (session.tool !== before || session.agents.size !== agentsBefore) &&
+          this.live.get(taskId) === session
+        ) {
           const task = this.task(taskId)
           if (task)
             this.ctx.ui.activity({ workKey: this.key, taskId, activity: this.activityOf(task) })
@@ -2958,6 +3578,47 @@ export class WorkRunner {
     if (draft === null) throw new Error('intent 초안이 없음')
     const written = await this.files.writeIntent(
       confirmedIntent(draft, { version, type: workType(this.work) }),
+      version,
+    )
+    await this.ownedWritten('intent.md', written)
+  }
+
+  /**
+   * 공용 규칙 없이 배포할 글 (D552, D557): 자식은 연결 규칙, 세션이 하는 Work의 자율 진행은 orchestrate.md 그대로다. 그 밖의
+   * task는 빈 객체다
+   */
+  private async bareRules(task: TaskRecord, dir: string): Promise<{ bareRules?: string }> {
+    if (this.work.parent) return { bareRules: childRules(this.childLink(dir)) }
+    if (!this.pushesItself(task)) return {}
+    const text = await readText(path.join(this.ctx.skills, 'types', 'auto', 'orchestrate.md'))
+    return text === null ? {} : { bareRules: text }
+  }
+
+  /** 자식 세션의 연결 정보 (D552, D553): 부모 Work와 그 세션의 폴더, 이 worktree와 브랜치, 맡는 파일 */
+  private childLink(taskDir: string): ChildLink {
+    const parent = this.work.parent
+    const info = parent ? this.ctx.workInfo(this.project.project_id, parent.work_id) : null
+    return {
+      parentWorkId: parent?.work_id ?? '',
+      parentTitle: info?.title ?? '',
+      parentTree: info?.tree ?? '',
+      tree: this.worktree,
+      branch: workBranch(this.work),
+      taskDir,
+      files: parent?.files ?? [],
+    }
+  }
+
+  /** 부모의 지시 (D552): intent.md의 본문이다 */
+  private async parentBrief(): Promise<string> {
+    const intent = await this.files.readOwned('intent.md')
+    return intent ? parseFrontMatter(intent.text).body : ''
+  }
+
+  /** 부모가 쓴 의도를 intent.md로 쓴다 (D543): 의도 정리 없이 만든 자식 Work */
+  private async writeParentIntent(text: string, version: number): Promise<void> {
+    const written = await this.files.writeIntent(
+      confirmedIntent(text, { version, type: workType(this.work) }),
       version,
     )
     await this.ownedWritten('intent.md', written)
@@ -5012,6 +5673,10 @@ export class WorkRunner {
       autoApprove: autoApproveNote(this.work, task, this.ctx.config()),
       completion,
       respond: respond?.view ?? null,
+      ...(task.node === 'orchestrate' && files[PLAN_FILE] !== undefined
+        ? { plan: planView(files[PLAN_FILE]) }
+        : {}),
+      ...(this.pushesItself(task) ? { session: await this.sessionView(task) } : {}),
     }
   }
 
@@ -5402,6 +6067,8 @@ export class WorkRunner {
    * 않고 자동 대응을 바라지 않는다 (D159, D121). 읽기는 기다리지 않는다: 반영은 이 Work의 처리 줄에서 한다(I51)
    */
   async startPr(opts: { quiet?: boolean } = {}): Promise<void> {
+    // 세션이 하는 Work는 세션이 연 PR을 읽는다 (D565). 기다리지 않는다
+    if (this.watchesSessionPrs()) this.sessionPrTrack(this.watchSessionPrs())
     // PR 카드마다 한다 (D480)
     for (const lane of this.cardLanes()) await this.startLane(lane, opts)
   }
@@ -5440,10 +6107,17 @@ export class WorkRunner {
    */
   async prIdle(): Promise<void> {
     for (const L of this.laneStates.values()) while (L.reading) await L.reading
+    // 세션이 연 PR의 일도 기다린다 (D565): git·gh가 worktree를 작업 폴더로 쓴다
+    while (this.sessionPrBusy.size) await Promise.all([...this.sessionPrBusy])
+    if (this.sessionPrReading) await this.sessionPrReading.catch(() => undefined)
   }
 
   /** 모든 PR 카드의 주기 읽기를 멈춘다: 앱을 끝내거나 기록을 지운다 */
   private stopPrTimers(): void {
+    if (this.sessionPrTimer) clearTimeout(this.sessionPrTimer)
+    this.sessionPrTimer = null
+    if (this.sessionStopTimer) clearTimeout(this.sessionStopTimer)
+    this.sessionStopTimer = null
     for (const L of this.laneStates.values()) {
       if (L.timer) clearTimeout(L.timer)
       L.timer = null
@@ -6988,6 +7662,15 @@ export class WorkRunner {
         : null,
       title: this.title,
       driver: workDriver(w),
+      ...(w.parent
+        ? {
+            parent: {
+              key: `${this.project.project_id}/${w.parent.work_id}`,
+              taskId: w.parent.task_id,
+              files: w.parent.files ?? [],
+            },
+          }
+        : {}),
       status: w.status,
       statusLabel: WORK_STATUS_LABEL[w.status],
       completedAt: w.completed_at ?? null,
@@ -7140,10 +7823,12 @@ export class WorkRunner {
     const session = this.live.get(t.id)
     const turn = session?.turnStartedAt ?? null
     const tool = session?.tool ?? null
+    const agents = [...(session?.agents.values() ?? [])]
     return {
       turn: turn !== null,
       since: turn ?? this.launchedAt.get(t.id) ?? Date.parse(t.created_at),
       tool: tool ? { label: tool.label, startedAt: tool.startedAt, endedAt: tool.endedAt } : null,
+      ...(agents.length ? { agents } : {}),
     }
   }
 }

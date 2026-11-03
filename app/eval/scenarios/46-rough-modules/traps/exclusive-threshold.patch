@@ -1,0 +1,12 @@
+diff --git a/src/inventory.js b/src/inventory.js
+index 3639879..242e746 100644
+--- a/src/inventory.js
++++ b/src/inventory.js
+@@ -3,3 +3,7 @@
+ export function find(items, sku) {
+   return items.find((i) => i.sku === sku) ?? null
+ }
++
++export function lowStock(items, threshold = 5) {
++  return items.filter((i) => i.qty < threshold).sort((a, b) => a.qty - b.qty || a.name.localeCompare(b.name, 'ko'))
++}

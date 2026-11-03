@@ -153,6 +153,8 @@ export async function runEpisode(o) {
           ...armOpts,
           appDir: opts.apps?.[build],
           knowledge: !armBase(kind).endsWith('-off'),
+          // relay-ask: 의도 정리의 질문 방식을 결정마다 확인으로 둔 relay (relay 5.6.1)
+          ...(build === 'relay-ask' ? { questionMode: { 'work-start': 'confirm_each' } } : {}),
         })
       : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
   const handoffs = []

@@ -41,6 +41,10 @@ const draftTemplateOf = (type: WorkType) =>
     (b) => b.startsWith('## 목표\n'),
   )
 const draftTemplate = draftTemplateOf('bugfix')
+// 자율 진행의 plan.md 템플릿 (5.6.16, D534). 방식 줄(D535)과 여섯 절을 갖춰 앱 검사를 통과한다
+const planTemplate = codeBlocks(read('types/auto/orchestrate.md'), 'markdown').find((b) =>
+  b.startsWith('## 전략\n'),
+)
 
 describe('스킬 원본이 있다 (5.6.3)', () => {
   it('노드마다 절차가 있다: 기본 유형의 단계는 skills/types/<유형>/<노드>.md, 나머지는 skills/<스킬>/SKILL.md (D232, D258, D302, D506)', () => {
@@ -81,7 +85,13 @@ describe.runIf(handoffTemplate && draftTemplate)(
       return Object.fromEntries(
         NODE_INFO[node].artifacts.map((a) => [
           a,
-          a === 'intent.draft.md' ? draft : a === 'pr.md' ? '# PR 제목\n\n## 요약\n' : '',
+          a === 'intent.draft.md'
+            ? draft
+            : a === 'pr.md'
+              ? '# PR 제목\n\n## 요약\n'
+              : a === 'plan.md'
+                ? (planTemplate ?? '')
+                : '',
         ]),
       )
     }
