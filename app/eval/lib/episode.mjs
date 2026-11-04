@@ -6,8 +6,9 @@ import path from 'node:path'
 import { CliArm } from './cli-arm.mjs'
 import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
-import { armBase } from './kind.mjs'
+import { armBase, relay3Env } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
+import { Relay3Arm, withReviewUsage } from './relay3-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
 import { diffTree, handoffRepo, judgeTree, makeRepo, withoutKnowledge } from './repo.mjs'
@@ -91,6 +92,26 @@ function humanOf(turns, knowledge = []) {
   }
 }
 
+/** 바뀐 코드를 보는 화면: [변경]·[전체 변경] 탭, relay-v3 [변경]의 파일 diff 펼치기("<경로> +3 −1") */
+const DIFF_VIEW = /^(?:tab|button) "(?:전체 )?변경"$|^summary "[^"]*[\w-]\.[A-Za-z]{1,8} \+\d/
+/** 바뀐 코드를 보는 명령 (터미널) */
+const DIFF_COMMAND = /\bgit\s+(?:diff|show)\b|\bgit\s+log\b.*\s-p\b/
+
+/**
+ * hands-off 사람 역할(relay-v3 M2 평가 규약 2절의 -handsoff)이 결과를 본 행동. 규칙은 프롬프트로만 주므로 어긴 실행을
+ * 가려내려고 센다: inspect_diff, 앱의 변경 화면을 누름(DIFF_VIEW), 터미널에 git diff·show·log -p를 침. 결과를 바로잡는
+ * 말은 뜻을 읽어야 해서 세지 않는다(보고서의 사람 역할의 말과 차례 기록으로 본다)
+ */
+export function handsOffViolations(turns) {
+  const acts = turns.flatMap((t) => t.actions ?? [])
+  const inspectDiff = acts.filter((a) => a.do === 'inspect_diff').length
+  const diffViews = acts.filter((a) => a.do === 'click' && DIFF_VIEW.test(a.label ?? '')).length
+  const diffCommands = acts.filter(
+    (a) => a.do === 'type' && DIFF_COMMAND.test(String(a.text ?? '')),
+  ).length
+  return { inspectDiff, diffViews, diffCommands, total: inspectDiff + diffViews + diffCommands }
+}
+
 const ENDINGS = {
   done: '네가 끝났다고 판단함',
   give_up: '네가 포기함',
@@ -110,6 +131,7 @@ const mmss = (ms) => {
  * @param {string} o.kind 쪽: relay, cli, 또는 relay 앱의 다른 빌드(run.mjs의 --app). 이름이 -off로 끝나면 그 빌드에
  *   RELAY_KNOWLEDGE=off를 준다(relay-off는 이 체크아웃의 앱에서 지식 관리를 끈 것)
  *   뒤에 @<유형>이 붙으면(relay@general) 사람 역할이 새 Work에서 그 유형을 고른다(교차 비교, I93)
+ *   relay3, relay3-noreview는 relay-v3 앱이다(opts.relay3App, relay-v3 docs/experiments/m2/protocol.md)
  * @param {number} o.index 회차 (1부터)
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
@@ -145,18 +167,22 @@ export async function runEpisode(o) {
   fs.mkdirSync(shots, { recursive: true })
   const armOpts = { dir: o.workDir, repo, base, agentEnv: agentEnv(opts), agentConfigDir }
   const screenType = screenKind(kind)
+  // 앱 화면(relay, relay-v3)은 같은 방식으로 본다: 스크린샷, 보이는 글자, 터미널, 누를 수 있는 요소. Work마다 결과 폴더가 있다
+  const appScreen = screenType !== 'cli'
   // 쪽의 앱 빌드: @<유형>(I93)과 -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
   const build = armBase(kind).replace(/-off$/, '')
   const arm =
-    screenType === 'relay'
-      ? new RelayArm({
-          ...armOpts,
-          appDir: opts.apps?.[build],
-          knowledge: !armBase(kind).endsWith('-off'),
-          // relay-ask: 의도 정리의 질문 방식을 결정마다 확인으로 둔 relay (relay 5.6.1)
-          ...(build === 'relay-ask' ? { questionMode: { 'work-start': 'confirm_each' } } : {}),
-        })
-      : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
+    screenType === 'relay3'
+      ? new Relay3Arm({ ...armOpts, appDir: opts.relay3App, appEnv: relay3Env(kind) })
+      : screenType === 'relay'
+        ? new RelayArm({
+            ...armOpts,
+            appDir: opts.apps?.[build],
+            knowledge: !armBase(kind).endsWith('-off'),
+            // relay-ask: 의도 정리의 질문 방식을 결정마다 확인으로 둔 relay (relay 5.6.1)
+            ...(build === 'relay-ask' ? { questionMode: { 'work-start': 'confirm_each' } } : {}),
+          })
+        : new CliArm({ ...armOpts, claudeArgs: opts.cliArgs })
   const handoffs = []
   // Work 둘을 잇는 시나리오는 Work마다 사람 역할 세션을 새로 둔다. 같은 사람이지만 그 Work의 사정만 받는다
   const multi = multiWork(scenario)
@@ -172,7 +198,7 @@ export async function runEpisode(o) {
       model: opts.humanModel,
       effort: opts.humanEffort,
       handsOff: opts.humanMode === 'hands-off',
-      vision: screenType === 'relay' && opts.vision,
+      vision: appScreen && opts.vision,
     })
     humans.push(h)
     return h
@@ -183,6 +209,17 @@ export async function runEpisode(o) {
   }
 
   const t0 = Date.now()
+  // 도구의 준비(앱 띄우기와 프로젝트 등록, claude 띄우기, 팀원 교대의 새 저장소)에 든 시간. 쪽마다 달라 사람 몫을 뺀
+  // 걸린 시간(P4)에서 뺀다. wallMs는 예전처럼 준비를 넣은 채 둔다
+  let prepareMs = 0
+  const timed = async (fn) => {
+    const t = Date.now()
+    try {
+      return await fn()
+    } finally {
+      prepareMs += Date.now() - t
+    }
+  }
   const turns = []
   const setupDialogs = []
   const counts = {}
@@ -214,12 +251,11 @@ export async function runEpisode(o) {
     for (const t of all) {
       const d = diffTree(t.path, baseDir, path.join(o.workDir, 'inspect', t.label))
       // 맨 CLI는 체크아웃되지 않은 브랜치에 고친 것이 있을 때만 브랜치를 밝힌다
-      const head =
-        screenType === 'relay'
-          ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n`
-          : all.length > 1
-            ? `# ${t.label === 'repo' ? '체크아웃된 ' : ''}브랜치 ${t.git?.branch ?? '?'}\n`
-            : ''
+      const head = appScreen
+        ? `# Work ${t.label}${t.removed ? ' (정리됨)' : ''}\n`
+        : all.length > 1
+          ? `# ${t.label === 'repo' ? '체크아웃된 ' : ''}브랜치 ${t.git?.branch ?? '?'}\n`
+          : ''
       parts.push(`${head}${d.diff.trim() || '(바뀐 것 없음)'}`)
     }
     return clip(parts.join('\n\n') || '(Work가 아직 없음)', 12_000)
@@ -274,7 +310,7 @@ export async function runEpisode(o) {
         const ws = workScenario(scenario, p.n)
         const all = trees()
         // relay는 이 Work에서 생긴 결과 폴더(worktree)만, 맨 CLI는 레포와 브랜치 모두를 본다
-        const fresh = screenType === 'relay' ? all.filter((t) => !p.trees.has(t.label)) : all
+        const fresh = appScreen ? all.filter((t) => !p.trees.has(t.label)) : all
         const judged = (fresh.length ? fresh : all).map((t) => ({
           label: t.label,
           ...judgeTree({
@@ -332,7 +368,7 @@ export async function runEpisode(o) {
     say(`준비 (${repo})`)
     // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
-    await arm.prepare()
+    await timed(() => arm.prepare())
     for (let w = 0; w < parts.length; w++) {
       let handoff = null
       if (w > 0) {
@@ -351,9 +387,9 @@ export async function runEpisode(o) {
           say(
             `팀원 교대: 머지 ${h.merged.length}개${h.conflicts.length ? `, 충돌 ${h.conflicts.length}개(뒤 쪽으로 머지)` : ''}${h.failed.length ? `, 머지 못함 ${h.failed.length}개` : ''}`,
           )
-          moved = await arm.handoff(h.repo)
+          moved = await timed(() => arm.handoff(h.repo))
         } else {
-          moved = await arm.nextWork()
+          moved = await timed(() => arm.nextWork())
         }
         if (moved) say(moved)
       }
@@ -612,6 +648,13 @@ export async function runEpisode(o) {
   /** 결과 폴더마다의 diff. 숨긴 쟁점의 판정 모델에 준다 */
   const diffs = new Map()
   let issueJudge = null
+  /** 앱 쪽: 세션이 평가 레포의 main을 직접 움직였는가(판정에는 넣지 않는다, RelayArm.mainMoved) */
+  let mainMoved
+  try {
+    mainMoved = arm.mainMoved?.()
+  } catch {
+    mainMoved = undefined
+  }
   try {
     arm.snapshot()
     works = arm.works()
@@ -692,6 +735,8 @@ export async function runEpisode(o) {
     summary,
     error,
     wallMs,
+    // 준비에 든 시간(wallMs에 들어 있다). 사람 몫을 뺀 걸린 시간은 wallMs − prepareMs − human.ms다
+    prepareMs,
     firstChangeMs: firstChangeAt ? firstChangeAt - t0 : null,
     outcome: {
       // Work 둘을 잇는 시나리오는 모든 Work를 돌려 판정했을 때만 성공이다. 앞 Work에서 멈추면 재는 Work의 시험이 없다
@@ -713,6 +758,7 @@ export async function runEpisode(o) {
         changedTrees.every(
           (f) => f.git && !f.git.error && f.git.commits > 0 && f.git.uncommitted.length === 0,
         ),
+      ...(mainMoved !== undefined ? { mainMoved } : {}),
       trees: final,
     },
     human: {
@@ -735,9 +781,15 @@ export async function runEpisode(o) {
       waitOnlyTurns: turns.filter((t) => t.actions.every((a) => a.do === 'wait')).length,
       // 스크린샷을 붙인 차례 (eval-findings E10)
       images: humans.reduce((a, h) => a + h.images, 0),
+      // hands-off에서 결과를 본 행동(규칙 어김). 보통 사람은 null
+      handsOffViolations: opts.humanMode === 'hands-off' ? handsOffViolations(turns) : null,
     },
+    // 앱 쪽: 찍은 스크린샷과 그 가운데 번호 표시가 끝내 빠진 수(같은 관찰 방식인지 본다)
+    ...(arm.shots ? { screenshots: { ...arm.shots } } : {}),
     setupDialogs,
-    agent: agentUsage(agentConfigDir),
+    // 앱이 따로 부른 claude -p(relay-v3 독립 리뷰, relay 독립 리뷰·지식 검토)는 대화 기록을 남기지 않아 앱의 기록으로 세어
+    // 에이전트 토큰에 더한다(agent.review). 맨 CLI에는 없다
+    agent: withReviewUsage(agentUsage(agentConfigDir), arm.reviewUsage?.() ?? null),
     agentSteps,
     works,
     ...(multi ? { workResults, handoffs } : {}),
@@ -747,14 +799,22 @@ export async function runEpisode(o) {
       effort: opts.effort,
       humanModel: opts.humanModel,
       cliArgs: opts.cliArgs,
+      // 사람 역할 변형. 결과 폴더를 합쳐 읽을 때 hands-off 실행은 <쪽>-handsoff로 읽는다(lib/works.mjs armOf)
+      humanMode: opts.humanMode ?? 'normal',
+      ...(screenType === 'relay3' ? { appEnv: relay3Env(kind) } : {}),
     },
   }
   writeJson(path.join(o.outDir, 'run.json'), result)
   // 스크린샷은 결과 폴더로 옮긴다
   if (fs.existsSync(shots) && fs.readdirSync(shots).length)
     fs.cpSync(shots, path.join(o.outDir, 'shots'), { recursive: true })
-  // relay의 Work 기록(산출물, handoff, pty.log)도 남긴다
-  for (const w of works) fs.cpSync(w.dir, path.join(o.outDir, 'works', w.id), { recursive: true })
+  // relay의 Work 기록(산출물, handoff, pty.log)도 남긴다. relay-v3는 마지막 증거 묶음과 실적 장부도(files)
+  for (const w of works) {
+    const dest = path.join(o.outDir, 'works', w.id)
+    fs.cpSync(w.dir, dest, { recursive: true })
+    for (const [name, file] of Object.entries(w.files ?? {}))
+      if (fs.existsSync(file)) fs.cpSync(file, path.join(dest, name))
+  }
   say(
     `결과: ${result.outcome.success ? '성공' : '실패'} (${checks.map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${turns.length}, 사람 비용 $${humanCost.toFixed(2)}`,
   )

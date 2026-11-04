@@ -32,6 +32,26 @@ export function run(cmd, args, o = {}) {
 
 export const hash = (s) => crypto.createHash('sha1').update(s).digest('hex')
 
+/**
+ * 화면이 멈췄는지 가를 때 Claude Code 터미널에서 시계만 따라 바뀌는 것을 가린다(docs/eval.md의 같은 깨우기, 앱의
+ * [data-tick]과 같은 원칙). 스피너 줄과 도구의 경과 시간("12s", "1m 5s", "thought for 3s"), 스피너 그림(· ✢ * ✶ ✻ ✽),
+ * 도는 도구의 깜빡이는 점(●)이다. 토큰 수처럼 모델이 내는 것은 그대로 둔다. 그래서 MCP 도구가 사람의 답을 기다리거나
+ * 명령이 오래 돌 때처럼 시계만 도는 화면은 멈춘 화면이다. 사람 역할이 보는 글자에는 그대로 있다. 세 쪽(relay, relay-v3,
+ * 맨 CLI)에 똑같이 쓴다
+ */
+export function withoutClock(terminal) {
+  return String(terminal ?? '')
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^(\s*)[·✢✳✶✻✽*●⏺](?=\s|$)/u, '$1 ')
+        // "59s"에서 "1m 0s"로 넘어가도 같게: 붙은 단위들을 한 덩어리로 가린다
+        .replace(/\b\d+(?:\.\d+)?(?:ms|[smhd])(?:\s\d+(?:\.\d+)?(?:ms|[smhd]))*\b/g, '#'),
+    )
+    .join('\n')
+}
+
 /** .git과 node_modules를 빼고 폴더를 복사한다 */
 export function copyTree(from, to) {
   fs.rmSync(to, { recursive: true, force: true })

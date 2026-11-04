@@ -103,6 +103,19 @@ export function codeOutcome(outcome) {
 }
 
 /**
+ * relay-v3의 계약 예시 자료. relay-v3 세션은 승인된 계약의 예시를 `.relay/examples/<계약 id>.json`에 커밋하고 수용 시험이
+ * 그 파일을 읽는다(relay-v3 core/instructions.ts). 시험 자료라 test/**처럼 기대 밖 파일로 세지 않는다. diff와 바뀐 줄에는
+ * 그대로 둔다(시험이 읽는 자료라 판정 모델도 본다)
+ */
+const RELAY3_EXAMPLES = /^\.relay\/examples\/[^/]+\.json$/
+
+/** 기대 파일(시나리오의 expectedFiles glob)에 들지 않는 바뀐 파일. relay-v3의 예시 자료는 기대 파일로 본다 */
+export function unrelatedFiles(files, expectedFiles = []) {
+  const allowed = expectedFiles.map(globToRe)
+  return files.filter((f) => !RELAY3_EXAMPLES.test(f) && !allowed.some((re) => re.test(f)))
+}
+
+/**
  * 결과 폴더 하나를 판정한다.
  * @param {object} o
  * @param {string} o.tree 결과 폴더 (.git이 있어도 없어도 된다)
@@ -116,8 +129,10 @@ export function judgeTree(o) {
   // 지식 파일은 코드 결과에서 뺀다. diff는 그대로 돌려줘 저장한다(지식의 질은 따로 본다)
   const files = all.filter((f) => !isKnowledge(f.file))
   const knowledgeFiles = all.filter((f) => isKnowledge(f.file)).map((f) => f.file)
-  const allowed = (o.scenario.expectedFiles ?? []).map(globToRe)
-  const unrelated = files.filter((f) => !allowed.some((re) => re.test(f.file))).map((f) => f.file)
+  const unrelated = unrelatedFiles(
+    files.map((f) => f.file),
+    o.scenario.expectedFiles,
+  )
 
   // 레포의 시험 (에이전트가 더한 시험 포함). 숨긴 시험을 eval-hidden/에 복사하기 전에 돌린다.
   // 인자 없는 "node --test"는 eval-hidden/*.test.js도 찾아 돌리므로 순서를 바꾸면 레포 시험 결과가 달라진다

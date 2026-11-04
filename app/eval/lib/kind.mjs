@@ -101,6 +101,25 @@ export function armType(arm) {
 /** 쪽 이름에서 `@<유형>`을 뗀 것. 앱 빌드와 지식 끔(-off)은 이 이름으로 가린다 */
 export const armBase = (arm) => String(arm ?? '').replace(/@[a-z]+$/, '')
 
+/**
+ * relay-v3 앱의 쪽(relay-v3 docs/experiments/m2/protocol.md 2절)과 그 앱에 더 줄 환경 변수. relay3는 앱 기본(질문은 결정마다
+ * 확인, 리뷰는 모두), relay3-noreview는 같은 빌드에서 평가용 환경 변수로 독립 리뷰를 끈 것이다(제품 설정이 아님). v3에는
+ * 업무 유형이 없어 `@<유형>`을 붙이지 않는다
+ */
+const RELAY3_ARMS = {
+  relay3: {},
+  'relay3-noreview': { RELAY_ABLATE: 'review' },
+}
+
+/** relay-v3 앱의 쪽인가 */
+export const isRelay3 = (arm) => Object.hasOwn(RELAY3_ARMS, String(arm ?? ''))
+
+/** relay-v3 쪽이 앱에 더 줄 환경 변수 */
+export const relay3Env = (arm) => ({ ...(RELAY3_ARMS[String(arm ?? '')] ?? {}) })
+
+/** relay-v3 쪽 이름들 */
+export const RELAY3 = Object.keys(RELAY3_ARMS)
+
 /** 유형의 화면 이름 (relay 새 Work 대화상자의 버튼) */
 export const typeLabel = (type) => WORDS[type]?.label ?? type
 

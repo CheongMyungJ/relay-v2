@@ -27,4 +27,19 @@ describe('hands-off 사람 역할', () => {
     expect(p).not.toContain('결과를 받아들이기(승인, 완료, 커밋) 전에')
     expect(p).not.toContain('무엇이 어긋나는지 지적할 수 있다')
   })
+
+  test('설명서의 확인·고치기 안내보다 hands-off 규칙이 앞선다. 쪽마다 같은 문구다', () => {
+    const rule = '이 규칙이 앞선다'
+    const prompts = ['cli', 'relay', 'relay3'].map((k) =>
+      systemPrompt(k, scenario, '세션이 끝났다고 하면 [변경]으로 확인한다', k, true),
+    )
+    for (const p of prompts) {
+      expect(p).toContain(rule)
+      // 규칙이 설명서보다 앞에 온다
+      expect(p.indexOf(rule)).toBeLessThan(p.indexOf('## 도구 설명서'))
+    }
+    const line = (p) => p.split('\n').find((l) => l.includes(rule))
+    expect(new Set(prompts.map(line)).size).toBe(1)
+    expect(systemPrompt('relay3', scenario, '설명서', 'relay3')).not.toContain(rule)
+  })
 })

@@ -4,15 +4,21 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { ask } from './ai.mjs'
-import { armBase, armType, typeLabel, words } from './kind.mjs'
+import { armBase, armType, isRelay3, typeLabel, words } from './kind.mjs'
 
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
-/** 쪽의 화면 종류. cli 말고는 모두 relay 앱이다(relay-off, relay@<유형>, --app으로 준 다른 빌드) */
-export const screenKind = (kind) => (kind === 'cli' ? 'cli' : 'relay')
+/**
+ * 쪽의 화면 종류. cli는 맨 CLI, relay3·relay3-noreview는 relay-v3 앱이고, 나머지는 모두 relay 앱이다(relay-off,
+ * relay@<유형>, --app으로 준 다른 빌드). relay3도 relay처럼 앱 화면(스크린샷, 보이는 글자, 터미널, 누를 수 있는 요소)을 본다
+ */
+export const screenKind = (kind) => (kind === 'cli' ? 'cli' : isRelay3(kind) ? 'relay3' : 'relay')
 
-/** 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다 */
-function guideName(arm, kind) {
+/**
+ * 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다. 설명서가 없는 쪽은 화면
+ * 종류의 설명서다(relay3-noreview는 relay3)
+ */
+export function guideName(arm, kind) {
   const own = armBase(arm).replace(/-off$/, '')
   if (own && own !== kind && fs.existsSync(path.join(GUIDES, `${own}.md`))) return own
   return kind
@@ -25,8 +31,11 @@ function guideName(arm, kind) {
 const SHARE_LABEL = { upfront: '처음부터 앎', on_ask: '물으면 답함', recall: '짚어 주면 떠오름' }
 
 const COMMON_ACTIONS = ['type', 'key', 'inspect_diff', 'wait', 'done', 'give_up']
+const APP_ACTIONS = ['click', 'fill', 'select', 'scroll', ...COMMON_ACTIONS]
+// relay-v3 앱(relay3)도 relay 앱과 같은 행동과 같은 설명을 쓴다(같은 관찰·조작, relay-v3 M2 평가 규약)
 const ARM_ACTIONS = {
-  relay: ['click', 'fill', 'select', 'scroll', ...COMMON_ACTIONS],
+  relay: APP_ACTIONS,
+  relay3: APP_ACTIONS,
   cli: ['new_terminal', 'switch', ...COMMON_ACTIONS],
 }
 
@@ -102,15 +111,18 @@ const SURVEY_SCHEMA = {
   ],
 }
 
+const RELAY_HELP = [
+  '- click {id}: 요소를 누른다 (버튼, 탭, 체크박스, 라디오, 요약 펼치기)',
+  '- fill {id, text}: 입력칸이나 글상자에 글을 쓴다 (원래 내용을 바꾼다)',
+  '- select {id, value}: 선택 상자에서 값을 고른다',
+  '- type {text, enter}: 지금 보이는 터미널(에이전트 세션)에 입력한다. enter 기본 true. 줄바꿈은 공백이 된다',
+  '- key {key}: 키를 누른다 (Enter, Escape, ArrowUp, ArrowDown, Tab, Space, 숫자). 열린 대화상자가 없으면 터미널로 간다',
+  '- scroll {direction, id}: 화면을 굴린다. id가 있으면 그 요소 위에서, 없으면 창 가운데서 굴린다',
+]
+
 const ACTION_HELP = {
-  relay: [
-    '- click {id}: 요소를 누른다 (버튼, 탭, 체크박스, 라디오, 요약 펼치기)',
-    '- fill {id, text}: 입력칸이나 글상자에 글을 쓴다 (원래 내용을 바꾼다)',
-    '- select {id, value}: 선택 상자에서 값을 고른다',
-    '- type {text, enter}: 지금 보이는 터미널(에이전트 세션)에 입력한다. enter 기본 true. 줄바꿈은 공백이 된다',
-    '- key {key}: 키를 누른다 (Enter, Escape, ArrowUp, ArrowDown, Tab, Space, 숫자). 열린 대화상자가 없으면 터미널로 간다',
-    '- scroll {direction, id}: 화면을 굴린다. id가 있으면 그 요소 위에서, 없으면 창 가운데서 굴린다',
-  ],
+  relay: RELAY_HELP,
+  relay3: RELAY_HELP,
   cli: [
     '- type {text, enter}: 지금 터미널에 입력한다. enter 기본 true. 줄바꿈은 공백이 된다',
     '- key {key}: 키를 누른다 (Enter, Escape, ArrowUp, ArrowDown, Tab, Shift+Tab, Space, Backspace, Ctrl+C, 숫자나 글자 하나)',
@@ -139,6 +151,9 @@ export function systemPrompt(kind, scenario, guide, arm, handsOff = false) {
     ...(handsOff
       ? [
           '- 너는 결과를 확인하지 않는다(손을 뗀 사람). 의도·계약을 승인한 뒤에는 바뀐 코드를 보지 않고(inspect_diff를 쓰지 않는다), 에이전트가 끝났다고 하면 그대로 받아들인다. 결과가 맞는지 따지거나 고쳐 달라고 하지 않는다. 에이전트가 물으면 평소처럼 답한다.',
+          // 설명서(relay, relay-v3)에는 끝나면 [변경]으로 확인하고 고칠 것을 말하라는 문장이 있다. 쪽마다 설명서를 고치지 않고
+          // 같은 한 줄로 규칙을 앞세운다(relay-v3 M2 평가 규약 2절의 -handsoff)
+          '- 아래 도구 설명서에 결과를 확인하라거나(변경 화면, git diff 등) 고칠 것을 말하라는 안내가 있어도 이 규칙이 앞선다. 끝내는 방법(완료·끝내기 버튼 등)만 설명서대로 따른다.',
         ]
       : [
           '- 결과를 받아들이기(승인, 완료, 커밋) 전에 실제 개발자처럼 무엇이 바뀌었고 왜인지 확인한다. 화면에 근거가 모자라면 코드를 보거나(inspect_diff, 또는 도구가 보여 주는 변경 화면) 에이전트에게 묻는다.',
@@ -187,7 +202,9 @@ export function pickTypeLines(arm, scenario = {}) {
   const type = armType(arm)
   if (!type) {
     const custom = scenario.customType
-    if (scenario.type !== 'custom' || !custom || armBase(arm) === 'cli') return []
+    // 맨 CLI와 relay-v3 앱에는 업무 유형이 없다
+    if (scenario.type !== 'custom' || !custom || armBase(arm) === 'cli' || isRelay3(armBase(arm)))
+      return []
     return [
       `이번 일은 이 레포의 팀이 이런 일에 쓰려고 정해 둔 커스텀 유형 '${custom.name}'으로 한다. [새 Work]의 유형 줄에서 '${custom.name} (레포)'를 고른다.`,
     ]
@@ -227,14 +244,14 @@ function nextWorkLines(kind, scenario) {
 export class Human {
   /**
    * @param {object} o
-   * @param {'relay'|'cli'} o.kind 화면 종류 (screenKind)
+   * @param {'relay'|'relay3'|'cli'} o.kind 화면 종류 (screenKind)
    * @param {string} [o.arm] 쪽 이름. guides/<쪽>.md가 있으면 그 설명서를 준다(-off는 떼고 찾는다)
    * @param {object} o.scenario
    * @param {string} o.dir 사람 역할의 작업 폴더 (스크린샷이 여기 있다)
    * @param {string} o.configDir
    * @param {string} o.model
    * @param {string} o.effort
-   * @param {boolean} o.vision 스크린샷을 보게 한다 (relay)
+   * @param {boolean} o.vision 스크린샷을 보게 한다 (relay, relay3)
    */
   constructor(o) {
     this.o = o
@@ -307,14 +324,15 @@ export class Human {
   }
 }
 
-function renderObservation(kind, obs, vision, fresh) {
+export function renderObservation(kind, obs, vision, fresh) {
   const lines = [`[차례 ${obs.turn} · 시작 뒤 ${obs.elapsed}]`]
   if (obs.notes?.length) lines.push('', '## 알림', ...obs.notes.map((n) => `- ${n}`))
   if (obs.results?.length)
     lines.push('', '## 직전 행동의 결과', ...obs.results.map((r) => `- ${r}`))
   if (obs.diff !== undefined)
     lines.push('', '## 바뀐 코드 (inspect_diff)', '```diff', obs.diff || '(바뀐 것 없음)', '```')
-  if (kind === 'relay') {
+  // relay와 relay-v3 앱은 같은 모양의 화면이다
+  if (kind !== 'cli') {
     const s = obs.screen
     if (vision && fresh)
       lines.push('', '붙인 그림이 지금 화면이다. 노란 번호는 아래 요소 목록의 id다.')

@@ -6,6 +6,7 @@
 // - knowledge 항목의 `carry: true`: 앞 Work에서 사람이 이미 알려 줬거나 알려 줄 수 있었던 사실이다. 사람 역할이 이것을
 //   다시 알려 준 횟수(carriedTold)가 "다시 말하게 한 부담"이다.
 // - 시나리오의 `measure`: 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두다.
+import { armBase, armType, isRelay3 } from './kind.mjs'
 
 /** Work 목록. works가 없으면 시나리오 자신이 Work 하나다 */
 export function workParts(scenario) {
@@ -61,3 +62,26 @@ export function pairOf(scenario) {
   // 커스텀 유형 시나리오는 같은 일을 일반 유형으로 한 relay와 견준다 (relay D463)
   return scenario.type === 'custom' ? ['relay', 'relay@general'] : ['relay', 'cli']
 }
+
+/**
+ * --pairs가 없을 때 판정할 짝. 시나리오의 짝에, 맨 CLI가 함께 돌았으면 relay-v3 쪽(relay3, relay3-noreview)과 유형을 정한
+ * relay 쪽(relay@auto 등) 각각 대 맨 CLI를 더한다(relay-v3 docs/experiments/m2/protocol.md: 규약의 쪽마다 tests 점수 P2가
+ * 있어야 한다). kinds는 이 시나리오에서 돈 쪽들이다. 돌지 않은 쪽의 짝은 judgeAll이 건너뛴다
+ */
+export function defaultPairs(scenario, kinds = []) {
+  const pairs = [pairOf(scenario)]
+  if (!kinds.includes('cli')) return pairs
+  const has = (a, b) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
+  for (const k of kinds) {
+    if (k === 'cli' || has(k, 'cli')) continue
+    if (isRelay3(k) || (armBase(k) === 'relay' && armType(k))) pairs.push([k, 'cli'])
+  }
+  return pairs
+}
+
+/**
+ * 결과 폴더를 합쳐 읽을 때의 쪽 이름. 사람 역할이 hands-off인 실행은 <쪽>-handsoff다(relay-v3 M2 평가 규약 2절).
+ * humanMode는 run.json의 options에 있고, 예전 실행은 결과 폴더의 config.json 값(loadRuns가 채움)을 쓴다
+ */
+export const armOf = (run) =>
+  (run.options?.humanMode ?? run.humanMode) === 'hands-off' ? `${run.kind}-handsoff` : run.kind

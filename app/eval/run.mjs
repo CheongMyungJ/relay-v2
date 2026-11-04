@@ -12,7 +12,8 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
-import { armBase, armType, words } from './lib/kind.mjs'
+import { armBase, armType, isRelay3, RELAY3, words } from './lib/kind.mjs'
+import { RELAY3_APP } from './lib/relay3-arm.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
@@ -33,10 +34,16 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --arms <목록>            relay, relay-off(지식을 끈 relay), relay-ask(의도 정리의 질문 방식을 결정마다 확인으로 둔 relay), cli, --app으로 준 빌드 이름(뒤에 -off를 붙이면
                            그 빌드에서 지식을 끔) 가운데 (기본: 시나리오의 짝. works가 있는 시나리오는
                            relay,relay-off, 나머지는 relay,cli). relay 쪽 뒤에 @<유형>을 붙이면(예: relay@general)
-                           시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93)
+                           시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93).
+                           relay3(relay-v3 앱), relay3-noreview(같은 앱에서 독립 리뷰를 끔, RELAY_ABLATE=review)도
+                           쓸 수 있다. relay-v3 체크아웃은 RELAY3_APP(기본 relay-v2 옆의 relay-v3)이고 먼저
+                           npm run build를 돌려 둔다. relay-v3 쪽이 돌면 판정 모델에 목적을 주지 않는다.
+                           cli와 함께 돌리면 relay3, relay3-noreview, relay@<유형> 각각 대 cli도 짝 판정한다
+                           (--pairs가 없을 때). 결과 폴더 여럿의 규약 판정은 eval/m2-primary.mjs
   --app <이름=폴더>        다른 relay 빌드를 쪽으로 쓴다. 폴더는 빌드한 app/ (eval/ref-app.sh). 여럿이면 쉼표.
+                           이름 relay, cli, relay3…, -off로 끝나는 이름은 못 쓴다.
                            예: --app base=/tmp/relay-ref/base/app,m17=/tmp/relay-ref/m17/app
-  --pairs <목록>           짝 판정할 짝. 예: relay:base,relay:m17 (기본: 시나리오의 짝)
+  --pairs <목록>           짝 판정할 짝. 예: relay:base,relay:m17 (기본: 시나리오의 짝, 위의 relay-v3·relay@<유형> 대 cli)
   --parallel <n>           동시에 돌릴 실행 수 (기본 1, 2까지 권함)
   --agent-model <모델>     relay와 CLI 안의 claude 모델 (기본 sonnet)
   --effort <수준>          에이전트 effort: low / medium / high (기본 medium)
@@ -49,7 +56,7 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --max-turns <n>          사람 차례 제한 (기본은 시나리오 값)
   --no-judge               짝 판정을 하지 않는다
   --human-mode <방식>      normal(기본) 또는 hands-off: 사람 역할이 의도 승인 뒤 결과를 확인하거나 지적하지 않는다
-  --no-judge-purpose       판정 모델에 시나리오의 평가 목적을 주지 않는다
+  --no-judge-purpose       판정 모델에 시나리오의 평가 목적을 주지 않는다(relay-v3 쪽이 돌면 늘 주지 않음)
   --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
 `
 
@@ -95,11 +102,12 @@ async function ensureDisplay() {
   throw new Error('Xvfb를 띄우지 못했습니다')
 }
 
-const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli']
+const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli', ...RELAY3]
 
-/** 쪽 이름이 쓸 앱 폴더. cli는 null */
+/** 쪽 이름이 쓸 앱 폴더. cli는 null, relay3 쪽은 relay-v3 체크아웃 */
 const appOf = (arm, apps) => {
   if (arm === 'cli') return null
+  if (isRelay3(arm)) return RELAY3_APP
   const build = armBase(arm).replace(/-off$/, '')
   return build === 'relay' || build === 'relay-ask' ? APP : (apps[build] ?? null)
 }
@@ -186,15 +194,25 @@ async function main() {
       .filter(Boolean)
       .map((x) => {
         const [name, dir] = x.split('=')
-        if (!name || !dir || ['relay', 'cli'].includes(name) || name.endsWith('-off'))
-          throw new Error(`--app 형식: 이름=폴더 (relay, cli, -off로 끝나는 이름은 못 씀): ${x}`)
+        if (
+          !name ||
+          !dir ||
+          ['relay', 'cli'].includes(name) ||
+          name.startsWith('relay3') ||
+          name.endsWith('-off')
+        )
+          throw new Error(
+            `--app 형식: 이름=폴더 (relay, cli, relay3…, -off로 끝나는 이름은 못 씀): ${x}`,
+          )
         return [name, path.resolve(dir)]
       }),
   )
   const knownBase = (a) => ARMS.includes(a) || !!apps[a.replace(/-off$/, '')]
-  // relay@<유형>: @ 앞은 relay 앱의 쪽이고 뒤는 아는 유형이다 (I93)
+  // relay@<유형>: @ 앞은 relay 앱의 쪽이고 뒤는 아는 유형이다 (I93). relay-v3(relay3)와 맨 CLI에는 유형이 없다
   const known = (a) =>
-    a === armBase(a) ? knownBase(a) : !!armType(a) && armBase(a) !== 'cli' && knownBase(armBase(a))
+    a === armBase(a)
+      ? knownBase(a)
+      : !!armType(a) && armBase(a) !== 'cli' && !isRelay3(armBase(a)) && knownBase(armBase(a))
   for (const a of given ?? [])
     if (!known(a))
       throw new Error(`모르는 쪽: ${a} (--app으로 빌드를 주거나 @ 뒤에 유형을 바르게 쓰세요)`)
@@ -227,11 +245,14 @@ async function main() {
     maxTurns: v['max-turns'] ? Number(v['max-turns']) : undefined,
     workRoot,
     apps,
+    // relay-v3 앱의 체크아웃 (relay3, relay3-noreview 쪽)
+    relay3App: RELAY3_APP,
     pairs,
     // hands-off: 사람 역할이 의도(계약) 승인 뒤 결과를 확인하거나 지적하지 않는다(relay-v3 M2 평가 규약 Q3, E-auto)
     humanMode: v['human-mode'] === 'hands-off' ? 'hands-off' : 'normal',
-    // 판정 모델에 시나리오의 목적(무엇이 relay의 강점인지)을 주지 않는다(relay-v3 M2 평가 규약 6절)
-    judgePurpose: !v['no-judge-purpose'],
+    // 판정 모델에 시나리오의 목적(무엇이 relay의 강점인지)을 주지 않는다(relay-v3 M2 평가 규약 6절). relay-v3 쪽이 도는
+    // 배치는 그 규약의 평가라 --no-judge-purpose가 없어도 주지 않는다
+    judgePurpose: !v['no-judge-purpose'] && !arms.some(isRelay3),
   }
   if (!['normal', 'hands-off'].includes(v['human-mode']))
     throw new Error(`--human-mode는 normal이나 hands-off입니다: ${v['human-mode']}`)
@@ -250,6 +271,17 @@ async function main() {
   }
   const commit = commitOf(APP)
   const appCommits = Object.fromEntries(Object.entries(apps).map(([k, d]) => [k, commitOf(d)]))
+  // relay-v3는 커밋하지 않은 변경이 있으면 표시한다(빌드는 작업 트리에서 한다)
+  if (arms.some(isRelay3)) {
+    let dirty = false
+    try {
+      dirty =
+        execFileSync('git', ['status', '--porcelain'], { cwd: RELAY3_APP }).toString().trim() !== ''
+    } catch {
+      // 적지 못해도 된다
+    }
+    appCommits.relay3 = `${commitOf(RELAY3_APP)}${dirty ? '+dirty' : ''}`
+  }
   writeJson(path.join(outDir, 'config.json'), {
     startedAt: new Date().toISOString(),
     commit,

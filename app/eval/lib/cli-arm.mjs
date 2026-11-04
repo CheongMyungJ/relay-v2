@@ -7,7 +7,7 @@ import pty from 'node-pty'
 import { cleanEnv, findClaude } from './env.mjs'
 import { DialogGuard } from './dialogs.mjs'
 import { branchTrees, gitState } from './repo.mjs'
-import { run, sleep } from './util.mjs'
+import { run, sleep, withoutClock } from './util.mjs'
 
 const { Terminal } = headless
 const COLS = 140
@@ -112,8 +112,11 @@ export class CliArm {
     return lines.join('\n').replace(/\n+$/, '')
   }
 
+  /** 깨우기 서명. 시계만 따라 바뀌는 것(스피너의 경과 시간 등)은 가린다(withoutClock, relay 쪽과 같음) */
   async poll() {
-    return { signature: this.terms.map((t) => this.screenOf(t)).join('\n\u0000\n') }
+    return {
+      signature: this.terms.map((t) => withoutClock(this.screenOf(t))).join('\n\u0000\n'),
+    }
   }
 
   async notifications() {

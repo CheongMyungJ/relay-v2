@@ -6,7 +6,7 @@ import { _electron as electron } from '@playwright/test'
 import { cleanEnv, findClaude } from './env.mjs'
 import { DialogGuard } from './dialogs.mjs'
 import { branchTrees, gitState } from './repo.mjs'
-import { copyTree, git, sleep } from './util.mjs'
+import { copyTree, git, run, sleep, withoutClock } from './util.mjs'
 
 const APP_DIR = path.resolve(import.meta.dirname, '../..')
 /**
@@ -115,6 +115,14 @@ function drawMarks(show) {
   }
 }
 
+/** 다음 프레임이 두 번 그려질 때까지 기다린다(창이 가려져 프레임이 멈췄으면 0.5초까지) */
+function nextFrame() {
+  return Promise.race([
+    new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true)))),
+    new Promise((done) => setTimeout(() => done(false), 500)),
+  ])
+}
+
 /** 보이는 글자. 터미널은 줄 단위로 따로 모은다 */
 function visibleText() {
   const clean = (s) =>
@@ -163,6 +171,15 @@ function pollText() {
   }
 }
 
+/**
+ * 깨우기 서명. 터미널의 시계만 따라 바뀌는 것(Claude Code 스피너의 경과 시간 등)도 가린다(withoutClock, 맨 CLI 쪽과 같음).
+ * 화면 글자(text)에도 보이는 터미널의 줄이 들어 있으므로(.layout이나 body 아래의 xterm) 서명 전체에 쓴다. 터미널 쪽만
+ * 가렸던 첫 고침은 relay-v3 시범에서 계약 승인 기다림을 여전히 120초 놓쳤다(2026-11-04)
+ */
+export function pollSignature(v) {
+  return withoutClock(`${v.text}\n${v.terminal}`)
+}
+
 /** 열린 대화상자 수 */
 function openDialogs() {
   return [...document.querySelectorAll('[role=dialog]')].filter(
@@ -198,6 +215,10 @@ export class RelayArm {
     /** 꺼낸 브랜치: label → 커밋 (finalTrees) */
     this.exported = new Map()
     this.guard = new DialogGuard()
+    /** 찍은 스크린샷과 그 가운데 번호 표시가 끝내 없던 수 (observe) */
+    this.shots = { taken: 0, unmarked: 0 }
+    /** 평가 레포 main의 처음 커밋 (mainMoved) */
+    this.mainStart = mainHead(o.repo)
   }
 
   kind = 'relay'
@@ -302,7 +323,7 @@ export class RelayArm {
    */
   async poll() {
     const v = await this.win.evaluate(pollText)
-    return { signature: `${v.text}\n${v.terminal}`, terminal: v.terminal }
+    return { signature: pollSignature(v), terminal: v.terminal }
   }
 
   /** 첫 실행 창(신뢰, 권한 우회 경고 등)을 도구가 수락한다. 사람의 부담에 넣지 않는다 */
@@ -321,8 +342,13 @@ export class RelayArm {
   async observe(shotPath) {
     const elements = await this.win.evaluate(collectElements)
     await this.win.evaluate(drawMarks, true)
-    await this.shot(shotPath)
+    // 번호를 얹은 프레임이 그려진 뒤 찍는다. 그리기 전 프레임을 찍어 번호 없는 그림이 사람 역할에게 간 일이 있었다
+    // (relay-v3 시범 세 번에서 30장 가운데 6장). 찍은 그림에 번호가 없으면 shot이 몇 번 다시 찍는다
+    await this.win.evaluate(nextFrame)
+    const marked = await this.shot(shotPath, elements.length > 0)
     await this.win.evaluate(drawMarks, false)
+    this.shots.taken++
+    if (marked === false) this.shots.unmarked++
     const v = await this.win.evaluate(visibleText)
     return {
       elements,
@@ -336,25 +362,52 @@ export class RelayArm {
 
   /**
    * 창을 SHOT_WIDTH 너비로 줄여 찍는다 (E10). 메인 프로세스의 capturePage와 nativeImage.resize를 쓴다. 안 되면 창
-   * 크기 그대로 찍는다
+   * 크기 그대로 찍는다. marks면 줄이기 전 그림에 번호 표시의 색(#e5c100)이 있는지 보고, 없으면 잠깐 뒤 다시 찍는다(세 번까지).
+   * 번호가 있으면 true, 끝내 없으면 false, 보지 않았으면 null
    */
-  async shot(file) {
+  async shot(file, marks = false) {
     try {
-      const png = await this.app.evaluate(async ({ BrowserWindow }, width) => {
-        const w = BrowserWindow.getAllWindows()[0]
-        if (!w) return null
-        const img = await w.webContents.capturePage()
-        const small = img.getSize().width > width ? img.resize({ width, quality: 'good' }) : img
-        return small.toPNG().toString('base64')
-      }, SHOT_WIDTH)
-      if (png) {
-        fs.writeFileSync(file, Buffer.from(png, 'base64'))
-        return
+      const r = await this.app.evaluate(
+        async ({ BrowserWindow }, o) => {
+          const w = BrowserWindow.getAllWindows()[0]
+          if (!w) return null
+          // 비트맵의 차례는 플랫폼에 따라 BGRA나 RGBA라 두 차례를 모두 본다. 앱 화면에는 이 색이 없다
+          const hasMarks = (img) => {
+            const b = img.toBitmap()
+            let n = 0
+            for (let i = 0; i + 3 < b.length; i += 4) {
+              if (Math.abs(b[i + 1] - 0xc1) > 12) continue
+              const bgra = Math.abs(b[i + 2] - 0xe5) <= 12 && b[i] <= 40
+              const rgba = Math.abs(b[i] - 0xe5) <= 12 && b[i + 2] <= 40
+              if ((bgra || rgba) && ++n >= 20) return true
+            }
+            return false
+          }
+          let img = await w.webContents.capturePage()
+          let marked = null
+          if (o.marks) {
+            marked = hasMarks(img)
+            for (let k = 0; k < 3 && !marked; k++) {
+              await new Promise((done) => setTimeout(done, 200))
+              img = await w.webContents.capturePage()
+              marked = hasMarks(img)
+            }
+          }
+          const small =
+            img.getSize().width > o.width ? img.resize({ width: o.width, quality: 'good' }) : img
+          return { png: small.toPNG().toString('base64'), marked }
+        },
+        { width: SHOT_WIDTH, marks },
+      )
+      if (r) {
+        fs.writeFileSync(file, Buffer.from(r.png, 'base64'))
+        return r.marked
       }
     } catch {
       // 아래에서 창 크기 그대로 찍는다
     }
     await this.win.screenshot({ path: file })
+    return null
   }
 
   /** 보이는 터미널에 포커스를 준다. 보이는 터미널이 없으면 false */
@@ -520,9 +573,44 @@ export class RelayArm {
     this.userData = path.join(this.o.dir, `electron-user-data-${k}`)
     this.homes.push(this.home)
     this.o.repo = repo
+    this.mainStart = mainHead(repo)
     this.app = null
     await this.prepare()
     return '팀원 교대: 새 앱 저장소에서 새로 clone한 레포를 등록했습니다.'
+  }
+
+  /**
+   * 평가 레포의 main이 처음과 달라졌으면 그 커밋들. 앱 쪽은 main을 판정 폴더에 넣지 않으므로(finalTrees의 skipBranches)
+   * 세션이 main을 직접 움직인 변경은 숨긴 시험에 들지 않는다. 맨 CLI는 레포를 그대로 판정한다. 판정에는 넣지 않고 run.json에
+   * 남겨 보고서에 보인다. 그대로면 null
+   */
+  mainMoved() {
+    const now = mainHead(this.o.repo)
+    if (!this.mainStart || !now || now === this.mainStart) return null
+    const count = run('git', ['rev-list', '--count', `${this.mainStart}..${now}`], {
+      cwd: this.o.repo,
+    })
+    return {
+      from: this.mainStart,
+      to: now,
+      commits: count.code === 0 ? Number(count.out.trim()) : null,
+    }
+  }
+
+  /**
+   * 앱이 따로 부른 claude -p(독립 리뷰 D502, 지식 검토 D300)의 호출 수와 토큰. 대화 기록을 남기지 않으므로
+   * (--no-session-persistence) task 폴더의 기록(independent-review.json, knowledge-review.json)으로 센다. relay-v3 쪽의
+   * 독립 리뷰와 같게 에이전트 토큰에 더한다(episode.mjs). 부른 적이 없으면 null
+   */
+  reviewUsage() {
+    const calls = []
+    for (const w of this.works())
+      for (const t of w.tasks)
+        for (const file of APP_CALL_FILES) {
+          const j = readJsonSafe(path.join(taskDir(w.dir, t), file))
+          if (Array.isArray(j?.calls)) calls.push(...j.calls)
+        }
+    return appCallUsage(calls)
   }
 
   /** 끝난 Work의 상태 (work.json 요약, 팀원 교대 전의 앱 저장소 것도) */
@@ -539,8 +627,7 @@ export class RelayArm {
           if (!fs.existsSync(file)) continue
           const j = JSON.parse(fs.readFileSync(file, 'utf8'))
           // 단계별 토큰(eval-findings R9)을 세려고 세션 id와 context.md 크기를 남긴다
-          const context = (t) =>
-            path.join(ws, w, 'tasks', `${String(t.seq).padStart(2, '0')}-${t.node}`, 'context.md')
+          const context = (t) => path.join(taskDir(path.join(ws, w), t), 'context.md')
           const read = (t) =>
             fs.existsSync(context(t)) ? fs.readFileSync(context(t), 'utf8') : null
           out.push({
@@ -551,6 +638,8 @@ export class RelayArm {
             tasks: (j.tasks ?? []).map((t) => ({
               seq: t.seq,
               node: t.node,
+              // 커스텀 유형의 단계는 폴더 이름이 단계 이름이다(taskDir)
+              ...(t.step ? { step: t.step } : {}),
               status: t.status,
               approved_by: t.approved_by ?? null,
               session: t.session?.id ?? null,
@@ -594,6 +683,63 @@ function knowledgeChars(taskDir, context) {
  * 번호를 붙여 결과 폴더와 스냅숏을 가른다
  */
 const homeLabel = (k, w) => (k === 0 ? w : `p${k + 1}-${w}`)
+
+/** relay Work의 task 폴더: works/<id>/tasks/<두 자리 순번>-<단계>. 커스텀 단계는 단계 이름이다(relay core/machine taskDirName) */
+const taskDir = (workDir, t) =>
+  path.join(
+    workDir,
+    'tasks',
+    `${String(t.seq).padStart(2, '0')}-${t.node === 'custom' && t.step ? t.step : t.node}`,
+  )
+
+/** relay 앱이 claude -p 호출을 남기는 task 폴더의 기록 (core/independent-review.ts, core/knowledge-review.ts) */
+const APP_CALL_FILES = ['independent-review.json', 'knowledge-review.json']
+
+const readJsonSafe = (file) => {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/** 레포의 main 커밋. 없거나 읽지 못하면 null */
+function mainHead(repo) {
+  if (!repo) return null
+  const r = run('git', ['rev-parse', '--verify', '-q', 'refs/heads/main'], { cwd: repo })
+  return r.code === 0 ? r.out.trim() || null : null
+}
+
+/**
+ * relay 앱의 claude -p 호출 기록(calls[]: usage {input, output, cacheRead, cacheCreation}, error)을 relay-v3의 리뷰 사용량
+ * 모양(relay3-arm.mjs reviewUsage)으로 더한다. usage가 없는 호출(실패 등)은 usageUnknown으로 센다. 호출이 없으면 null
+ */
+export function appCallUsage(calls) {
+  if (!calls.length) return null
+  const total = {
+    calls: calls.length,
+    done: calls.filter((c) => !c?.error).length,
+    failed: calls.filter((c) => !!c?.error).length,
+    skipped: 0,
+    usageUnknown: 0,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+  }
+  for (const c of calls) {
+    const u = c?.usage
+    if (!u || typeof u !== 'object') {
+      total.usageUnknown++
+      continue
+    }
+    total.input += u.input ?? 0
+    total.output += u.output ?? 0
+    total.cacheRead += u.cacheRead ?? 0
+    total.cacheWrite += u.cacheCreation ?? 0
+  }
+  return total
+}
 
 const KEYS = {
   enter: 'Enter',

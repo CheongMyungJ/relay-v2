@@ -6,21 +6,26 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DIMENSIONS, judgePair } from './lib/judge.mjs'
-import { armBase, armType, typeLabel } from './lib/kind.mjs'
+import { armBase, armType, isRelay3, typeLabel } from './lib/kind.mjs'
 import { codeOutcome } from './lib/repo.mjs'
 import { clip, isMain, readJson, readJsonl, stats, writeJson } from './lib/util.mjs'
-import { measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
+import { defaultPairs, measuredWorks, multiWork, pairOf, workParts } from './lib/works.mjs'
 
 const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
   ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
   : path.resolve(import.meta.dirname, 'scenarios')
 
-/** 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. 그 밖의 이름(--app으로 준 빌드)은 이름 차례로 뒤에 둔다 */
-const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli']
+/**
+ * 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. relay3은 relay-v3 앱이다. 그 밖의 이름(--app으로 준 빌드)은
+ * 이름 차례로 뒤에 둔다
+ */
+const ARMS = ['relay', 'relay-off', 'relay-ask', 'relay3', 'relay3-noreview', 'cli']
 const LABEL = {
   relay: 'relay',
   'relay-off': 'relay (지식 끔)',
   'relay-ask': 'relay (결정마다 확인)',
+  relay3: 'relay-v3',
+  'relay3-noreview': 'relay-v3 (리뷰 끔)',
   cli: '맨 CLI',
 }
 const label = (k) => {
@@ -34,15 +39,25 @@ const label = (k) => {
 const pairOfJudge = (j) => j.pair ?? ['relay', 'cli']
 const scoreOf = (j, k) => j.experience.scores?.[k] ?? j.experience[`${k}Score`] ?? null
 
-/** 결과 폴더의 실행들: <시나리오>/<쪽>-<회차>/run.json */
+/**
+ * 결과 폴더의 실행들: <시나리오>/<쪽>-<회차>/run.json. humanMode는 run.json의 options에 없으면(예전 실행) 결과 폴더의
+ * config.json 값이다. 여러 결과 폴더를 합쳐 읽는 집계는 hands-off 실행을 <쪽>-handsoff로 읽는다(lib/works.mjs armOf)
+ */
 export function loadRuns(dir) {
+  const config = readJson(path.join(dir, 'config.json'), {}) ?? {}
   const runs = []
   for (const s of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!s.isDirectory()) continue
     for (const r of fs.readdirSync(path.join(dir, s.name), { withFileTypes: true })) {
       const file = path.join(dir, s.name, r.name, 'run.json')
-      if (r.isDirectory() && fs.existsSync(file))
-        runs.push({ dir: path.join(dir, s.name, r.name), ...readJson(file) })
+      if (r.isDirectory() && fs.existsSync(file)) {
+        const run = readJson(file)
+        runs.push({
+          dir: path.join(dir, s.name, r.name),
+          ...run,
+          humanMode: run.options?.humanMode ?? config.humanMode ?? 'normal',
+        })
+      }
     }
   }
   return runs
@@ -62,13 +77,16 @@ export async function judgeAll(dir, opts, { redo = false } = {}) {
     const indexes = [...new Set(runs.filter((r) => r.scenario === id).map((r) => r.index))].sort(
       (a, b) => a - b,
     )
-    // 짝: --pairs(config.json의 pairs), 없으면 시나리오의 짝(relay 대 맨 CLI, works 시나리오는 relay 대 relay-off)
-    for (const [a, b] of opts.pairs ?? [pairOf(scenario)])
+    // 짝: --pairs(config.json의 pairs), 없으면 시나리오의 짝(relay 대 맨 CLI, works 시나리오는 relay 대 relay-off)과
+    // relay3 대 맨 CLI(둘 다 돌았으면). 시나리오의 짝만 judge-<회차>.json이고 다른 짝은 이름에 짝을 넣는다
+    const kinds = [...new Set(runs.filter((r) => r.scenario === id).map((r) => r.kind))]
+    const own = pairOf(scenario)
+    for (const [a, b] of opts.pairs ?? defaultPairs(scenario, kinds))
       for (const i of indexes) {
         const first = runs.find((r) => r.scenario === id && r.kind === a && r.index === i)
         const second = runs.find((r) => r.scenario === id && r.kind === b && r.index === i)
         if (!first || !second) continue
-        const isDefault = !opts.pairs || (a === pairOf(scenario)[0] && b === pairOf(scenario)[1])
+        const isDefault = a === own[0] && b === own[1]
         const file = path.join(dir, id, isDefault ? `judge-${i}.json` : `judge-${a}-${b}-${i}.json`)
         if (!redo && fs.existsSync(file)) {
           out.push(readJson(file))
@@ -143,14 +161,29 @@ function metricRows(rs) {
     ['커밋까지 됨', pct(rs.filter((r) => r.outcome.committed).length, n)],
     ['사람이 끝냄(done)', pct(rs.filter((r) => r.ending === 'done').length, n)],
     ['걸린 시간(분)', ms(get((r) => r.wallMs / 60000))],
+    [
+      '도구 준비 시간(분, 아래 줄에서 뺌)',
+      ms(get((r) => (typeof r.prepareMs === 'number' ? r.prepareMs / 60000 : null))),
+    ],
     ['사람 역할 응답 시간(분)', ms(get((r) => (time.get(r)?.ms ?? 0) / 60000))],
-    ['걸린 시간 − 사람 역할 응답(분)', ms(get((r) => (r.wallMs - (time.get(r)?.ms ?? 0)) / 60000))],
+    // 준비(앱 띄우기·프로젝트 등록, claude 띄우기)는 쪽마다 달라 뺀다. 예전 결과(prepareMs 없음)는 준비를 넣은 채다
+    [
+      '걸린 시간 − 준비 − 사람 역할 응답(분)',
+      ms(get((r) => (r.wallMs - (r.prepareMs ?? 0) - (time.get(r)?.ms ?? 0)) / 60000)),
+    ],
     ['사람 차례 수', ms(get((r) => r.human.turns))],
     ['기다리기만 한 차례', ms(get((r) => time.get(r)?.waitOnly ?? null))],
     ['스크린샷을 붙인 차례', ms(get((r) => r.human.images ?? null))],
+    // 앱 쪽: 요소 번호가 끝내 그려지지 않은 스크린샷(다시 찍어도 없음). 같은 관찰 방식인지 본다
+    ['번호 표시가 빠진 스크린샷', ms(get((r) => r.screenshots?.unmarked ?? null))],
     ['사람 행동 수(기다림 제외)', ms(get((r) => r.human.actionsTotal))],
     ['입력한 글자 수', ms(get((r) => r.human.charsTyped))],
     ['코드 직접 확인(inspect_diff)', ms(get((r) => r.human.actions.inspect_diff ?? 0))],
+    // hands-off 사람 역할이 결과를 본 행동(inspect_diff, 변경 화면, git diff). 보통 사람은 '-'
+    [
+      'hands-off 규칙 어김(결과를 본 행동)',
+      ms(get((r) => r.human.handsOffViolations?.total ?? null)),
+    ],
     ['헛동작(없는 요소, 실패)', ms(get((r) => r.human.invalidActions))],
     ['friction 평균 (0~3)', ms(get((r) => r.human.frictionMean))],
     ['friction 2 이상 차례', ms(get((r) => r.human.frictionHigh))],
@@ -164,14 +197,114 @@ function metricRows(rs) {
     // relay의 지식 파일은 코드 결과에서 빼고 따로 센다 (lib/repo.mjs, docs/eval.md 6절)
     ['바뀐 줄 수', ms(get((r) => code.get(r).linesChanged))],
     ['기대 밖 파일 수', ms(get((r) => code.get(r).unrelated.length))],
+    // 앱 쪽은 main을 판정 폴더에 넣지 않는다. 세션이 main을 직접 움직였으면 그 변경은 숨긴 시험에 들지 않았다
+    [
+      'main이 움직임(앱 쪽, 판정에 안 넣음)',
+      rs.some((r) => r.outcome && 'mainMoved' in r.outcome)
+        ? pct(
+            rs.filter((r) => r.outcome?.mainMoved).length,
+            rs.filter((r) => r.outcome && 'mainMoved' in r.outcome).length,
+          )
+        : '-',
+    ],
     ['지식 파일 수(판정에서 뺌)', ms(get((r) => code.get(r).knowledgeFiles.length))],
     ['에이전트 출력 토큰(천)', ms(get((r) => r.agent.output / 1000))],
     [
-      '에이전트 입력 토큰(천, 캐시 포함)',
+      '에이전트 입력 토큰(천, 캐시 포함, 앱이 부른 claude -p 포함)',
       ms(get((r) => (r.agent.input + r.agent.cacheRead + r.agent.cacheWrite) / 1000)),
+    ],
+    // 앱이 따로 부른 claude -p(relay-v3 독립 리뷰, relay 독립 리뷰·지식 검토): 위 줄에 들어 있는 몫
+    [
+      '그 가운데 앱이 부른 claude -p 입력 토큰(천)',
+      ms(
+        get((r) => {
+          const u = r.agent.review
+          return u ? (u.input + u.cacheRead + u.cacheWrite) / 1000 : 0
+        }),
+      ),
     ],
     ['에이전트 세션 수', ms(get((r) => r.agent.sessions))],
     ['사람 역할 비용($)', ms(get((r) => r.human.costUsd))],
+  ]
+}
+
+const CONCLUSION = {
+  human_merge: '사람 머지',
+  auto_merge_candidate: '자동 머지 후보',
+  recontract: '계약 다시',
+}
+
+/**
+ * 실행의 관문 결론 가운데 G1, G2에 쓰는 것: 내보내기(리뷰 포함) 측정의 결론(gate.export, relay3-arm.mjs gateSummary).
+ * Stop 뒤의 측정에는 늘 '리뷰 없음'이 사람 머지 사실로 붙어 그림자가 될 수 없다. export가 없는 예전 결과는 쓰지 않는다
+ */
+export const exportGates = (r) => (r.works ?? []).map((w) => w.gate).filter((g) => g?.export)
+
+/** 내보내기 결론 가운데 자동 조건을 채운 것(그림자 또는 자동 머지 후보)이 있는가 */
+export const autoGate = (r) =>
+  exportGates(r).some((g) => g.shadow || g.conclusion === 'auto_merge_candidate')
+
+/**
+ * relay-v3 쪽의 계약, 관문(그림자)과 독립 리뷰 (relay-v3 docs/experiments/m2/protocol.md Q4, P5). 관문은 Work마다 마지막
+ * 결론이다. G1, G2는 내보내기 결론이 있는 실행만으로 센다(exportGates). 그 가운데 자동 조건을 채운 실행에서 숨긴 시험을
+ * 모두 통과한 비율이 G1, 숨긴 시험을 모두 통과한 실행 가운데 자동 조건을 채운 비율이 G2다. 내보내기 결론이 없는 실행
+ * ([끝내기] 전에 끝남)과 숨긴 시험을 판정하지 못한 실행은 뺀다(앞의 것은 수를 보인다)
+ */
+export function relay3Rows(rs) {
+  const n = rs.length
+  const works = (r) => r.works ?? []
+  const gates = (r) => works(r).map((w) => w.gate)
+  const judged = rs.filter((r) => typeof r.outcome?.success === 'boolean')
+  const exported = judged.filter((r) => exportGates(r).length > 0)
+  const autoRuns = exported.filter(autoGate)
+  const passRuns = exported.filter((r) => r.outcome.success)
+  const counts = new Map()
+  for (const g of rs.flatMap(gates)) {
+    const k = g
+      ? `${CONCLUSION[g.conclusion] ?? g.conclusion}${g.export ? '(내보내기)' : ''}`
+      : '없음'
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  const review = (r) => r.agent?.review ?? null
+  const reviewed = rs.flatMap(works).filter((w) => typeof w.workedAfterReview === 'boolean')
+  return [
+    ['계약 승인됨', pct(rs.filter((r) => works(r).some((w) => w.contract?.approvedBy)).length, n)],
+    [
+      'Work 끝남(끝내기·머지)',
+      pct(rs.filter((r) => works(r).some((w) => w.status === 'done')).length, n),
+    ],
+    ['관문 결론(Work마다 마지막)', [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'],
+    ['내보내기 결론이 있음(G1·G2의 분모, 없으면 뺌)', pct(exported.length, judged.length)],
+    ['자동 조건을 채움(그림자·자동 후보)', pct(autoRuns.length, exported.length)],
+    [
+      'G1 그 가운데 숨긴 시험 모두 통과',
+      pct(autoRuns.filter((r) => r.outcome.success).length, autoRuns.length),
+    ],
+    [
+      'G2 숨긴 시험 모두 통과 가운데 자동 조건을 채움',
+      pct(passRuns.filter(autoGate).length, passRuns.length),
+    ],
+    ['독립 리뷰 호출 수(돈 것)', ms(stats(rs.map((r) => review(r)?.calls ?? 0)))],
+    ['리뷰 건너뜀(리뷰 끈 쪽)', ms(stats(rs.map((r) => review(r)?.skipped ?? 0)))],
+    ['리뷰 실패', ms(stats(rs.map((r) => review(r)?.failed ?? 0)))],
+    // 시간 초과처럼 claude -p가 사용량을 알리지 못한 리뷰. 그 토큰은 에이전트 입력(P5)에서 빠져 있다
+    ['토큰을 모르는 리뷰(P5에서 빠짐)', ms(stats(rs.map((r) => review(r)?.usageUnknown ?? 0)))],
+    // 리뷰 지적은 세션에 넣지 않는다(V4). 리뷰 뒤 세션이 더 일하지 않았으면 리뷰는 코드에 닿을 수 없었다(Q1)
+    [
+      '리뷰 뒤 세션이 더 일한 Work',
+      pct(reviewed.filter((w) => w.workedAfterReview).length, reviewed.length),
+    ],
+    [
+      '리뷰 입력 토큰(천, 캐시 포함, 에이전트 입력에 들어 있음)',
+      ms(
+        stats(
+          rs.map((r) => {
+            const u = review(r)
+            return u ? (u.input + u.cacheRead + u.cacheWrite) / 1000 : 0
+          }),
+        ),
+      ),
+    ],
   ]
 }
 
@@ -312,12 +445,25 @@ export function buildReport(dir) {
     '',
     `- 결과 폴더: \`${dir}\``,
     `- 시작: ${config.startedAt ?? '-'}, 앱 커밋: ${config.commit ?? '-'}, Claude Code: ${config.claudeVersion ?? '-'}`,
+    // 다른 빌드와 relay-v3의 커밋(+dirty는 커밋하지 않은 변경이 있는 작업 트리)
+    ...(Object.keys(config.appCommits ?? {}).length
+      ? [
+          `- 다른 빌드 커밋: ${Object.entries(config.appCommits)
+            .map(([k, c]) => `${k} ${c ?? '-'}`)
+            .join(', ')}`,
+        ]
+      : []),
+    ...(config.humanMode === 'hands-off'
+      ? ['- 사람 역할: hands-off(계약 승인 뒤 결과를 보지 않음)']
+      : []),
     `- 에이전트: ${config.agentModel ?? '-'} (effort ${config.effort ?? '-'}), 사람 역할: ${config.humanModel ?? '-'}, 판정: ${config.judgeModel ?? '-'}`,
     `- 맨 CLI 인자: \`claude ${(config.cliArgs ?? []).join(' ')}\`, 스크린샷 보기: ${config.vision === false ? '끔' : '켬'}`,
+    `- 판정 모델에 시나리오의 평가 목적: ${config.judgePurpose === false ? '주지 않음' : '줌'}`,
     `- 실행 ${runs.length}개, 짝 판정 ${judges.length}개`,
     '',
     '읽는 법: 수치는 평균 ± 표준편차다. 사람 역할과 판정은 AI이므로 경향을 보는 자료로 쓴다. 회차가 적으면 편차가 크다.',
-    '걸린 시간에는 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 두 쪽의 대기를 견줄 때는 그 시간을 뺀 줄을 본다.',
+    '걸린 시간에는 도구의 준비(앱 띄우기·프로젝트 등록, claude 띄우기)와 사람 역할(AI)이 답을 만드는 동안 기다린 시간이 들어 있다. 쪽끼리 대기를 견줄 때는 그 둘을 뺀 줄을 본다.',
+    '에이전트 토큰에는 앱이 따로 부른 claude -p(relay-v3 독립 리뷰, relay 독립 리뷰·지식 검토)가 들어 있다. 사람은 Claude Code 화면에서 시계만 도는 것(스피너의 경과 시간)으로는 화면이 바뀐 것으로 보지 않는다.',
     '',
   ]
   const present = (rs) => [
@@ -402,6 +548,14 @@ export function buildReport(dir) {
         '',
       )
     }
+    for (const k of own.filter(isRelay3)) {
+      lines.push(
+        `### ${label(k)} 계약·관문·리뷰`,
+        '',
+        table(['지표', label(k)], relay3Rows(rs.filter((r) => r.kind === k))),
+        '',
+      )
+    }
     lines.push('### 회차별', '')
     lines.push(
       table(
@@ -482,9 +636,14 @@ if (isMain(import.meta.url)) {
   const abs = path.resolve(dir)
   if (process.argv.includes('--rejudge')) {
     const config = readJson(path.join(abs, 'config.json'), {})
+    // 판정 모델에 목적을 줄지는 처음 돌린 설정을 따른다(relay-v3 M2 평가 규약 6절은 주지 않는다)
     await judgeAll(
       abs,
-      { judgeModel: config.judgeModel ?? 'sonnet', pairs: config.pairs ?? null },
+      {
+        judgeModel: config.judgeModel ?? 'sonnet',
+        pairs: config.pairs ?? null,
+        judgePurpose: config.judgePurpose !== false,
+      },
       { redo: true },
     )
   }
