@@ -51,7 +51,7 @@ const EXPERIENCE_SCHEMA = {
   required: [...DIMENSIONS, 'A_score', 'B_score', 'reason'],
 }
 
-function scenarioBrief(s) {
+function scenarioBrief(s, withPurpose = true) {
   const text = (r) => (Array.isArray(r) ? r.join(' ') : r)
   // Work 둘을 잇는 시나리오는 Work마다 리포트, 아는 사실, 숨긴 시험을 보인다
   const parts = multiWork(s)
@@ -66,7 +66,7 @@ function scenarioBrief(s) {
       ]
   return [
     `시나리오: ${s.id} — ${s.title}`,
-    `평가 목적: ${s.purpose}`,
+    ...(withPurpose ? [`평가 목적: ${s.purpose}`] : []),
     ...parts,
     ...(s.preferences ?? []).map((p) => `사람의 선호: ${p}`),
     ...(s.reveals ?? []).map((r) => `도중에 더해진 요구: ${r.text}`),
@@ -168,7 +168,7 @@ export async function judgePair({ scenario, first, second, firstDir, secondDir, 
       `${words(scenario).same} 두 번 따로 ${words(scenario).did} 결과 A와 B를 비교하라. 어떻게 만들었는지는 알려 주지 않는다.`,
       outcomeCriteria(scenario),
       '',
-      scenarioBrief(scenario),
+      scenarioBrief(scenario, opts.judgePurpose !== false),
       '',
       '## 결과 A',
       outcomeBlock(A, Ad),
@@ -195,7 +195,7 @@ export async function judgePair({ scenario, first, second, firstDir, secondDir, 
       '- overall: 이 상황에서 전체로 더 나은 사용 경험',
       'A_score, B_score는 전체 사용 경험 1~10이다. 결과의 정확성은 참고만 하고 사용 경험을 본다.',
       '',
-      scenarioBrief(scenario),
+      scenarioBrief(scenario, opts.judgePurpose !== false),
       '',
       '## 기록 A',
       timeline(A, Ad),

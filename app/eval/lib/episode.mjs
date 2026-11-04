@@ -171,6 +171,7 @@ export async function runEpisode(o) {
       configDir: makeClaudeConfig(path.join(o.workDir, multi ? `cfg-human-${n + 1}` : 'cfg-human')),
       model: opts.humanModel,
       effort: opts.humanEffort,
+      handsOff: opts.humanMode === 'hands-off',
       vision: screenType === 'relay' && opts.vision,
     })
     humans.push(h)

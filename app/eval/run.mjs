@@ -48,6 +48,8 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --max-minutes <n>        실행 하나의 시간 제한 (기본은 시나리오 값)
   --max-turns <n>          사람 차례 제한 (기본은 시나리오 값)
   --no-judge               짝 판정을 하지 않는다
+  --human-mode <방식>      normal(기본) 또는 hands-off: 사람 역할이 의도 승인 뒤 결과를 확인하거나 지적하지 않는다
+  --no-judge-purpose       판정 모델에 시나리오의 평가 목적을 주지 않는다
   --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
 `
 
@@ -158,6 +160,8 @@ async function main() {
       'max-minutes': { type: 'string' },
       'max-turns': { type: 'string' },
       'no-judge': { type: 'boolean' },
+      'human-mode': { type: 'string', default: 'normal' },
+      'no-judge-purpose': { type: 'boolean' },
       out: { type: 'string' },
     },
   })
@@ -224,7 +228,13 @@ async function main() {
     workRoot,
     apps,
     pairs,
+    // hands-off: 사람 역할이 의도(계약) 승인 뒤 결과를 확인하거나 지적하지 않는다(relay-v3 M2 평가 규약 Q3, E-auto)
+    humanMode: v['human-mode'] === 'hands-off' ? 'hands-off' : 'normal',
+    // 판정 모델에 시나리오의 목적(무엇이 relay의 강점인지)을 주지 않는다(relay-v3 M2 평가 규약 6절)
+    judgePurpose: !v['no-judge-purpose'],
   }
+  if (!['normal', 'hands-off'].includes(v['human-mode']))
+    throw new Error(`--human-mode는 normal이나 hands-off입니다: ${v['human-mode']}`)
   let claudeVersion = null
   try {
     claudeVersion = execFileSync(findClaude(), ['--version'], { env: cleanEnv() }).toString().trim()
