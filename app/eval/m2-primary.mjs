@@ -311,7 +311,8 @@ export function m2Report(runs, dirs = []) {
     '',
   )
 
-  // 규칙을 읽기 전에 볼 것: hands-off 규칙을 어긴 실행(Q3이 약해진다), 번호 빠진 스크린샷, main을 움직인 실행
+  // 규칙을 읽기 전에 볼 것: hands-off 규칙을 어긴 실행(Q3이 약해진다), 번호 빠진 스크린샷, main을 움직인 실행,
+  // 품질 기준을 덧씌우지 않은 실행(규약 7절: 모든 쪽에 덧씌운다. 없으면 v3 증거가 비어 Q4를 잴 수 없다)
   const checks = arms.map((a) => {
     const own = ok.filter((r) => r.arm === a)
     return [
@@ -329,13 +330,21 @@ export function m2Report(runs, dirs = []) {
       own.some((r) => r.outcome && 'mainMoved' in r.outcome)
         ? `${own.filter((r) => r.outcome?.mainMoved).length}`
         : '-',
+      `${own.filter((r) => !r.options?.qualityOverlay).length}`,
     ]
   })
   lines.push(
     '## 실행 점검',
     '',
     table(
-      ['쪽', '실행', 'hands-off 규칙 어긴 실행', '번호 빠진 스크린샷', 'main이 움직인 실행'],
+      [
+        '쪽',
+        '실행',
+        'hands-off 규칙 어긴 실행',
+        '번호 빠진 스크린샷',
+        'main이 움직인 실행',
+        '품질 기준 덧씌우지 않은 실행',
+      ],
       checks,
     ),
     '',

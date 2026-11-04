@@ -59,7 +59,8 @@ export function copyTree(from, to) {
     recursive: true,
     filter: (src) => {
       const b = path.basename(src)
-      return b !== '.git' && b !== 'node_modules'
+      // .relay-out: relay-v3 품질 기준의 명령이 쓰는 JUnit 출력(세션이 그 명령을 직접 돌리면 생김). 모든 쪽에 같게 뺀다
+      return b !== '.git' && b !== 'node_modules' && b !== '.relay-out'
     },
   })
 }

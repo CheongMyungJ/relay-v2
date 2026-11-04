@@ -35,7 +35,7 @@ const runOf = (o) => ({
   human: { turns: o.turns ?? 10, ms: o.humanMs ?? 50_000 },
   agent: { input: 1000, output: 10, cacheRead: o.cacheRead ?? 9000, cacheWrite: 0, sessions: 1 },
   works: o.gate ? [{ gate: o.gate }] : [],
-  options: { humanMode: o.humanMode ?? 'normal' },
+  options: { humanMode: o.humanMode ?? 'normal', qualityOverlay: o.overlay ?? false },
 })
 
 describe('쪽 이름', () => {
@@ -232,8 +232,9 @@ describe('보고서', () => {
     const handsOff = []
     for (const scenario of ['10-x', '14-y'])
       for (let index = 1; index <= 3; index++) {
-        normal.push(runOf({ scenario, index, kind: 'relay3', success: true }))
-        normal.push(runOf({ scenario, index, kind: 'cli', success: index !== 1 }))
+        const overlay = { path: '.relay/quality.json', sha256: 'x' }
+        normal.push(runOf({ scenario, index, kind: 'relay3', success: true, overlay }))
+        normal.push(runOf({ scenario, index, kind: 'cli', success: index !== 1, overlay }))
         handsOff.push(
           runOf({ scenario, index, kind: 'relay3', success: false, humanMode: 'hands-off' }),
         )
@@ -249,6 +250,9 @@ describe('보고서', () => {
     ])
     const { text, verdicts: v, comparisons } = m2Report(runs, [a, b])
     expect(text).toContain('도구 문제로 뺀 실행 1개')
+    // 품질 기준을 덧씌우지 않은 실행을 쪽마다 센다(규약 7절: 모두 덧씌운다)
+    expect(text).toMatch(/\| relay3 \| 6 \| - \| - \| - \| 0 \|/)
+    expect(text).toMatch(/\| relay3-handsoff \| 6 \| 0% \(0\/6\) \| - \| - \| 6 \|/)
     // relay3는 모두 통과, 손 뗀 쪽은 모두 실패: 차이 1, 구간 [1, 1]이라 다름
     expect(comparisons['relay3|relay3-handsoff|P1']).toMatchObject({
       diff: 1,

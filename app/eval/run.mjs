@@ -13,6 +13,7 @@ import { parseArgs } from 'node:util'
 import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
 import { armBase, armType, isRelay3, RELAY3, words } from './lib/kind.mjs'
+import { overlayRecord, qualityOverlay, relay3Cli } from './lib/overlay.mjs'
 import { RELAY3_APP } from './lib/relay3-arm.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
@@ -57,6 +58,8 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --no-judge               짝 판정을 하지 않는다
   --human-mode <방식>      normal(기본) 또는 hands-off: 사람 역할이 의도 승인 뒤 결과를 확인하거나 지적하지 않는다
   --no-judge-purpose       판정 모델에 시나리오의 평가 목적을 주지 않는다(relay-v3 쪽이 돌면 늘 주지 않음)
+  --quality-overlay        모든 쪽의 평가 레포 첫 커밋에 relay-v3 relay init 초안의 .relay/quality.json을 넣는다
+                           (RELAY3_APP의 relay-v3로 시나리오마다 만든다. 판정의 기준에도 얹어 diff에 나오지 않는다)
   --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
 `
 
@@ -123,8 +126,11 @@ function newestMtime(dir) {
   return newest
 }
 
-function preflight(arms, apps) {
+function preflight(arms, apps, overlay) {
   const problems = []
+  // 품질 기준 덧씌우기는 쪽과 상관없이 relay-v3의 relay init을 쓴다
+  if (overlay && !fs.existsSync(relay3Cli(RELAY3_APP)))
+    problems.push(`relay-v3 명령줄(${relay3Cli(RELAY3_APP)})이 없습니다. RELAY3_APP을 확인하세요`)
   for (const dir of new Set(arms.map((a) => appOf(a, apps)).filter(Boolean))) {
     const built = path.join(dir, 'out/main/index.js')
     if (!fs.existsSync(built)) problems.push(`앱 빌드(${dir}/out)가 없습니다`)
@@ -170,6 +176,7 @@ async function main() {
       'no-judge': { type: 'boolean' },
       'human-mode': { type: 'string', default: 'normal' },
       'no-judge-purpose': { type: 'boolean' },
+      'quality-overlay': { type: 'boolean' },
       out: { type: 'string' },
     },
   })
@@ -227,7 +234,7 @@ async function main() {
       })
     : null
   const runs = Number(v.runs)
-  preflight(arms, apps)
+  preflight(arms, apps, !!v['quality-overlay'])
 
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')
   const outDir = path.resolve(v.out ?? path.join(EVAL, 'results', stamp))
@@ -253,6 +260,8 @@ async function main() {
     // 판정 모델에 시나리오의 목적(무엇이 relay의 강점인지)을 주지 않는다(relay-v3 M2 평가 규약 6절). relay-v3 쪽이 도는
     // 배치는 그 규약의 평가라 --no-judge-purpose가 없어도 주지 않는다
     judgePurpose: !v['no-judge-purpose'] && !arms.some(isRelay3),
+    // 품질 기준 덧씌우기(relay-v3 M2 평가 규약 7절, lib/overlay.mjs). 시나리오마다의 파일은 overlays
+    qualityOverlay: !!v['quality-overlay'],
   }
   if (!['normal', 'hands-off'].includes(v['human-mode']))
     throw new Error(`--human-mode는 normal이나 hands-off입니다: ${v['human-mode']}`)
@@ -271,8 +280,8 @@ async function main() {
   }
   const commit = commitOf(APP)
   const appCommits = Object.fromEntries(Object.entries(apps).map(([k, d]) => [k, commitOf(d)]))
-  // relay-v3는 커밋하지 않은 변경이 있으면 표시한다(빌드는 작업 트리에서 한다)
-  if (arms.some(isRelay3)) {
+  // relay-v3는 커밋하지 않은 변경이 있으면 표시한다(빌드는 작업 트리에서 한다). 품질 기준 덧씌우기도 relay-v3의 초안이다
+  if (arms.some(isRelay3) || opts.qualityOverlay) {
     let dirty = false
     try {
       dirty =
@@ -282,6 +291,19 @@ async function main() {
     }
     appCommits.relay3 = `${commitOf(RELAY3_APP)}${dirty ? '+dirty' : ''}`
   }
+  // 덧씌울 품질 기준: 시나리오마다 한 번 만들어 모든 쪽·회차에 같은 파일을 넣는다(초안은 레포 파일로만 정해진다)
+  const overlays = opts.qualityOverlay
+    ? Object.fromEntries(
+        scenarios.map((s) => [
+          s.id,
+          qualityOverlay(
+            path.join(s.dir, 'repo'),
+            relay3Cli(RELAY3_APP),
+            path.join(workRoot, 'overlay', s.id),
+          ),
+        ]),
+      )
+    : {}
   writeJson(path.join(outDir, 'config.json'), {
     startedAt: new Date().toISOString(),
     commit,
@@ -291,6 +313,14 @@ async function main() {
     runs,
     arms,
     ...opts,
+    // 시나리오마다 넣은 파일의 경로와 sha256 (run.json의 options.qualityOverlay와 같다)
+    ...(opts.qualityOverlay
+      ? {
+          qualityOverlayFiles: Object.fromEntries(
+            Object.entries(overlays).map(([id, x]) => [id, overlayRecord(x)]),
+          ),
+        }
+      : {}),
   })
   console.log(`결과 폴더: ${outDir}`)
   console.log(`작업 폴더: ${workRoot}`)
@@ -317,6 +347,7 @@ async function main() {
           opts,
           outDir: path.join(outDir, s.id, `${kind}-${i}`),
           workDir: path.join(workRoot, `${s.id}-${kind}-${i}`),
+          overlay: overlays[s.id] ?? null,
         })
       } catch (e) {
         console.log(`[${s.id} ${kind}#${i}] 실행 실패: ${e instanceof Error ? e.stack : e}`)

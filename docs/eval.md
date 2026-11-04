@@ -3,6 +3,7 @@
 - 상태: 사용 중. 평가 보고서는 `app/eval/reports/`에 있다(지난 것은 `reports/archive/`)
 - 코드: `app/eval/`
 - 새 세션에서 돌리기: `.claude/skills/relay-eval/SKILL.md` (예: "시나리오 3번으로 5번 돌려서 평가해줘")
+- relay-v3 평가: relay-v3의 M2 평가 규약(`relay-v3/docs/experiments/m2/protocol.md`)이 이 도구에 relay-v3 쪽과 아래 2·3·4·6·7절의 옵션을 더해 쓴다
 
 ## 1. 목적
 
@@ -15,6 +16,7 @@
   ├─ relay 쪽: 빌드한 Electron 앱(out/)을 가상 화면에 띄우고 Playwright로 누른다
   ├─ relay-off 쪽: relay와 같고 앱에 RELAY_KNOWLEDGE=off를 준다(지식 관리를 끔, Work 여럿을 잇는 시나리오 21~27의 짝)
   ├─ 다른 빌드 쪽(--app 이름=폴더): eval/ref-app.sh로 만든 다른 커밋의 앱. 이름-off는 그 빌드에서 지식을 끔
+  ├─ relay-v3 쪽(relay3, relay3-noreview): RELAY3_APP(기본 relay-v2 옆의 relay-v3)의 빌드한 앱. noreview는 RELAY_ABLATE=review
   └─ 맨 CLI 쪽: 레포 폴더의 bash(PTY)에서 claude를 띄워 둔다
 사람 역할(claude -p 세션 하나) ── 화면을 보고 행동을 JSON으로 고른다
 판정: 숨긴 시험, 바뀐 파일, 설문, 짝 판정(claude -p)
@@ -32,9 +34,12 @@
 | `eval/knowledge-quality.mjs` | 남은 지식의 질, kind 분포, 지식 검토 호출의 시간·비용 (`docs/knowledge-experiment/followup.md` 9절). 기준은 `eval/knowledge-truth/<시나리오>.json` |
 | `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
+| `eval/m2-primary.mjs` | relay-v3 M2 평가 규약의 지표(P1~P5, G1·G2)와 판정 규칙(Q1~Q4). 결과 폴더 여럿(보통 배치와 hands-off 배치)을 합쳐 읽고 hands-off 실행은 `<쪽>-handsoff`로 센다 |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
 | `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌). 이름을 붙인 봉인은 `HOLDOUT_NAME=<이름>` |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
+| `eval/lib/relay3-arm.mjs` | relay-v3 앱 쪽. 화면 읽기와 행동은 relay 쪽을 물려받고, 앱 띄우기, 프로젝트 등록, 앱 저장소(`$RELAY_HOME/works/<id>`)의 Work·관문·리뷰 토큰·Work의 끝을 읽는다 |
+| `eval/lib/overlay.mjs` | 품질 기준 덧씌우기(`--quality-overlay`): relay-v3 `relay init` 초안 만들기, 판정의 기준에 얹기 |
 | `eval/lib/cli-arm.mjs` | bash와 claude를 PTY로 띄우기, 터미널 화면(xterm headless), 입력, 새 터미널, 비정상 종료 |
 | `eval/lib/human.mjs` | 사람 역할의 시스템 프롬프트, 차례마다 보일 화면, 행동 형식, 설문 |
 | `eval/lib/judge.mjs` | 결과 판정(가림)과 경험 판정 |
@@ -57,7 +62,8 @@
 - **같은 에이전트:** 두 쪽 모두 같은 claude 실행 파일(맨 CLI는 경로로 직접 띄우고, 셸의 `claude`도 PATH 맨 앞의 링크로 같은 파일을 가리킨다), 모델(`ANTHROPIC_MODEL`), effort(`CLAUDE_CODE_EFFORT_LEVEL`)다. 맨 CLI는 relay와 같게 `--dangerously-skip-permissions`로 띄운다(D17). `--cli-permission default`로 권한 확인을 켤 수 있다.
 - **같은 환경:** 세션의 환경 변수를 넘기지 않고 고른 것만 넘긴다(`env -i`와 같음, 8.4). 에이전트, 사람 역할, 판정은 설정 폴더(`CLAUDE_CONFIG_DIR`)를 따로 써서 사용량을 나눠 센다. 두 쪽 모두 자동 업데이트 알림과 입력창의 흐린 추천 문구(prompt suggestion)를 끈다. 추천 문구는 화면 글자만 보는 사람 역할이 자기가 친 것으로 착각했다.
 - **같은 사람:** 두 쪽의 사람 역할은 같은 모델, 같은 규칙, 같은 시나리오 정보를 받는다. 다른 것은 도구 설명서와 행동 목록뿐이다. 둘 다 "끝의 기준"(버그가 고쳐졌다고 납득하고 로컬 브랜치에 커밋됨)이 같다.
-- **같은 깨우기:** 사람은 화면이 바뀌었다가 6초 동안 그대로면 깨어난다(화면이 멈춘 것을 알아챔). 스스로 기다리기로 한 시간이 지나도 깨어나고, 화면이 계속 바뀌어도 4분마다 한 번 들여다본다. relay의 OS 알림은 알림으로 보이고 사람을 깨운다(relay만 가진 기능이므로 그대로 둔다). relay 화면에서 시계만 따라 바뀌는 글자(진행 표시의 경과 시간, `data-tick`, relay D216)는 화면이 바뀐 것으로 보지 않는다. 시계가 도는 것으로는 사람이 멈춤을 알아채지 않기 때문이다. 사람 역할이 보는 화면 글자와 스크린샷에는 그대로 있다.
+- **같은 깨우기:** 사람은 화면이 바뀌었다가 6초 동안 그대로면 깨어난다(화면이 멈춘 것을 알아챔). 스스로 기다리기로 한 시간이 지나도 깨어나고, 화면이 계속 바뀌어도 4분마다 한 번 들여다본다. relay의 OS 알림은 알림으로 보이고 사람을 깨운다(relay만 가진 기능이므로 그대로 둔다). relay 화면에서 시계만 따라 바뀌는 글자(진행 표시의 경과 시간, `data-tick`, relay D216)는 화면이 바뀐 것으로 보지 않는다. 시계가 도는 것으로는 사람이 멈춤을 알아채지 않기 때문이다. 사람 역할이 보는 화면 글자와 스크린샷에는 그대로 있다. 같은 까닭으로 Claude Code 터미널에서 시계만 따라 바뀌는 것(스피너 그림, 경과 시간 "12s"·"1m 5s", 깜빡이는 점)도 세 쪽(relay, relay-v3, 맨 CLI)에서 똑같이 가린다(`eval/lib/util.mjs`의 `withoutClock`). relay-v3 세션이 MCP 도구 안에서 사람의 승인을 기다리는 동안 시계만 돌아 사람 역할이 최대 2분 늦게 깨던 것을 없앤 것이라, 그 전 보고서와 차례 수의 정의가 조금 다르다.
+- **같은 레포(`--quality-overlay`):** 켜면 모든 쪽의 평가 레포 첫 커밋에 relay-v3 `relay init`(쓰지 않고 출력만)이 그 레포에서 내는 초안을 `.relay/quality.json`으로 넣는다. relay-v3는 레포의 품질 기준으로 증거를 재므로 이것이 없으면 증거가 비고 관문이 늘 사람 머지다. 초안은 레포 파일로만 정해져 시나리오마다 한 번 만들어 모든 쪽·회차에 같게 넣는다(기준 커밋의 트리가 같다, `run.json`의 `baseTree`). 팀원 교대의 clone은 그 커밋에서 이어진다. relay·맨 CLI에는 쓰이지 않는 파일이다. 숨긴 시험, 시나리오 정의, `check-scenario.mjs`에는 넣지 않는다. `config.json`의 `qualityOverlay`·`qualityOverlayFiles`와 `run.json`의 `options.qualityOverlay`(경로와 sha256, 끄면 false)에 남는다.
 - **같은 시작점:** relay는 프로젝트가 등록된 앱에서, 맨 CLI는 레포 폴더에서 claude가 떠 있는 상태에서 시작한다. 등록과 첫 실행 창은 도구가 한다.
 - **relay 설정:** 앱 설정은 바꾸지 않고 앱의 기본값으로 돈다. 지금 기본값은 fix, implement, refactor, execute를 자동 승인한다(`app/src/shared/config.ts`의 `DEFAULT_CONFIG`). M12(relay D214) 전의 보고서(`app/eval/reports/archive/`)는 자동 승인이 꺼진 기본값으로 돌았으므로 견줄 때 이것을 감안한다. 프로젝트 설정의 이슈 기록(relay D337)만 등록 직후 도구가 끈다. 평가 환경의 gh는 로그인하지 않아 게시가 늘 실패하고, 그 알림이 사람 역할의 friction으로 잡혔다(2026-10-05 평가 31). 그 전의 relay 결과는 이 알림을 본 채로 돌았다.
 - **보는 것:** relay의 사람 역할은 스크린샷(요소 번호를 얹은 것), 보이는 글자, 누를 수 있는 요소 목록을 본다. 맨 CLI의 사람 역할은 터미널 화면 글자를 본다(터미널은 글자가 곧 화면이다). 둘 다 지금 보이는 만큼만 본다. 스크린샷은 창(1500×950)을 1000픽셀 너비로 줄인 것이고, 화면 배치(누를 수 있는 요소와 그 상태, 열린 대화상자)가 앞에 붙인 그림과 같으면 다시 붙이지 않는다. 글자와 요소 목록은 차례마다 준다(eval-findings E10). 사람 역할 비용을 줄여 회차를 늘리려는 것이다.
@@ -70,6 +76,8 @@
 - 행동: relay는 `click`, `fill`, `select`, `scroll`, 맨 CLI는 `new_terminal`, `switch`, 공통으로 `type`(터미널 입력), `key`, `inspect_diff`, `wait`, `done`, `give_up`.
 - 시나리오의 사실은 "처음부터 앎"과 "물으면 답함"으로 나뉜다. 물으면 답함은 에이전트가 묻거나 꼭 필요할 때만 말한다.
 - 끝나면 같은 세션에서 설문(1~7)에 답한다: 수고, 명확함, 통제감, 결과 확신, 신뢰, 복구, 다시 쓰고 싶음, 좋았던 점, 불편했던 점.
+- **손 뗀 사람(`--human-mode hands-off`):** 의도·계약을 승인한 뒤 결과를 확인하지 않는다. `inspect_diff`를 쓰지 않고, 결과가 아는 사실과 어긋나도 지적하지 않으며, 에이전트가 끝났다고 하면 받아들인다. 질문에는 평소처럼 답한다. 설명서의 확인·고치기 안내보다 이 규칙이 앞서고, 끝내는 방법(완료·끝내기·끝 확정)만 설명서대로 따른다(끝내기 전에 보이는 판정표·증거·리뷰 지적도 따지지 않는다). 기계로 세는 어김(`inspect_diff`, 변경 화면 열기, 터미널의 `git diff`·`show`·`log -p`)은 `run.json`의 `human.handsOffViolations`에 둔다. 결과 폴더를 합쳐 읽을 때 이 실행은 `<쪽>-handsoff`다.
+- relay-v3 쪽의 설명서는 `guides/relay3.md`(두 쪽 같음)다. 끝내기는 두 단계다: [끝내기]가 내보내기 증거와 리뷰를 돌려 [증거]에 확인 상자를 띄우고(리뷰를 끈 쪽은 '리뷰가 꺼져 있음'), 사람이 고칠 것을 세션에게 말하거나 [끝 확정]을 누른다.
 
 ## 5. 시나리오
 
@@ -159,10 +167,12 @@
   - 걸린 시간에는 평가 고리가 사람 역할(AI)의 답을 기다린 시간이 들어 있다. 보고서는 사람 역할 응답 시간의 합과 그것을 뺀 시간을 따로 보인다. 기다리기만 한 차례(행동이 `wait`뿐이거나 없음)도 센다. 진행 표시(relay D216)처럼 화면이 계속 바뀌면 깨우는 횟수가 기계적으로 달라지므로, 개선 전후는 이 줄과 사람 역할의 말로 견준다(eval-findings E2).
   - 스크린샷을 붙인 차례 수(relay만)를 센다(E10).
 - **에이전트(자동):** 설정 폴더의 대화 기록에서 토큰(같은 메시지 id는 마지막 줄 하나. Claude Code는 메시지 하나를 여러 줄에 쓰고 앞 줄의 출력 토큰은 다 세지 않은 값이다), 세션 수.
+  - 앱이 따로 부른 `claude -p`(relay-v3 독립 리뷰, relay 독립 리뷰·지식 검토)는 대화 기록을 남기지 않으므로(`--no-session-persistence`) 앱의 기록으로 세어 에이전트 토큰(입력, 출력, 캐시 읽기·쓰기)에 더하고 그 몫을 `agent.review`에 따로 둔다. relay-v3는 Work의 `events.jsonl`의 `review` 기록의 `usage`, relay는 task 폴더의 `independent-review.json`·`knowledge-review.json`이다. 세션 수와 메시지 수에는 넣지 않는다. 사용량을 알리지 못한 리뷰(시간 초과 등)는 `usageUnknown`으로 센다.
   - relay는 task마다 세션 id로 대화 기록을 맞춰 단계별 토큰(입력(캐시 포함), 캐시 쓰기, 출력)과 `context.md` 글자 수를 `run.json`의 `agentSteps`에 두고, 보고서의 "relay 단계별 에이전트" 표에 단계마다 평균으로 보인다(eval-findings R9). 대화 기록을 찾지 못한 세션은 빼고 센다.
 - **설문:** 4절.
+- **relay-v3 쪽(자동):** Work마다 계약 승인, 관문 결론(마지막 evidence 기록이 내보내기이고 그 head가 내보낸 head이자 끝낸 때의 worktree HEAD면 내보내기 결론. G1·G2는 이것만 센다), 리뷰 호출·토큰, 리뷰 뒤 세션이 더 일했는지, Work의 끝(`end`)을 `run.json`의 `works`에 둔다. 끝은 `confirmed`([끝 확정]), `merged`·`closed`(PR), `prepared`([끝 확정] 없이 끝났지만 끝낸 커밋이 내보내기 증거·리뷰를 받은 그 커밋이고 커밋하지 않은 변경이 없음), `stale`([끝내기] 뒤 커밋이 더 생겼거나 커밋 안 된 변경이 남음), `abandoned`, `null`([끝내기] 없음)이다. 끝의 기준은 커밋된 상태라 앞의 넷을 relay@auto의 [Work 완료]와 같은 수준의 끝으로 센다(`ended`). 사람 역할의 `done`은 쪽과 상관없이 받고([끝 확정]·[Work 완료]를 누르지 않았어도), 숨긴 시험은 다른 쪽처럼 worktree 그대로로 판정한다.
 - **짝 판정:** 같은 시나리오 같은 회차의 relay와 맨 CLI(`works`가 있는 21~27은 relay와 relay-off, `--pairs`를 주면 그 짝들)를 A, B로 무작위로 놓고 판정 모델이 비교한다.
-  - 결과 판정(가림): 코드 차이와 시험 결과만 본다. 커밋 메시지는 보이지 않는다. correctness, scope, quality, tests (1~5), 선호.
+  - 결과 판정(가림): 코드 차이와 시험 결과만 본다. 커밋 메시지는 보이지 않는다. correctness, scope, quality, tests (1~5), 선호. `--no-judge-purpose`(relay-v3 쪽이 돌면 늘)면 판정 모델에 시나리오의 평가 목적(무엇이 relay의 강점인지)을 주지 않는다.
   - 경험 판정: 차례 기록과 설문을 본다. 기록에 도구가 드러나므로 가릴 수 없다. burden, clarity, control, recovery, confidence, overall의 우세와 점수(1~10).
 
 ## 7. 돌리기
@@ -179,6 +189,10 @@ node eval/run.mjs --scenarios 21,24 --runs 3 --arms relay,base --app base=/tmp/r
 node eval/primary.mjs eval/results/<폴더> --pair relay:relay-off # 주지표와 구간
 node eval/run.mjs --scenarios 1,10,15,16,18,19 --runs 3 --arms relay,relay@general --pairs relay:relay@general --parallel 2  # 교차 비교(relay I93)
 node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만들기
+# relay-v3 M2 평가(규약 3절): relay-v3 체크아웃(RELAY3_APP)에서 먼저 npm ci && npm run build
+node eval/run.mjs --scenarios 7,8,10 --runs 5 --arms relay3,relay3-noreview,relay@auto,cli --parallel 2 --quality-overlay --no-judge-purpose --pairs relay3:cli,relay3-noreview:cli,relay@auto:cli,relay3:relay3-noreview,relay3:relay@auto
+node eval/run.mjs --scenarios 10,14 --runs 5 --arms relay3,cli --human-mode hands-off --quality-overlay --no-judge-purpose --parallel 2
+node eval/m2-primary.mjs eval/results/<보통 배치> eval/results/<hands-off 배치> --out m2.md   # 지표와 판정 규칙
 ```
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`. 옵션 전체(`--human-effort`, `--no-vision`, `--max-minutes`, `--max-turns`, `--no-judge` 포함)는 `node eval/run.mjs --help`로 본다.

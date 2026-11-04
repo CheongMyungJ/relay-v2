@@ -244,6 +244,26 @@ export const exportGates = (r) => (r.works ?? []).map((w) => w.gate).filter((g) 
 export const autoGate = (r) =>
   exportGates(r).some((g) => g.shadow || g.conclusion === 'auto_merge_candidate')
 
+const END_NAME = {
+  confirmed: '[끝 확정]',
+  merged: '머지',
+  closed: 'PR 닫힘',
+  prepared: '확정 없이 리뷰 본 커밋 그대로',
+  stale: '[끝내기] 뒤 바뀜(끝 아님)',
+  abandoned: '버림',
+  done: '끝남(기록 없음)',
+}
+
+/** Work마다의 끝(relay3-arm.mjs workEnd)을 센다. end가 없는 예전 결과는 빼고 '-'다 */
+function endCounts(ws) {
+  const counts = new Map()
+  for (const w of ws.filter((x) => x.end !== undefined)) {
+    const k = w.end === null ? '[끝내기] 없음' : (END_NAME[w.end] ?? w.end)
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  return [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'
+}
+
 /**
  * relay-v3 쪽의 계약, 관문(그림자)과 독립 리뷰 (relay-v3 docs/experiments/m2/protocol.md Q4, P5). 관문은 Work마다 마지막
  * 결론이다. G1, G2는 내보내기 결론이 있는 실행만으로 센다(exportGates). 그 가운데 자동 조건을 채운 실행에서 숨긴 시험을
@@ -269,10 +289,13 @@ export function relay3Rows(rs) {
   const reviewed = rs.flatMap(works).filter((w) => typeof w.workedAfterReview === 'boolean')
   return [
     ['계약 승인됨', pct(rs.filter((r) => works(r).some((w) => w.contract?.approvedBy)).length, n)],
+    // 끝(relay3-arm.mjs workEnd): [끝 확정]·머지, 그리고 [끝 확정] 없이 끝냈지만 내보내기 증거·리뷰를 받은 커밋 그대로인 것.
+    // ended가 없는 예전 결과는 상태(끝남)로 센다
     [
-      'Work 끝남(끝내기·머지)',
-      pct(rs.filter((r) => works(r).some((w) => w.status === 'done')).length, n),
+      'Work 끝남([끝 확정]·머지, 확정 없이 리뷰 본 커밋 그대로)',
+      pct(rs.filter((r) => works(r).some((w) => w.ended ?? w.status === 'done')).length, n),
     ],
+    ['끝의 종류(Work마다)', endCounts(rs.flatMap(works))],
     ['관문 결론(Work마다 마지막)', [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'],
     ['내보내기 결론이 있음(G1·G2의 분모, 없으면 뺌)', pct(exported.length, judged.length)],
     ['자동 조건을 채움(그림자·자동 후보)', pct(autoRuns.length, exported.length)],
@@ -459,6 +482,14 @@ export function buildReport(dir) {
     `- 에이전트: ${config.agentModel ?? '-'} (effort ${config.effort ?? '-'}), 사람 역할: ${config.humanModel ?? '-'}, 판정: ${config.judgeModel ?? '-'}`,
     `- 맨 CLI 인자: \`claude ${(config.cliArgs ?? []).join(' ')}\`, 스크린샷 보기: ${config.vision === false ? '끔' : '켬'}`,
     `- 판정 모델에 시나리오의 평가 목적: ${config.judgePurpose === false ? '주지 않음' : '줌'}`,
+    // 품질 기준 덧씌우기(lib/overlay.mjs): 모든 쪽의 첫 커밋에 넣은 relay-v3 초안. 해시는 sha256 앞 8자
+    `- 품질 기준 덧씌우기(.relay/quality.json): ${
+      config.qualityOverlay
+        ? `켬 (${Object.entries(config.qualityOverlayFiles ?? {})
+            .map(([id, f]) => `${id} ${String(f?.sha256 ?? '-').slice(0, 8)}`)
+            .join(', ')})`
+        : '끔'
+    }`,
     `- 실행 ${runs.length}개, 짝 판정 ${judges.length}개`,
     '',
     '읽는 법: 수치는 평균 ± 표준편차다. 사람 역할과 판정은 AI이므로 경향을 보는 자료로 쓴다. 회차가 적으면 편차가 크다.',

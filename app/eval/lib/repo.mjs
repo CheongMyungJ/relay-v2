@@ -1,16 +1,21 @@
 // 평가 레포 만들기와 결과 판정(숨긴 시험, 기존 시험, 바뀐 파일, 범위).
-// 기준은 시나리오의 repo/ 폴더 그대로다. 결과 폴더를 .git 없이 복사해 git diff --no-index로 비교하므로
-// relay의 worktree, 맨 CLI의 레포, 지워진 worktree의 스냅숏을 똑같이 다룬다.
+// 기준은 시나리오의 repo/ 폴더다(품질 기준 덧씌우기를 켜면 그 파일을 얹은 것, lib/overlay.mjs). 결과 폴더를 .git 없이
+// 복사해 git diff --no-index로 비교하므로 relay의 worktree, 맨 CLI의 레포, 지워진 worktree의 스냅숏을 똑같이 다룬다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { isIssue } from './issue-judge.mjs'
+import { writeFiles } from './overlay.mjs'
 import { copyTree, git, run } from './util.mjs'
 
-/** 시나리오의 repo/를 git 레포로 만든다. origin은 로컬 bare 레포다(test/support/repo.ts의 makeRepo와 같음) */
-export function makeRepo(root, name, srcDir) {
+/**
+ * 시나리오의 repo/를 git 레포로 만든다. origin은 로컬 bare 레포다(test/support/repo.ts의 makeRepo와 같음). files(경로 →
+ * 내용)는 첫 커밋에 함께 넣는다(품질 기준 덧씌우기, lib/overlay.mjs). 팀원 교대의 clone은 이 커밋에서 이어지므로 따로 넣지 않는다
+ */
+export function makeRepo(root, name, srcDir, files = {}) {
   const repo = path.join(root, name)
   const remote = path.join(root, `${name}.git`)
   copyTree(srcDir, repo)
+  writeFiles(repo, files)
   git(root, 'init', '-q', '--bare', '-b', 'main', remote)
   git(repo, 'init', '-q', '-b', 'main')
   git(repo, 'config', 'user.email', 'dev@example.com')

@@ -11,12 +11,14 @@ import { RelayArm } from './relay-arm.mjs'
 import { Relay3Arm, withReviewUsage } from './relay3-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
+import { baseWithOverlay, overlayFiles, overlayRecord } from './overlay.mjs'
 import { diffTree, handoffRepo, judgeTree, makeRepo, withoutKnowledge } from './repo.mjs'
 import {
   agentUsage,
   agentUsageBySession,
   appendJsonl,
   clip,
+  git,
   hash,
   questionsBySession,
   sleep,
@@ -136,6 +138,8 @@ const mmss = (ms) => {
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
  * @param {string} o.workDir 작업 폴더 (/tmp 아래)
+ * @param {{ path: string, text: string, sha256: string } | null} [o.overlay] 평가 레포의 첫 커밋에 넣을 품질 기준
+ *   (run.mjs --quality-overlay, lib/overlay.mjs). 판정의 기준에도 얹는다
  */
 export async function runEpisode(o) {
   const { scenario, kind, opts } = o
@@ -150,9 +154,14 @@ export async function runEpisode(o) {
   fs.mkdirSync(o.outDir, { recursive: true })
   const turnsFile = path.join(o.outDir, 'turns.jsonl')
 
-  const baseDir = path.join(o.scenarioDir, 'repo')
+  const overlay = o.overlay ?? null
+  const scenarioRepo = path.join(o.scenarioDir, 'repo')
+  // 판정의 기준(diff, 숨긴 시험의 바탕)은 평가 레포의 첫 커밋과 같은 내용이다: 덧씌운 파일은 diff에 나오지 않는다
+  const baseDir = baseWithOverlay(scenarioRepo, overlay, path.join(o.workDir, 'base-tree'))
   const repoName = scenario.repoName ?? 'repo'
-  const { repo, remote, base } = makeRepo(o.workDir, repoName, baseDir)
+  const { repo, remote, base } = makeRepo(o.workDir, repoName, scenarioRepo, overlayFiles(overlay))
+  // 기준 커밋의 트리. 쪽과 회차가 달라도 같은 시나리오·같은 덧씌우기면 같다(커밋 id는 시각 때문에 다르다)
+  const baseTree = git(repo, 'rev-parse', `${base}^{tree}`)
   const agentConfigDir = makeClaudeConfig(path.join(o.workDir, 'cfg-agent'))
   /** before 뒤에 새로 생긴 에이전트 세션 (Work마다의 토큰과 질문 수) */
   const newSessions = (before, bySession = agentUsageBySession(agentConfigDir)) =>
@@ -737,6 +746,7 @@ export async function runEpisode(o) {
     wallMs,
     // 준비에 든 시간(wallMs에 들어 있다). 사람 몫을 뺀 걸린 시간은 wallMs − prepareMs − human.ms다
     prepareMs,
+    baseTree,
     firstChangeMs: firstChangeAt ? firstChangeAt - t0 : null,
     outcome: {
       // Work 둘을 잇는 시나리오는 모든 Work를 돌려 판정했을 때만 성공이다. 앞 Work에서 멈추면 재는 Work의 시험이 없다
@@ -801,6 +811,8 @@ export async function runEpisode(o) {
       cliArgs: opts.cliArgs,
       // 사람 역할 변형. 결과 폴더를 합쳐 읽을 때 hands-off 실행은 <쪽>-handsoff로 읽는다(lib/works.mjs armOf)
       humanMode: opts.humanMode ?? 'normal',
+      // 품질 기준 덧씌우기: 넣은 파일의 경로와 sha256(lib/overlay.mjs). 끄면 false
+      qualityOverlay: overlayRecord(overlay),
       ...(screenType === 'relay3' ? { appEnv: relay3Env(kind) } : {}),
     },
   }

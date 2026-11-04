@@ -8,6 +8,7 @@ import path from 'node:path'
 import { _electron as electron } from '@playwright/test'
 import { cleanEnv, findClaude } from './env.mjs'
 import { RelayArm } from './relay-arm.mjs'
+import { run } from './util.mjs'
 
 /** relay-v3 체크아웃. RELAY3_APP으로 바꿀 수 있다. 기본은 relay-v2 옆의 relay-v3 */
 export const RELAY3_APP = process.env.RELAY3_APP
@@ -78,8 +79,8 @@ export function reviewUsage(events) {
 
 /**
  * 실제로 돈 첫 리뷰 뒤에 세션이 도구를 더 썼는가(리뷰가 코드에 닿을 수 있었나, 평가 규약 Q1). 리뷰 지적은 세션에 넣지
- * 않으니(V4) 사람이 읽고 말해야 닿는다. PR이 없는 평가에서는 리뷰가 [끝내기] 때만 돌고 곧 Work가 끝나 대개 false다.
- * 돈 리뷰가 없으면 null
+ * 않으니(V4) 사람이 읽고 말해야 닿는다. PR이 없는 평가에서는 리뷰가 [끝내기] 때 돌고, [끝 확정] 전에 사람이 지적을 보고
+ * 세션에게 말해 고치게 했을 때 true다(V18 끝내기 두 단계). 돈 리뷰가 없으면 null
  */
 export function workedAfterReview(events) {
   const i = events.findIndex((e) => e?.type === 'review' && e.status !== 'skipped')
@@ -126,12 +127,15 @@ export function withReviewUsage(agent, review) {
 /**
  * 관문 결론의 요약(평가 규약 Q4의 그림자). 없으면 null. export는 이 결론이 내보내기(리뷰 포함) 측정에서 나왔는가다: 마지막
  * evidence 기록이 내보내기이고 그 head가 내보낸 head(exported_head)와 같을 때다. Stop 뒤의 측정(내보내기 아님)에는 늘
- * '리뷰 없음'이 사람 머지 사실로 붙어 그림자가 될 수 없으므로 G1, G2는 내보내기 결론만으로 센다
+ * '리뷰 없음'이 사람 머지 사실로 붙어 그림자가 될 수 없으므로 G1, G2는 내보내기 결론만으로 센다. head(끝낸 때 worktree의
+ * HEAD)를 주면 그것이 내보낸 head일 때만이다: [끝내기] 뒤 세션이 커밋했는데 다시 재기 전에 끝나면 결론은 앞 커밋의 것이라
+ * 판정한 상태(숨긴 시험)와 어긋난다
  * @param {object | null} gate work.json의 gate
  * @param {object[]} [events] events.jsonl의 기록
  * @param {string | null} [exportedHead] work.json의 exported_head
+ * @param {string | null} [head] Work worktree의 HEAD. 주지 않으면 보지 않는다
  */
-export function gateSummary(gate, events = [], exportedHead = null) {
+export function gateSummary(gate, events = [], exportedHead = null, head = undefined) {
   if (!gate || typeof gate !== 'object') return null
   const last = events.findLast((e) => e?.type === 'evidence') ?? null
   return {
@@ -139,7 +143,61 @@ export function gateSummary(gate, events = [], exportedHead = null) {
     condition: gate.condition ?? null,
     shadow: !!gate.shadow,
     decisive: gate.decisive ?? null,
-    export: !!last && last.export === true && !!exportedHead && last.head === exportedHead,
+    export:
+      !!last &&
+      last.export === true &&
+      !!exportedHead &&
+      last.head === exportedHead &&
+      (head === undefined || head === exportedHead),
+  }
+}
+
+/** Work가 끝났다고 세는 끝(workEnd). relay@auto의 [Work 완료]와 같은 수준이다 */
+const ENDED = new Set(['confirmed', 'merged', 'closed', 'prepared', 'done'])
+
+/**
+ * Work의 끝(relay-v3 V18 끝내기 두 단계). [끝내기]는 지금 커밋으로 내보내기 증거와 리뷰를 재고 [증거]에 확인 상자를 띄울
+ * 뿐 Work는 '구현 중'이다. [끝 확정]을 눌러야 '끝남'(ended 기록)이 된다. 끝의 기준은 커밋된 상태다(사람 역할의 끝의 기준,
+ * v3 증거는 커밋만 잰다). relay@auto의 [Work 완료](세션이 쉴 때 사람이 끝냄)와 같은 수준의 끝을 ENDED로 센다:
+ * - confirmed: [끝 확정]으로 끝남(events.jsonl의 ended 기록). merged: PR 머지(앱의 [머지]·정책 머지는 merged, 앱 밖 머지는
+ *   merged_outside 기록). closed: PR 닫힘(pr_closed 기록). done: 끝났는데 그 기록이 없음(기록을 읽지 못함)
+ * - prepared: [끝 확정] 없이 실행이 끝났지만(사람 역할의 done 등) 끝낸 커밋 상태가 내보내기 증거·리뷰를 받은 그 상태다
+ *   (마지막 evidence 기록이 내보내기이고 그 head = 내보낸 head = worktree HEAD, 커밋하지 않은 변경 없음). 사람은 그 커밋의
+ *   증거와 리뷰를 본 뒤 끝냈고 [끝 확정]은 세션을 닫을 뿐이라 끝으로 센다
+ * - stale: 내보내기 증거는 있지만 그 뒤 커밋이 더 생겼거나 커밋하지 않은 변경이 남음(끝낸 상태의 증거·리뷰가 아님). 끝이 아니다
+ * - abandoned: [버리기]. null: 내보내기 증거 없이 끝남([끝내기]를 누르지 않았거나 리뷰가 도는 중)
+ * @param {{ state: string | null, events: object[], exportedHead: string | null, head: string | null, clean: boolean }} o
+ *   head와 clean은 Work worktree의 HEAD와 커밋하지 않은 변경이 없는지다
+ */
+export function workEnd(o) {
+  if (o.state === 'abandoned') return 'abandoned'
+  if (o.state === 'done') {
+    // relay-v3 works-evidence.ts·works.ts가 남기는 기록 이름이다(pr_merged는 상태 사건 이름일 뿐 기록하지 않는다)
+    const has = (...types) => o.events.some((e) => types.includes(e?.type))
+    if (has('merged', 'merged_outside')) return 'merged'
+    if (has('pr_closed')) return 'closed'
+    if (has('ended')) return 'confirmed'
+    return 'done'
+  }
+  if (!o.exportedHead || !o.events.some((e) => e?.type === 'evidence' && e.export === true))
+    return null
+  const last = o.events.findLast((e) => e?.type === 'evidence')
+  return last?.export === true &&
+    last.head === o.exportedHead &&
+    o.head === o.exportedHead &&
+    o.clean
+    ? 'prepared'
+    : 'stale'
+}
+
+/** worktree의 HEAD와 커밋하지 않은 변경이 없는지. 읽지 못하면 null, false */
+function treeState(dir) {
+  const ok = !!dir && fs.existsSync(path.join(dir, '.git'))
+  const head = ok ? run('git', ['rev-parse', 'HEAD'], { cwd: dir }) : null
+  const status = ok ? run('git', ['status', '--porcelain'], { cwd: dir }) : null
+  return {
+    head: head?.code === 0 ? head.out.trim() : null,
+    clean: status?.code === 0 && status.out.trim() === '',
   }
 }
 
@@ -252,7 +310,8 @@ export class Relay3Arm extends RelayArm {
 
   /**
    * Work의 상태(work.json 요약). 단계가 없어 세션 하나를 task 하나로 두고(단계별 토큰 표에 'session'으로 보인다), 관문
-   * 결론과 리뷰 사용량을 함께 둔다. files는 결과 폴더에 함께 남길 앱 파일(마지막 증거 묶음, 실적 장부)이다
+   * 결론과 리뷰 사용량을 함께 둔다. end는 끝의 종류(workEnd)다. files는 결과 폴더에 함께 남길 앱 파일(마지막 증거 묶음,
+   * 실적 장부)이다
    */
   works() {
     return this.records().map(({ k, id, home, dir, rec }) => {
@@ -260,15 +319,25 @@ export class Relay3Arm extends RelayArm {
         ? parseEvents(fs.readFileSync(path.join(dir, 'events.jsonl'), 'utf8'))
         : []
       const contract = readJson(path.join(dir, 'contract.json'))
+      const tree = treeState(rec.worktree || path.join(home, 'worktrees', id))
+      const end = workEnd({
+        state: rec.state ?? null,
+        events,
+        exportedHead: rec.exported_head ?? null,
+        head: tree.head,
+        clean: tree.clean,
+      })
       return {
         id: workLabel(k, id),
         dir,
         status: rec.state ?? null,
+        end,
+        ended: ENDED.has(end),
         branch: rec.branch ?? null,
         contract: contract
           ? { id: contract.id ?? null, approvedBy: contract.approved_by ?? null }
           : null,
-        gate: gateSummary(rec.gate, events, rec.exported_head ?? null),
+        gate: gateSummary(rec.gate, events, rec.exported_head ?? null, tree.head),
         exportedHead: rec.exported_head ?? null,
         error: rec.error ?? null,
         review: reviewUsage(events),

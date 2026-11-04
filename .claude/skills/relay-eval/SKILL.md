@@ -1,6 +1,6 @@
 ---
 name: relay-eval
-description: relay-v2의 버그 수정, 기능 추가, 리팩터링, 설계, 일반, 커스텀 유형 사용성을 맨 Claude Code CLI와 비교 평가한다. 시나리오마다 두 쪽(relay 앱, 맨 CLI. 지식 관리 시나리오는 지식을 켠 relay와 끈 relay)을 실제 claude로 n번 돌리고 사람 역할과 판정은 AI가 한다. "시나리오 3번으로 5번 돌려서 평가해줘", "사용성 평가 돌려줘", "relay vs CLI 비교", "시나리오 목록" 같은 요청에 쓴다.
+description: relay-v2의 버그 수정, 기능 추가, 리팩터링, 설계, 일반, 커스텀 유형 사용성을 맨 Claude Code CLI와 비교 평가한다. 시나리오마다 두 쪽(relay 앱, 맨 CLI. 지식 관리 시나리오는 지식을 켠 relay와 끈 relay)을 실제 claude로 n번 돌리고 사람 역할과 판정은 AI가 한다. relay-v3 앱(relay3, M2 평가 규약)도 쪽으로 돌린다. "시나리오 3번으로 5번 돌려서 평가해줘", "사용성 평가 돌려줘", "relay vs CLI 비교", "시나리오 목록" 같은 요청에 쓴다.
 ---
 
 # relay 사용성 평가 돌리기
@@ -12,6 +12,7 @@ description: relay-v2의 버그 수정, 기능 추가, 리팩터링, 설계, 일
 - 시나리오: 번호(`3`, `1,5`), id(`03-cart`), "전부"(`all`). 목록은 `node app/eval/run.mjs --list`(유형을 `[버그 수정]`/`[기능 추가]`/`[리팩터링]`/`[설계]`/`[일반]`/`[커스텀]`으로 보인다). 01~14는 버그 수정, 15~17은 기능 추가(작은·중간·큰), 18~20은 리팩터링(작은·중간·큰), 21~24는 지식 관리(같은 레포에서 Work 둘을 잇는 버그 수정, 24는 Work 2를 팀원이 함), 25~27은 지식 관리 개발용("전부"에 들지 않고 번호로만 고름), 28~30은 일반(설정·CI, 의존성 올리기, 섞인 일)이다. 31(리팩터링)과 32(기능 추가)는 요청을 짧게 하고 세부 사항을 사람이 짚어 줘야 떠올리는(`recall`) 시나리오다. 33(중간, 새 설계 문서)과 34(큼, 기존 `docs/design.md`에 더함)는 설계다. 36과 `h-tidy-route-dispatch`(열린 hold-out)는 지식 정리 후보(D393)의 시나리오, 37과 `h-tidy-bug-library`(열린 hold-out)는 정리 요청 없이 버그만 고치러 온 사람이 후보를 쓰는지 보는 시나리오이고 "전부"에 들지 않는다. 38은 커스텀 유형(relay D447~D463)으로, 레포의 `.relay/types/survey-apply/`(조사 → 적용)를 쓴다. "커스텀 유형 시나리오"는 `38`이다. 후속 실험에서 사이드바 알림(D395, 버림)을 1단계 빌드와 견줄 때는 `bash app/eval/ref-app.sh f3 7a876e5` 뒤 `--app f3=/tmp/relay-ref/f3/app --arms relay,f3 --pairs relay:f3`, 지표는 `node app/eval/tidy.mjs <결과 폴더>`(`docs/tidy-experiment/protocol.md`). 그 전 빌드와 견줄 때는 `bash app/eval/ref-app.sh pre 2bbdb6d` 뒤 `--app pre=/tmp/relay-ref/pre/app --arms relay,pre --pairs relay:pre`(설명서 `guides/pre.md`). "기능 추가 시나리오"는 `15,16,17`, "리팩터링 시나리오"는 `18,19,20`, "지식 관리 시나리오"는 `21,22,23,24`, "일반 시나리오"는 `28,29,30`, "설계 시나리오"는 `33,34`다. 지식 실험(`docs/knowledge-experiment/protocol.md`)의 주지표는 `node app/eval/primary.mjs <결과 폴더> --pair relay:relay-off`로 본다.
 - 횟수: "n번" → `--runs n` (시나리오와 쪽마다 n번). 말이 없으면 1.
 - 쪽: 말이 없으면 시나리오의 짝으로 돈다. Work 여럿을 잇는 시나리오(21~27)는 relay 대 지식을 끈 relay(`relay-off`, 앱에 `RELAY_KNOWLEDGE=off`), 커스텀 유형 시나리오(38)는 relay(그 유형) 대 같은 일을 일반 유형으로 한 relay(`relay@general`, D463)다. 나머지(01~20, 28~34)는 relay 대 맨 CLI다. "relay만" → `--arms relay`, "CLI만" → `--arms cli`. 21~24를 맨 CLI와도 견주려면 `--arms relay,relay-off,cli`(판정은 짝만 한다. 다른 짝은 `--pairs relay:cli`). 다른 커밋의 빌드와 견주려면 `bash app/eval/ref-app.sh <이름> <커밋>` 뒤 `--app <이름>=/tmp/relay-ref/<이름>/app --arms relay,<이름> --pairs relay:<이름>`. "교차 비교"(같은 일을 전용 유형과 일반 유형으로, relay I93)는 `--scenarios 1,10,15,16,18,19 --arms relay,relay@general --pairs relay:relay@general`이다. `relay@<유형>` 쪽은 사람 역할이 그 유형으로 새 Work를 만든다. "자율 비교"(같은 일을 전용 유형과 자율 유형으로, relay D533, `docs/autonomous-work.md` 15절)는 `--arms relay,relay@auto,cli --pairs relay:relay@auto,relay@auto:cli`이다. 자식 Work(D543)를 보려면 39(작은 독립 기능 셋)와 40(독립 기능 셋, 모듈마다 브랜치)을 쓴다.
+- relay-v3(M2 평가 규약 `relay-v3/docs/experiments/m2/protocol.md`): 쪽 `relay3`(앱 기본), `relay3-noreview`(같은 빌드, `RELAY_ABLATE=review`로 독립 리뷰를 끔). 앱은 `RELAY3_APP`(기본 relay-v2 옆의 `relay-v3`)의 빌드다. 규약의 배치는 `--arms relay3,relay3-noreview,relay@auto,cli --quality-overlay --no-judge-purpose`와 짝 `--pairs relay3:cli,relay3-noreview:cli,relay@auto:cli,relay3:relay3-noreview,relay3:relay@auto`, 사람이 손을 떼는 배치(Q3)는 `--arms relay3,cli --human-mode hands-off --quality-overlay --no-judge-purpose`로 따로 돈다. 시나리오와 회차는 규약 3절대로 하고 배치마다 실행 수와 시간을 먼저 알린다. `--quality-overlay`는 모든 쪽의 평가 레포 첫 커밋에 relay-v3 `relay init` 초안(`.relay/quality.json`)을 넣는다(판정 diff에는 나오지 않는다). relay-v3 쪽이 돌면 판정 모델에 시나리오의 목적을 주지 않는다(`--no-judge-purpose`가 없어도).
 - 모델과 effort: 말이 있을 때만 `--agent-model`, `--effort`, `--human-model`, `--judge-model`을 준다. 기본은 에이전트 sonnet·medium, 사람 역할 sonnet·medium, 판정 sonnet.
 - 시나리오 번호가 목록에 없거나 요청이 모호할 때만 묻는다. 나머지는 기본값으로 바로 시작하고 무엇으로 돌리는지 한 줄로 알린다.
 
@@ -22,6 +23,8 @@ bash app/eval/setup.sh
 ```
 
 의존성(Electron 실행 파일 포함), 앱 빌드, 가상 화면(Xvfb), 깨끗한 환경의 `claude -p` 호출을 점검한다. 실패하면 출력의 이유대로 고친다. 네트워크나 프록시 문제면 `/root/.ccr/README.md`를 본다.
+
+relay-v3 쪽이나 `--quality-overlay`를 쓰면 relay-v3 체크아웃(`RELAY3_APP`)에서 `npm ci && npm run build`를 먼저 돌린다. run.mjs는 빌드가 `src`보다 오래됐으면 멈춘다. relay-v3에 커밋하지 않은 변경이 있으면 `config.json`의 앱 커밋에 `+dirty`가 붙는다.
 
 ## 3. 돌리기
 
@@ -44,13 +47,15 @@ cd app && node eval/run.mjs --scenarios <목록> --runs <n> --parallel 2 > eval/
 2. 숫자만 옮기지 말고 까닭을 확인한다. friction이 높은 차례, 끝이 `done`이 아닌 실행, 헛동작이 많은 실행은 그 실행의 `turns.jsonl`(사람 역할의 생각과 행동)과 relay라면 `shots/`의 스크린샷, `works/*/tasks/*/pty.log`를 열어 무슨 일이 있었는지 본다.
 3. 도구 문제(`harness_error`, `human_error`, 첫 실행 창을 넘지 못함)는 평가 결과에서 빼고 따로 알린다. relay의 문제로 보이는 것과 평가 도구의 문제를 가른다.
 4. 사용자에게: 무엇을 몇 번 돌렸는지, relay가 나았던 곳과 못했던 곳을 숫자와 함께, 눈에 띈 사례 한두 개, 한계(AI 사람 역할, 회차 수)를 짧게 알린다. 보고서는 Artifact로 게시하면 표를 보기 쉽다.
-5. 결과 폴더는 git에 들어가지 않고 컨테이너와 함께 사라진다. 남기려면 사용자에게 물어 `app/eval/reports/<날짜>-<시나리오>.md`로 `report.md`를 복사해 커밋한다.
+5. relay-v3 배치는 `node app/eval/m2-primary.mjs <보통 배치 폴더> <hands-off 배치 폴더>`로 규약의 지표(P1~P5, G1·G2)와 판정 규칙(Q1~Q4)을 본다. 규칙을 읽기 전에 '실행 점검' 표(hands-off 규칙을 어긴 실행, 번호 빠진 스크린샷, main이 움직인 실행, 품질 기준을 덧씌우지 않은 실행)와 보고서의 relay-v3 표(Work의 끝: [끝 확정], 확정 없이 리뷰 본 커밋 그대로, [끝내기] 뒤 바뀜)를 본다. 토큰(P5)에는 앱이 부른 `claude -p`(v3 리뷰, v2 독립 리뷰·지식 검토)가 들어 있다. 깨우기에서 Claude Code의 시계(스피너, 경과 시간)를 가리므로 그 전 보고서와 차례 수의 정의가 조금 다르다.
+6. 결과 폴더는 git에 들어가지 않고 컨테이너와 함께 사라진다. 남기려면 사용자에게 물어 `app/eval/reports/<날짜>-<시나리오>.md`로 `report.md`를 복사해 커밋한다.
 
 ## 문제가 생기면
 
 - `준비가 덜 됐습니다`: setup.sh를 다시 돌린다.
 - Xvfb 오류: `DISPLAY`가 비어 있으면 run.mjs가 `:90`부터 띄운다. 남은 잠금 파일 `/tmp/.X9*-lock`을 지운다.
 - 앞 실행이 남긴 프로세스: `pkill -f 'electron.*relay-eval'`, `pkill -f 'relay-eval.*claude'`.
+- `품질 기준 초안을 만들지 못했습니다`: `--quality-overlay`가 `RELAY3_APP`의 `node src/cli/main.ts init`을 부르지 못했다. 체크아웃 경로와 node 버전(.ts를 바로 돌림)을 본다.
 - 사람 역할 호출이 세 번 잇달아 실패하면 그 실행은 `human_error`로 끝난다. 로그의 오류 문구를 본다.
 - 디스크: 작업 폴더는 `/tmp/relay-eval/`이다. 다 쓴 폴더는 지워도 된다.
 
