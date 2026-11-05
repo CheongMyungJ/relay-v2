@@ -17,6 +17,7 @@
   ├─ relay-off 쪽: relay와 같고 앱에 RELAY_KNOWLEDGE=off를 준다(지식 관리를 끔, Work 여럿을 잇는 시나리오 21~27의 짝)
   ├─ 다른 빌드 쪽(--app 이름=폴더): eval/ref-app.sh로 만든 다른 커밋의 앱. 이름-off는 그 빌드에서 지식을 끔
   ├─ relay-v3 쪽(relay3, relay3-noreview): RELAY3_APP(기본 relay-v2 옆의 relay-v3)의 빌드한 앱. noreview는 RELAY_ABLATE=review
+  ├─ relay-v3 M2.1 쪽(relay3-m21, relay3-m2p): relay3-m21은 RELAY3_APP의 빌드, relay3-m2p는 RELAY3_M2P_APP(기본 relay-v2 옆의 relay-v3-m2p)의 빌드
   └─ 맨 CLI 쪽: 레포 폴더의 bash(PTY)에서 claude를 띄워 둔다
 사람 역할(claude -p 세션 하나) ── 화면을 보고 행동을 JSON으로 고른다
 판정: 숨긴 시험, 바뀐 파일, 설문, 짝 판정(claude -p)
@@ -35,6 +36,8 @@
 | `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/m2-primary.mjs` | relay-v3 M2 평가 규약의 지표(P1~P5, G1·G2)와 판정 규칙(Q1~Q4). 결과 폴더 여럿(보통 배치와 hands-off 배치)을 합쳐 읽고 hands-off 실행은 `<쪽>-handsoff`로 센다 |
+| `eval/m21-primary.mjs` | relay-v3 M2.1 평가(relay-v3 `docs/m2.1-design.md` 14절)의 주지표(봉인 셋의 P1·P3 마찰 m21 − m2p, P3 막대 m21 − relay@auto), 거짓 자동(14·H2·H3), 온라인 G1·G2, 판정 규칙, 장치 지표와 최소 n. H2의 id는 `--h2`로 바꾼다 |
+| `eval/lib/relay3-arm.mjs`, `eval/lib/relay3-devices.mjs` | relay-v3 앱 띄우기, work.json(M2.1은 내보내기 `exports[]`마다)과 events.jsonl 읽기, 리뷰 세기(다시 쓴 리뷰·멈춘 리뷰는 뺌), 장치 지표(끝낸 방식, 상자, 되먹임과 그 결과, 기준 확인, 예시 자료, 올림) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
 | `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌). 이름을 붙인 봉인은 `HOLDOUT_NAME=<이름>` |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
@@ -193,6 +196,9 @@ node eval/report.mjs eval/results/<폴더>                # 보고서 다시 만
 node eval/run.mjs --scenarios 7,8,10 --runs 5 --arms relay3,relay3-noreview,relay@auto,cli --parallel 2 --quality-overlay --no-judge-purpose --pairs relay3:cli,relay3-noreview:cli,relay@auto:cli,relay3:relay3-noreview,relay3:relay@auto
 node eval/run.mjs --scenarios 10,14 --runs 5 --arms relay3,cli --human-mode hands-off --quality-overlay --no-judge-purpose --parallel 2
 node eval/m2-primary.mjs eval/results/<보통 배치> eval/results/<hands-off 배치> --out m2.md   # 지표와 판정 규칙
+# relay-v3 M2.1 평가(설계 14절. 규약은 relay-v3 docs/experiments/m2.1/protocol.md에 고정): relay-v3와 relay-v3-m2p에서 먼저 빌드
+node eval/run.mjs --scenarios 39,<H2>,9 --runs 5 --arms relay3-m21,relay3-m2p,relay@auto --parallel 2 --quality-overlay --no-judge-purpose
+node eval/m21-primary.mjs eval/results/<봉인 배치> eval/results/<설계 배치> --out m21.md   # 주지표와 판정 규칙
 ```
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`. 옵션 전체(`--human-effort`, `--no-vision`, `--max-minutes`, `--max-turns`, `--no-judge` 포함)는 `node eval/run.mjs --help`로 본다.

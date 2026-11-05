@@ -9,14 +9,15 @@ import { armBase, armType, isRelay3, typeLabel, words } from './kind.mjs'
 const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
 /**
- * 쪽의 화면 종류. cli는 맨 CLI, relay3·relay3-noreview는 relay-v3 앱이고, 나머지는 모두 relay 앱이다(relay-off,
- * relay@<유형>, --app으로 준 다른 빌드). relay3도 relay처럼 앱 화면(스크린샷, 보이는 글자, 터미널, 누를 수 있는 요소)을 본다
+ * 쪽의 화면 종류. cli는 맨 CLI, relay3·relay3-noreview·relay3-m21·relay3-m2p는 relay-v3 앱이고, 나머지는 모두 relay 앱이다
+ * (relay-off, relay@<유형>, --app으로 준 다른 빌드). relay3도 relay처럼 앱 화면(스크린샷, 보이는 글자, 터미널, 누를 수 있는
+ * 요소)을 본다
  */
 export const screenKind = (kind) => (kind === 'cli' ? 'cli' : isRelay3(kind) ? 'relay3' : 'relay')
 
 /**
  * 사람 역할의 설명서 이름. 다른 빌드(base, m17 등)는 그 빌드의 화면 설명서가 있으면 그것을 쓴다. 설명서가 없는 쪽은 화면
- * 종류의 설명서다(relay3-noreview는 relay3)
+ * 종류의 설명서다(relay3-noreview, relay3-m21은 relay3: M2.1 화면). relay3-m2p는 M2 화면의 설명서(guides/relay3-m2p.md)다
  */
 export function guideName(arm, kind) {
   const own = armBase(arm).replace(/-off$/, '')

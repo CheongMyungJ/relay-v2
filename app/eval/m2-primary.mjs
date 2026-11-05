@@ -132,12 +132,13 @@ export function m2Compare(runs, a, b, metric) {
 
 /**
  * relay3 실행의 그림자 정밀도(Q4, 4절 G1·G2). 내보내기(리뷰 포함) 결론이 있고 숨긴 시험을 판정한 실행만 센다
- * (report.mjs exportGates). 자동 조건을 채운 실행 가운데 숨긴 시험 모두 통과가 G1, 통과 가운데 자동 조건이 G2다
+ * (report.mjs exportGates). 자동 조건을 채운 실행 가운데 숨긴 시험 모두 통과가 G1, 통과 가운데 자동 조건이 G2다.
+ * isAuto는 실행이 자동 조건을 채웠는가다: M2는 내보내기 결론 하나라도(autoGate), M2.1은 내보내기 모두(report.mjs autoRun)
  */
-export function shadowPrecision(runs) {
+export function shadowPrecision(runs, isAuto = autoGate) {
   const judged = runs.filter((r) => typeof r.outcome?.success === 'boolean')
   const exported = judged.filter((r) => exportGates(r).length > 0)
-  const auto = exported.filter(autoGate)
+  const auto = exported.filter(isAuto)
   const pass = exported.filter((r) => r.outcome.success)
   const autoPass = auto.filter((r) => r.outcome.success)
   // 틀린 실행(자동 조건을 채웠는데 숨긴 시험 실패)의 조건 이름: 어느 조건이 느슨한지
@@ -151,7 +152,7 @@ export function shadowPrecision(runs) {
     auto: auto.length,
     g1: auto.length ? autoPass.length / auto.length : null,
     g1Pass: autoPass.length,
-    g2: pass.length ? pass.filter(autoGate).length / pass.length : null,
+    g2: pass.length ? pass.filter(isAuto).length / pass.length : null,
     pass: pass.length,
     wrongConditions: [...new Set(wrong)],
   }

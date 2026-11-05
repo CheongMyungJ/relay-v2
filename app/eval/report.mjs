@@ -19,13 +19,24 @@ const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
  * 쪽의 차례와 보고서의 이름. relay-off는 지식 관리를 끈 relay다. relay3은 relay-v3 앱이다. 그 밖의 이름(--app으로 준 빌드)은
  * 이름 차례로 뒤에 둔다
  */
-const ARMS = ['relay', 'relay-off', 'relay-ask', 'relay3', 'relay3-noreview', 'cli']
+const ARMS = [
+  'relay',
+  'relay-off',
+  'relay-ask',
+  'relay3',
+  'relay3-noreview',
+  'relay3-m21',
+  'relay3-m2p',
+  'cli',
+]
 const LABEL = {
   relay: 'relay',
   'relay-off': 'relay (지식 끔)',
   'relay-ask': 'relay (결정마다 확인)',
   relay3: 'relay-v3',
   'relay3-noreview': 'relay-v3 (리뷰 끔)',
+  'relay3-m21': 'relay-v3 M2.1',
+  'relay3-m2p': 'relay-v3 M2 + 미룬 고침',
   cli: '맨 CLI',
 }
 const label = (k) => {
@@ -234,15 +245,30 @@ const CONCLUSION = {
   recontract: '계약 다시',
 }
 
+/** Work의 관문 요약들: 내보내기마다(V22, w.gates). gates가 없는 예전 결과는 Work의 gate 하나다 */
+export const workGates = (w) => (Array.isArray(w?.gates) ? w.gates : [w?.gate ?? null])
+
 /**
  * 실행의 관문 결론 가운데 G1, G2에 쓰는 것: 내보내기(리뷰 포함) 측정의 결론(gate.export, relay3-arm.mjs gateSummary).
- * Stop 뒤의 측정에는 늘 '리뷰 없음'이 사람 머지 사실로 붙어 그림자가 될 수 없다. export가 없는 예전 결과는 쓰지 않는다
+ * Stop 뒤의 측정에는 리뷰가 없거나 장부에 남지 않는 미리 리뷰라(V23) 쓰지 않는다. export가 없는 예전 결과는 쓰지 않는다
  */
-export const exportGates = (r) => (r.works ?? []).map((w) => w.gate).filter((g) => g?.export)
+export const exportGates = (r) => (r.works ?? []).flatMap(workGates).filter((g) => g?.export)
 
-/** 내보내기 결론 가운데 자동 조건을 채운 것(그림자 또는 자동 머지 후보)이 있는가 */
-export const autoGate = (r) =>
-  exportGates(r).some((g) => g.shadow || g.conclusion === 'auto_merge_candidate')
+/** 관문 결론이 자동 조건을 채웠는가(그림자 또는 자동 머지 후보) */
+export const autoMet = (g) => !!g && (g.shadow || g.conclusion === 'auto_merge_candidate')
+
+/** 내보내기 결론 가운데 자동 조건을 채운 것이 있는가(M2 규약의 G1·G2) */
+export const autoGate = (r) => exportGates(r).some(autoMet)
+
+/**
+ * 실행의 내보내기가 모두 자동 조건을 채웠는가(M2.1 규약의 G1·G2와 거짓 자동, relay-v3 docs/m2.1-design.md 3절 'G1에서는
+ * 실행의 내보내기가 모두 자동 조건을 채웠을 때만 그 실행을 센다'). 버리지 않은 Work의 내보내기마다 내보내기 결론이 있고
+ * 그것이 자동 조건을 채워야 한다. 내보내기 결론이 하나도 없으면 false
+ */
+export const autoRun = (r) => {
+  const gates = (r.works ?? []).filter((w) => w?.status !== 'abandoned').flatMap(workGates)
+  return gates.length > 0 && gates.every((g) => g?.export === true && autoMet(g))
+}
 
 const END_NAME = {
   confirmed: '[끝 확정]',
@@ -264,6 +290,18 @@ function endCounts(ws) {
   return [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'
 }
 
+const HOW_NAME = { once: '한 번', armed: '걸림', box: '상자에서 [그래도 끝내기]' }
+
+/** Work마다 끝낸 방식(relay3-devices.mjs endMetrics의 how). 장치 지표가 없는 예전 결과는 빼고 '-'다 */
+function howCounts(ws) {
+  const counts = new Map()
+  for (const w of ws.filter((x) => x.devices?.end && x.ended)) {
+    const k = HOW_NAME[w.devices.end.how] ?? '기록 없음'
+    counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  return [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'
+}
+
 /**
  * relay-v3 쪽의 계약, 관문(그림자)과 독립 리뷰 (relay-v3 docs/experiments/m2/protocol.md Q4, P5). 관문은 Work마다 마지막
  * 결론이다. G1, G2는 내보내기 결론이 있는 실행만으로 센다(exportGates). 그 가운데 자동 조건을 채운 실행에서 숨긴 시험을
@@ -273,7 +311,7 @@ function endCounts(ws) {
 export function relay3Rows(rs) {
   const n = rs.length
   const works = (r) => r.works ?? []
-  const gates = (r) => works(r).map((w) => w.gate)
+  const gates = (r) => works(r).flatMap(workGates)
   const judged = rs.filter((r) => typeof r.outcome?.success === 'boolean')
   const exported = judged.filter((r) => exportGates(r).length > 0)
   const autoRuns = exported.filter(autoGate)
@@ -296,6 +334,8 @@ export function relay3Rows(rs) {
       pct(rs.filter((r) => works(r).some((w) => w.ended ?? w.status === 'done')).length, n),
     ],
     ['끝의 종류(Work마다)', endCounts(rs.flatMap(works))],
+    // M2.1(V25): 끝낸 방식(events.jsonl ended.how). 옛 결과에는 없다
+    ['끝낸 방식(V25: 한 번·걸림·상자, Work마다)', howCounts(rs.flatMap(works))],
     ['관문 결론(Work마다 마지막)', [...counts].map(([k, v]) => `${k} ${v}`).join(', ') || '-'],
     ['내보내기 결론이 있음(G1·G2의 분모, 없으면 뺌)', pct(exported.length, judged.length)],
     ['자동 조건을 채움(그림자·자동 후보)', pct(autoRuns.length, exported.length)],
@@ -309,6 +349,10 @@ export function relay3Rows(rs) {
     ],
     ['독립 리뷰 호출 수(돈 것)', ms(stats(rs.map((r) => review(r)?.calls ?? 0)))],
     ['리뷰 건너뜀(리뷰 끈 쪽)', ms(stats(rs.map((r) => review(r)?.skipped ?? 0)))],
+    // V23: 미리 리뷰(돈 리뷰 가운데), 내보내기가 다시 쓴 리뷰(호출이 아님), 멈추고 버린 리뷰(호출·토큰에서 뺌)
+    ['미리 리뷰(돈 것 가운데)', ms(stats(rs.map((r) => review(r)?.prepared ?? 0)))],
+    ['다시 쓴 리뷰(호출 아님)', ms(stats(rs.map((r) => review(r)?.reused ?? 0)))],
+    ['멈춘 리뷰(호출·토큰에서 뺌)', ms(stats(rs.map((r) => review(r)?.aborted ?? 0)))],
     ['리뷰 실패', ms(stats(rs.map((r) => review(r)?.failed ?? 0)))],
     // 시간 초과처럼 claude -p가 사용량을 알리지 못한 리뷰. 그 토큰은 에이전트 입력(P5)에서 빠져 있다
     ['토큰을 모르는 리뷰(P5에서 빠짐)', ms(stats(rs.map((r) => review(r)?.usageUnknown ?? 0)))],

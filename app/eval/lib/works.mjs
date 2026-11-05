@@ -64,18 +64,23 @@ export function pairOf(scenario) {
 }
 
 /**
- * --pairs가 없을 때 판정할 짝. 시나리오의 짝에, 맨 CLI가 함께 돌았으면 relay-v3 쪽(relay3, relay3-noreview)과 유형을 정한
+ * --pairs가 없을 때 판정할 짝. 시나리오의 짝에, 맨 CLI가 함께 돌았으면 relay-v3 쪽(relay3, relay3-noreview 등)과 유형을 정한
  * relay 쪽(relay@auto 등) 각각 대 맨 CLI를 더한다(relay-v3 docs/experiments/m2/protocol.md: 규약의 쪽마다 tests 점수 P2가
- * 있어야 한다). kinds는 이 시나리오에서 돈 쪽들이다. 돌지 않은 쪽의 짝은 judgeAll이 건너뛴다
+ * 있어야 한다). relay3-m21이 돌았으면 relay3-m21 대 relay3-m2p, relay3-m21 대 relay@auto를 더한다(M2.1 규약에는 맨 CLI가
+ * 없다). kinds는 이 시나리오에서 돈 쪽들이다. 돌지 않은 쪽의 짝은 judgeAll이 건너뛴다
  */
 export function defaultPairs(scenario, kinds = []) {
   const pairs = [pairOf(scenario)]
-  if (!kinds.includes('cli')) return pairs
   const has = (a, b) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
-  for (const k of kinds) {
-    if (k === 'cli' || has(k, 'cli')) continue
-    if (isRelay3(k) || (armBase(k) === 'relay' && armType(k))) pairs.push([k, 'cli'])
-  }
+  if (kinds.includes('cli'))
+    for (const k of kinds) {
+      if (k === 'cli' || has(k, 'cli')) continue
+      if (isRelay3(k) || (armBase(k) === 'relay' && armType(k))) pairs.push([k, 'cli'])
+    }
+  // relay-v3 M2.1 규약(docs/m2.1-design.md 14절): relay3-m21의 P2(tests)를 같은 날의 기준(relay3-m2p)과 relay@auto 옆에서 본다
+  if (kinds.includes('relay3-m21'))
+    for (const k of ['relay3-m2p', 'relay@auto'])
+      if (kinds.includes(k) && !has('relay3-m21', k)) pairs.push(['relay3-m21', k])
   return pairs
 }
 

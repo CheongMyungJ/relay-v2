@@ -8,7 +8,7 @@ import { agentEnv, makeClaudeConfig } from './env.mjs'
 import { Human, screenKind } from './human.mjs'
 import { armBase, relay3Env } from './kind.mjs'
 import { RelayArm } from './relay-arm.mjs'
-import { Relay3Arm, withReviewUsage } from './relay3-arm.mjs'
+import { Relay3Arm, relay3AppOf, withReviewUsage } from './relay3-arm.mjs'
 import { auditTold } from './told.mjs'
 import { judgeIssues, isIssue, readDialogue } from './issue-judge.mjs'
 import { baseWithOverlay, overlayFiles, overlayRecord } from './overlay.mjs'
@@ -133,7 +133,8 @@ const mmss = (ms) => {
  * @param {string} o.kind 쪽: relay, cli, 또는 relay 앱의 다른 빌드(run.mjs의 --app). 이름이 -off로 끝나면 그 빌드에
  *   RELAY_KNOWLEDGE=off를 준다(relay-off는 이 체크아웃의 앱에서 지식 관리를 끈 것)
  *   뒤에 @<유형>이 붙으면(relay@general) 사람 역할이 새 Work에서 그 유형을 고른다(교차 비교, I93)
- *   relay3, relay3-noreview는 relay-v3 앱이다(opts.relay3App, relay-v3 docs/experiments/m2/protocol.md)
+ *   relay3, relay3-noreview, relay3-m21, relay3-m2p는 relay-v3 앱이다(relay-v3 docs/experiments/m2/protocol.md,
+ *   docs/m2.1-design.md 14절). relay3-m2p는 opts.relay3M2pApp, 나머지는 opts.relay3App의 체크아웃이다(relay3AppOf)
  * @param {number} o.index 회차 (1부터)
  * @param {object} o.opts 실행 옵션 (run.mjs)
  * @param {string} o.outDir 결과 폴더
@@ -180,9 +181,14 @@ export async function runEpisode(o) {
   const appScreen = screenType !== 'cli'
   // 쪽의 앱 빌드: @<유형>(I93)과 -off를 뗀 이름이 --app에 있으면 그 폴더, 없으면 이 체크아웃의 앱
   const build = armBase(kind).replace(/-off$/, '')
+  // relay-v3 쪽이 띄울 체크아웃(relay3-m2p는 M2 빌드에 미룬 고침을 합친 것)
+  const relay3App =
+    screenType === 'relay3'
+      ? relay3AppOf(kind, { main: opts.relay3App, m2p: opts.relay3M2pApp })
+      : null
   const arm =
     screenType === 'relay3'
-      ? new Relay3Arm({ ...armOpts, appDir: opts.relay3App, appEnv: relay3Env(kind) })
+      ? new Relay3Arm({ ...armOpts, appDir: relay3App, appEnv: relay3Env(kind) })
       : screenType === 'relay'
         ? new RelayArm({
             ...armOpts,
@@ -664,6 +670,13 @@ export async function runEpisode(o) {
   } catch {
     mainMoved = undefined
   }
+  /** relay-v3 쪽: 세션이 만들었는데 relay가 재지 않은 로컬 브랜치(V21 재는 법). 판정은 따로 한다 */
+  let unmeasuredBranches
+  try {
+    unmeasuredBranches = arm.unmeasuredBranches?.()
+  } catch {
+    unmeasuredBranches = undefined
+  }
   try {
     arm.snapshot()
     works = arm.works()
@@ -769,6 +782,7 @@ export async function runEpisode(o) {
           (f) => f.git && !f.git.error && f.git.commits > 0 && f.git.uncommitted.length === 0,
         ),
       ...(mainMoved !== undefined ? { mainMoved } : {}),
+      ...(unmeasuredBranches !== undefined ? { unmeasuredBranches } : {}),
       trees: final,
     },
     human: {
@@ -813,7 +827,7 @@ export async function runEpisode(o) {
       humanMode: opts.humanMode ?? 'normal',
       // 품질 기준 덧씌우기: 넣은 파일의 경로와 sha256(lib/overlay.mjs). 끄면 false
       qualityOverlay: overlayRecord(overlay),
-      ...(screenType === 'relay3' ? { appEnv: relay3Env(kind) } : {}),
+      ...(screenType === 'relay3' ? { appEnv: relay3Env(kind), relay3App } : {}),
     },
   }
   writeJson(path.join(o.outDir, 'run.json'), result)

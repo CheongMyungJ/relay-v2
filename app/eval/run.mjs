@@ -14,7 +14,7 @@ import { runEpisode } from './lib/episode.mjs'
 import { cleanEnv, findClaude } from './lib/env.mjs'
 import { armBase, armType, isRelay3, RELAY3, words } from './lib/kind.mjs'
 import { overlayRecord, qualityOverlay, relay3Cli } from './lib/overlay.mjs'
-import { RELAY3_APP } from './lib/relay3-arm.mjs'
+import { RELAY3_APP, RELAY3_M2P_APP, relay3AppOf } from './lib/relay3-arm.mjs'
 import { sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
@@ -37,10 +37,13 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
                            relay,relay-off, 나머지는 relay,cli). relay 쪽 뒤에 @<유형>을 붙이면(예: relay@general)
                            시나리오의 유형 대신 그 유형으로 새 Work를 만든다(교차 비교, I93).
                            relay3(relay-v3 앱), relay3-noreview(같은 앱에서 독립 리뷰를 끔, RELAY_ABLATE=review)도
-                           쓸 수 있다. relay-v3 체크아웃은 RELAY3_APP(기본 relay-v2 옆의 relay-v3)이고 먼저
-                           npm run build를 돌려 둔다. relay-v3 쪽이 돌면 판정 모델에 목적을 주지 않는다.
-                           cli와 함께 돌리면 relay3, relay3-noreview, relay@<유형> 각각 대 cli도 짝 판정한다
-                           (--pairs가 없을 때). 결과 폴더 여럿의 규약 판정은 eval/m2-primary.mjs
+                           쓸 수 있다(M2 규약). M2.1 규약의 쪽은 relay3-m21(RELAY3_APP의 빌드)과 relay3-m2p(M2 빌드에
+                           미룬 고침을 합친 RELAY3_M2P_APP의 빌드, 기본 relay-v2 옆의 relay-v3-m2p)다. relay-v3 체크아웃은
+                           RELAY3_APP(기본 relay-v2 옆의 relay-v3)이고 먼저 npm run build를 돌려 둔다. relay-v3 쪽이 돌면
+                           판정 모델에 목적을 주지 않는다. cli와 함께 돌리면 relay-v3 쪽과 relay@<유형> 각각 대 cli도,
+                           relay3-m21이 돌면 relay3-m21 대 relay3-m2p와 relay3-m21 대 relay@auto도 짝 판정한다
+                           (--pairs가 없을 때). 결과 폴더 여럿의 규약 판정은 eval/m2-primary.mjs(M2),
+                           eval/m21-primary.mjs(M2.1)
   --app <이름=폴더>        다른 relay 빌드를 쪽으로 쓴다. 폴더는 빌드한 app/ (eval/ref-app.sh). 여럿이면 쉼표.
                            이름 relay, cli, relay3…, -off로 끝나는 이름은 못 쓴다.
                            예: --app base=/tmp/relay-ref/base/app,m17=/tmp/relay-ref/m17/app
@@ -107,10 +110,10 @@ async function ensureDisplay() {
 
 const ARMS = ['relay', 'relay-off', 'relay-ask', 'cli', ...RELAY3]
 
-/** 쪽 이름이 쓸 앱 폴더. cli는 null, relay3 쪽은 relay-v3 체크아웃 */
+/** 쪽 이름이 쓸 앱 폴더. cli는 null, relay3 쪽은 relay-v3 체크아웃(relay3-m2p는 RELAY3_M2P_APP) */
 const appOf = (arm, apps) => {
   if (arm === 'cli') return null
-  if (isRelay3(arm)) return RELAY3_APP
+  if (isRelay3(arm)) return relay3AppOf(arm)
   const build = armBase(arm).replace(/-off$/, '')
   return build === 'relay' || build === 'relay-ask' ? APP : (apps[build] ?? null)
 }
@@ -252,8 +255,9 @@ async function main() {
     maxTurns: v['max-turns'] ? Number(v['max-turns']) : undefined,
     workRoot,
     apps,
-    // relay-v3 앱의 체크아웃 (relay3, relay3-noreview 쪽)
+    // relay-v3 앱의 체크아웃 (relay3, relay3-noreview, relay3-m21 쪽)과 relay3-m2p 쪽의 체크아웃
     relay3App: RELAY3_APP,
+    relay3M2pApp: RELAY3_M2P_APP,
     pairs,
     // hands-off: 사람 역할이 의도(계약) 승인 뒤 결과를 확인하거나 지적하지 않는다(relay-v3 M2 평가 규약 Q3, E-auto)
     humanMode: v['human-mode'] === 'hands-off' ? 'hands-off' : 'normal',
@@ -280,17 +284,20 @@ async function main() {
   }
   const commit = commitOf(APP)
   const appCommits = Object.fromEntries(Object.entries(apps).map(([k, d]) => [k, commitOf(d)]))
-  // relay-v3는 커밋하지 않은 변경이 있으면 표시한다(빌드는 작업 트리에서 한다). 품질 기준 덧씌우기도 relay-v3의 초안이다
-  if (arms.some(isRelay3) || opts.qualityOverlay) {
-    let dirty = false
+  // relay-v3는 커밋하지 않은 변경이 있으면 표시한다(빌드는 작업 트리에서 한다). 품질 기준 덧씌우기도 relay-v3의 초안이다.
+  // relay3-m2p 쪽이 돌면 그 체크아웃도 적는다
+  const dirtyOf = (dir) => {
     try {
-      dirty =
-        execFileSync('git', ['status', '--porcelain'], { cwd: RELAY3_APP }).toString().trim() !== ''
+      return execFileSync('git', ['status', '--porcelain'], { cwd: dir }).toString().trim() !== ''
     } catch {
-      // 적지 못해도 된다
+      return false // 적지 못해도 된다
     }
-    appCommits.relay3 = `${commitOf(RELAY3_APP)}${dirty ? '+dirty' : ''}`
   }
+  if (arms.some(isRelay3) || opts.qualityOverlay)
+    appCommits.relay3 = `${commitOf(RELAY3_APP)}${dirtyOf(RELAY3_APP) ? '+dirty' : ''}`
+  if (arms.includes('relay3-m2p'))
+    appCommits['relay3-m2p'] =
+      `${commitOf(RELAY3_M2P_APP)}${dirtyOf(RELAY3_M2P_APP) ? '+dirty' : ''}`
   // 덧씌울 품질 기준: 시나리오마다 한 번 만들어 모든 쪽·회차에 같은 파일을 넣는다(초안은 레포 파일로만 정해진다)
   const overlays = opts.qualityOverlay
     ? Object.fromEntries(

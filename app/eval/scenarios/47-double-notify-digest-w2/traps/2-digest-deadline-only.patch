@@ -1,0 +1,46 @@
+diff --git a/src/digest/deadline.js b/src/digest/deadline.js
+index afc5a84..4010ef7 100644
+--- a/src/digest/deadline.js
++++ b/src/digest/deadline.js
+@@ -1,21 +1,19 @@
+ // 요약 발송 한 건의 제한 시간.
+ // 요약은 아침에 한꺼번에 수천 통을 보내므로, 한 사람에게 오래 걸리면 뒤 사람들의 요약이 모두 밀린다.
+-import { SendTimeoutError } from '../adapters/errors.js'
+ 
+ /**
+- * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘기면 시간 초과로 본다.
++ * fn을 부르고 걸린 시간을 잰다. 제한 시간을 넘겼는지는 late로 알린다.
++ * 늦었더라도 fn이 성공했으면 메일 서버가 이미 받은 것이다. 시간 초과로 보고 다시 보내면 고객이 두 통 받는다.
++ * 정말 응답이 없는 경우는 fn이 SendTimeoutError를 던지고, 그때는 다시 보낸다.
+  * @template T
+  * @param {{ now(): number }} clock
+  * @param {number} timeoutMs
+  * @param {() => Promise<T>} fn
+- * @returns {Promise<{ value: T, elapsedMs: number }>}
++ * @returns {Promise<{ value: T, elapsedMs: number, late: boolean }>}
+  */
+ export async function withDeadline(clock, timeoutMs, fn) {
+   const started = clock.now()
+   const value = await fn()
+   const elapsedMs = clock.now() - started
+-  if (elapsedMs > timeoutMs) {
+-    throw new SendTimeoutError(`요약 발송이 제한 시간 ${timeoutMs}ms를 넘김 (${elapsedMs}ms)`)
+-  }
+-  return { value, elapsedMs }
++  return { value, elapsedMs, late: elapsedMs > timeoutMs }
+ }
+diff --git a/src/digest/runner.js b/src/digest/runner.js
+index 25b7c36..6293240 100644
+--- a/src/digest/runner.js
++++ b/src/digest/runner.js
+@@ -47,8 +47,9 @@ export function createDigestRunner({ clock, config, adapter, inbox, ledger, pref
+         const base = { runId, period, userId: job.userId, attempt: job.attempt, items: items.length }
+ 
+         try {
+-          const { value, elapsedMs } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
++          const { value, elapsedMs, late } = await withDeadline(clock, opts().sendTimeoutMs, () => adapter.send(message))
+           metrics.observe('digest.send.ms', elapsedMs)
++          if (late) logger.warn('요약 발송이 느림', { ...base, elapsedMs })
+           ledger.markSent(key, { ...base, providerId: value?.id })
+           metrics.increment('digest.sent')
+           summary.sent++
