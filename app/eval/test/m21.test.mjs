@@ -25,6 +25,8 @@ import {
   minNRows,
   p1Reading,
   p5Base,
+  pilotDirs,
+  reviewCalls,
   runHow,
   sealedOf,
 } from '../m21-primary.mjs'
@@ -326,6 +328,26 @@ describe('보고서', () => {
     expect(r.verdicts.P5).toMatch(/^P5 \+20%.*그대로/)
   })
 
+  it('시범 결과 폴더(m21-pilot-*)를 주면 읽되 보고서 머리에 경고를 단다', () => {
+    expect(pilotDirs(['eval/results/m21-pilot-40', 'eval/results/m21-sealed-39'])).toEqual([
+      'eval/results/m21-pilot-40',
+    ])
+    expect(pilotDirs(['/x/m21-pilot-08/14-double-notify'])).toHaveLength(1)
+    const r = m21Report(batch(), { dirs: ['eval/results/m21-pilot-40'] })
+    expect(r.pilots).toEqual(['eval/results/m21-pilot-40'])
+    expect(r.text.split('\n')[2]).toMatch(/^> 경고: 시범 결과 폴더/)
+    const clean = m21Report(batch(), { dirs: ['eval/results/m21-sealed-39'] })
+    expect(clean.pilots).toEqual([])
+    expect(clean.text).not.toContain('경고')
+  })
+
+  it('최소 n 표의 V23 기준은 봉인 셋의 relay3-m2p 실행이다', () => {
+    const r = m21Report(batch())
+    expect(r.text).toMatch(
+      /\| V23 미리 리뷰\(계기\) \| 봉인 셋 실행\(relay3-m21 · 기준 relay3-m2p\) \| 9 · 9 \|/,
+    )
+  })
+
   it('설계 셋 상수와 봉인 셋', () => {
     expect(DESIGN).toEqual([
       '07-two-bugs',
@@ -382,31 +404,133 @@ describe('장치 지표 표', () => {
     expect(rows['기준 확인이 돈 제출 (V28)']).toBe('67% (2/3)')
     expect(rows['기준 확인 시간 중앙값(초)']).toBe('60.0')
     expect(rows['예시 자료 사실이 난 Work (V27: 없음·다름·읽지 못함)']).toMatch(/^50% \(1\/2\)/)
-    expect(rows['갈래별 올림 (합)']).toBe('out_of_contract 1, request_gap 1')
+    expect(rows['갈래별 올림 (합, 같은 규칙)']).toBe('out_of_contract 1, request_gap 1')
     expect(rows['request_gap을 올린 실행 (V30)']).toBe('50% (1/2)')
     expect(rows['미리 리뷰 · 다시 쓴 리뷰 · 멈춘 리뷰 /Work (V23)']).toBe('1.00 · 1.00 · 0.00')
     expect(rows['재지 않은 브랜치/회 (V21)']).toBe('0.50')
+    expect(rows['올림 · 메모 /리뷰한 내보내기 (그 빌드의 관문 규칙: M2.1 V26, M2·m2p V4)']).toBe(
+      '1.00 · 0.50 (내보내기 2, V26 규칙)',
+    )
+    // 단위 브랜치 Work가 없으면 통합 증거 칸은 비어 있다
+    expect(rows['통합 증거 잰 수/단위 브랜치 Work (V22)']).toBe('-')
     // 되먹임 결과: 첫 실행의 두 사실 가운데 하나가 고쳐짐. 둘째 실행은 결과 칸이 없다
     expect(rows['보낸 사실이 고쳐짐 (relay: 결정론 · 리뷰, 다음 head를 모르는 것)']).toBe(
       '50% (1/2) · -, 모름 0',
     )
   })
 
-  it('옛 기록(M2, relay3-m2p)은 M2.1에만 있는 장치의 칸이 비고 올림·메모만 센다', () => {
-    const legacy = devices({ modern: false })
+  it('옛 기록(M2, relay3-m2p)은 M2.1에만 있는 장치의 칸이 비고 올림·메모만 V4 규칙으로 센다', () => {
+    const legacy = devices({
+      modern: false,
+      raises: { ...devices().raises, rule: 'v4' },
+    })
     const rows = Object.fromEntries(deviceRows([runOf({ arm: M2P, work: { devices: legacy } })]))
     expect(rows['끝낸 방식, Work (V25)']).toBe('-')
     expect(rows['[끝내기] 누름/회']).toBe('-')
     expect(rows['기준 확인이 돈 제출 (V28)']).toBe('-')
-    expect(rows['올림 · 메모 /리뷰한 내보내기 (V26)']).toBe('0.00 · 1.00 (내보내기 1)')
+    expect(rows['통합 증거 잰 수/단위 브랜치 Work (V22)']).toBe('-')
+    expect(rows['올림 · 메모 /리뷰한 내보내기 (그 빌드의 관문 규칙: M2.1 V26, M2·m2p V4)']).toBe(
+      '0.00 · 1.00 (내보내기 1, V4 규칙(갈래가 있으면 올림))',
+    )
   })
 
-  it('실행의 끝낸 방식은 Work 가운데 상자, 걸림, 한 번 차례로 본다', () => {
+  it('통합 증거(V22): 단위 브랜치 Work마다 잰 수, 마지막 것에 열린 것, 커밋이 Work 브랜치에 없는 단위 브랜치', () => {
+    const unit = (integration) =>
+      work({ devices: devices({ delivery: 'branch_per_unit', exports: 2, integration }) })
+    const rows = Object.fromEntries(
+      deviceRows([
+        runOf({
+          works: [
+            unit({ measures: 3, lastOpen: true, notOnWorkBranch: 2 }),
+            unit({ measures: 1, lastOpen: false, notOnWorkBranch: 0 }),
+          ],
+        }),
+        runOf({
+          index: 2,
+          works: [
+            unit({ measures: 0, lastOpen: null, notOnWorkBranch: 0 }),
+            // one_branch Work는 세지 않는다
+            work({ devices: devices({ integration: { measures: 0, lastOpen: null } }) }),
+          ],
+        }),
+      ]),
+    )
+    expect(rows['통합 증거 잰 수/단위 브랜치 Work (V22)']).toBe('1.33 (Work 3)')
+    expect(rows['마지막 통합 증거에 열린 것이 있던 Work (V22)']).toBe('50% (1/2)')
+    expect(rows['커밋이 Work 브랜치에 없는 단위 브랜치 (V22, 합 · 그런 Work)']).toBe(
+      '2 · 33% (1/3)',
+    )
+  })
+
+  it('실행의 끝낸 방식: 끝난 Work 하나라도 상자면 box, 모두 한 번이나 걸림이면 상자 없이(no_box)', () => {
     const w = (how) => work({ devices: devices({ end: { how } }) })
     expect(runHow(runOf({ works: [w('once'), w('box')] }))).toBe('box')
-    expect(runHow(runOf({ works: [w('once'), w('armed')] }))).toBe('armed')
-    expect(runHow(runOf({ works: [w('once')] }))).toBe('once')
+    expect(runHow(runOf({ works: [w('armed'), w('box')] }))).toBe('box')
+    expect(runHow(runOf({ works: [w('once'), w('armed')] }))).toBe('no_box')
+    expect(runHow(runOf({ works: [w('armed')] }))).toBe('no_box')
+    expect(runHow(runOf({ works: [w('once')] }))).toBe('no_box')
     expect(runHow(runOf({ works: [w(null)] }))).toBeNull()
+    expect(runHow(runOf({ works: [w('once'), w(null)] }))).toBeNull()
+  })
+
+  it('V25: 상자 없이 끝낸 Work는 한 번과 걸림이고, P1은 상자 없이 끝낸 실행과 상자에서 끝낸 실행으로 견준다', () => {
+    const cmp = () => null
+    const w = (how) => work({ devices: devices({ end: { how } }) })
+    const rows = minNRows(
+      [
+        runOf({ works: [w('once')] }),
+        runOf({ index: 2, works: [w('armed')], success: false }),
+        runOf({ index: 3, works: [w('box')] }),
+        runOf({ index: 4, works: [w('once'), w('box')], success: false }),
+      ],
+      cmp,
+    )
+    const v25 = Object.fromEntries(rows.map((r) => [r[0], r]))['V25 한 번 끝']
+    expect(v25.slice(1, 3)).toEqual(['상자 없이 끝낸 Work(한 번·걸림)', '3'])
+    expect(v25[5]).toMatch(/^P1 상자 없이 0\.50, 상자 0\.50/)
+  })
+
+  it('V23: 봉인 셋에서 리뷰 호출을 Work당과 내보내기당으로 m2p와 견주고, 기다림은 분류에서 온다', () => {
+    const cmp = () => null
+    const reviewed = (calls, exports = 1) =>
+      work({ review: { calls, prepared: 0, reused: 0, aborted: 0 }, devices: devices({ exports }) })
+    const m21 = sealedOf().flatMap((scenario) =>
+      Array.from({ length: 5 }, (_, i) =>
+        runOf({ scenario, index: i + 1, works: [reviewed(6, 2), reviewed(2)] }),
+      ),
+    )
+    const m2p = sealedOf().flatMap((scenario) =>
+      Array.from({ length: 5 }, (_, i) =>
+        runOf({
+          scenario,
+          index: i + 1,
+          arm: M2P,
+          works: [reviewed(1), reviewed(1)],
+        }),
+      ),
+    )
+    // 설계 셋 실행은 견주지 않는다
+    const design = runOf({ scenario: '14-double-notify', works: [reviewed(50)] })
+    expect(reviewCalls([...m21, design])).toEqual({
+      runs: 15,
+      works: 30,
+      perWork: 4,
+      perExport: 8 / 3,
+    })
+    expect(reviewCalls(m2p)).toMatchObject({ perWork: 1, perExport: 1 })
+    const row = (rs, base) =>
+      Object.fromEntries(minNRows(rs, cmp, H2, base).map((r) => [r[0], r]))['V23 미리 리뷰(계기)']
+    const full = row([...m21, design], m2p)
+    expect(full.slice(2, 5)).toEqual(['15 · 15', '시나리오마다 5 · 5', '찼음'])
+    expect(full[5]).toMatch(
+      /^리뷰 호출\/Work 4\.00 · 1\.00, \/내보내기 2\.67 · 1\.00\(2\.67배: 2배를 넘음/,
+    )
+    expect(full[5]).toMatch(/\[끝내기\] 뒤 순수 기다림: 분류에서/)
+    // 2배를 넘지 않으면 끄지 않는다. 봉인 시나리오 하나라도 5회가 안 되면 모름
+    const low = m2p.map((r) => ({ ...r, works: [reviewed(2), reviewed(2)] }))
+    expect(row(m21, low)[5]).toMatch(/1\.33배: 2배를 넘지 않아 끄지 않는다/)
+    expect(row(m21, m2p.slice(1))[4]).toBe('모름(n 모자람)')
+    expect(row(m21, [])[5]).toMatch(/배수 모름\(기준 없음\)/)
   })
 
   it('최소 n이 차지 않은 장치는 모름이다(판정 규칙 5)', () => {
@@ -415,6 +539,8 @@ describe('장치 지표 표', () => {
     const byDevice = Object.fromEntries(rows.map((r) => [r[0], r]))
     expect(byDevice['V25 한 번 끝'].slice(2, 5)).toEqual(['2', '30', '모름(n 모자람)'])
     expect(byDevice['V24 되먹임(결정론)'][2]).toBe('4')
+    expect(byDevice['V23 미리 리뷰(계기)'][4]).toBe('모름(n 모자람)')
+    expect(byDevice['V30 리뷰의 요청 대조'][5]).toMatch(/관문 재생/)
     const many = Array.from({ length: 30 }, (_, i) => runOf({ index: i + 1 }))
     const full = Object.fromEntries(minNRows(many, cmp).map((r) => [r[0], r]))
     expect(full['V25 한 번 끝'][4]).toBe('찼음')

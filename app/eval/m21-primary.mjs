@@ -9,6 +9,7 @@
 // 0단계(O1 관문 재생, O2 리뷰 재생)는 relay-v3 쪽 도구가 따로 낸다.
 //   node eval/m21-primary.mjs <결과 폴더>... [--h2 <시나리오 id>] [--out 파일.md]
 // M2 결과 폴더를 함께 주면 설계 셋의 쪽마다 평균에 M2의 relay3·relay@auto가 함께 보인다(기제 보고용, 판정에 쓰지 않음).
+// 시범 결과 폴더(m21-pilot-*, 규약 9절 1)를 주면 읽기는 하되 보고서 머리와 stderr에 경고를 단다(시범은 판정에 넣지 않는다).
 import fs from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
@@ -223,10 +224,14 @@ function outcomeText(works, by) {
   return `${part('facts')} · ${part('findings')}, 모름 ${unknown}`
 }
 
+/** 올림 규칙의 이름(relay3-devices.mjs RAISE_RULES): 그 빌드의 관문이 쓴 규칙 */
+const RULE = { v26: 'V26 규칙', v4: 'V4 규칙(갈래가 있으면 올림)' }
+
 /**
  * 장치 지표(14절 '장치마다 쓰는 지표', relay3-devices.mjs)를 실행 묶음 하나에서 센다. [이름, 값] 줄의 목록이다. M2.1에만 있는
- * 장치(끝내기, 되먹임, 기준 확인, 예시 자료, 단위)는 M2.1 기록(devices.modern)에서만 세고, 옛 기록(M2, relay3-m2p)의 칸은
- * '-'다. 올림과 메모는 옛 묶음에도 있어 모두 센다
+ * 장치(끝내기, 되먹임, 기준 확인, 예시 자료, 단위, 통합 증거)는 M2.1 기록(devices.modern)에서만 세고, 옛 기록(M2, relay3-m2p)의
+ * 칸은 '-'다. 올림과 메모는 옛 묶음에도 있어 모두 세고, 그 빌드의 관문이 쓴 규칙(M2.1은 V26, 옛 기록은 V4)으로 가른다. 값에
+ * 규칙의 이름을 붙인다
  */
 export function deviceRows(runs) {
   const works = runs.flatMap((r) => r.works ?? [])
@@ -260,7 +265,20 @@ export function deviceRows(runs) {
     addTo(byKind, x.byKind)
     addTo(bySeverity, x.bySeverity)
   }
+  // 규칙의 이름이 없는 예전 run.json의 장치 지표는 V26 규칙으로 센 것이다
+  const rules = {}
+  for (const w of known.filter((x) => (x.devices.raises?.exports ?? []).some((e) => e.reviewed))) {
+    const k = RULE[w.devices.raises?.rule] ?? RULE.v26
+    rules[k] = (rules[k] ?? 0) + 1
+  }
+  const ruleText = Object.keys(rules).length === 1 ? Object.keys(rules)[0] : tally(rules)
   const examplesWorks = dev.filter((w) => (w.devices.examples?.facts ?? 0) > 0).length
+  // 통합 증거(V22): 단위 브랜치 전달 Work만. 그 칸이 없는 예전 결과는 세지 않는다
+  const unitWorks = dev.filter(
+    (w) => w.devices.delivery === 'branch_per_unit' && w.devices.integration,
+  )
+  const integ = (w) => w.devices.integration
+  const lastKnown = unitWorks.filter((w) => typeof integ(w).lastOpen === 'boolean')
   const review = (w) => w.review ?? null
   const reviewTokens = (r) => {
     const u = r.agent?.review
@@ -334,18 +352,36 @@ export function deviceRows(runs) {
     ],
     ['리뷰 입력 토큰(천, 캐시 포함)/회', runs.length ? f(mean(runs.map(reviewTokens)), 1) : '-'],
     [
-      '올림 · 메모 /리뷰한 내보내기 (V26)',
+      '올림 · 메모 /리뷰한 내보내기 (그 빌드의 관문 규칙: M2.1 V26, M2·m2p V4)',
       exportsReviewed.length
-        ? `${f(mean(exportsReviewed.map((x) => x.raised)))} · ${f(mean(exportsReviewed.map((x) => x.notes)))} (내보내기 ${exportsReviewed.length})`
+        ? `${f(mean(exportsReviewed.map((x) => x.raised)))} · ${f(mean(exportsReviewed.map((x) => x.notes)))} (내보내기 ${exportsReviewed.length}, ${ruleText})`
         : '-',
     ],
-    ['갈래별 올림 (합)', exportsReviewed.length ? tally(byKind) : '-'],
-    ['심각도별 올림 (합)', exportsReviewed.length ? tally(bySeverity) : '-'],
+    ['갈래별 올림 (합, 같은 규칙)', exportsReviewed.length ? tally(byKind) : '-'],
+    ['심각도별 올림 (합, 같은 규칙)', exportsReviewed.length ? tally(bySeverity) : '-'],
     [
       'request_gap을 올린 실행 (V30)',
       exportsReviewed.length ? pct(runs.filter(hadRequestGap).length, runs.length) : '-',
     ],
     ['단위 브랜치 없음/회 (V22)', perRun((w) => w.devices?.missingExports ?? 0)],
+    [
+      '통합 증거 잰 수/단위 브랜치 Work (V22)',
+      unitWorks.length
+        ? `${f(mean(unitWorks.map((w) => integ(w).measures ?? 0)))} (Work ${unitWorks.length})`
+        : '-',
+    ],
+    [
+      '마지막 통합 증거에 열린 것이 있던 Work (V22)',
+      unitWorks.length
+        ? pct(lastKnown.filter((w) => integ(w).lastOpen).length, lastKnown.length)
+        : '-',
+    ],
+    [
+      '커밋이 Work 브랜치에 없는 단위 브랜치 (V22, 합 · 그런 Work)',
+      unitWorks.length
+        ? `${unitWorks.reduce((a, w) => a + (integ(w).notOnWorkBranch ?? 0), 0)} · ${pct(unitWorks.filter((w) => (integ(w).notOnWorkBranch ?? 0) > 0).length, unitWorks.length)}`
+        : '-',
+    ],
     [
       '재지 않은 브랜치/회 (V21)',
       unmeasured.length ? f(mean(unmeasured.map((r) => r.outcome.unmeasuredBranches.length))) : '-',
@@ -353,26 +389,57 @@ export function deviceRows(runs) {
   ]
 }
 
-/** 실행의 끝낸 방식: Work가 모두 한 번에 끝났으면 once, 하나라도 상자에서 끝냈으면 box, 걸렸다가 끝났으면 armed */
+/** 상자 없이 끝낸 방식(V25): 바로 끝남(once)과 걸렸다가 리뷰 뒤 저절로 끝남(armed). box는 상자의 [그래도 끝내기]다 */
+export const NO_BOX = ['once', 'armed']
+
+/**
+ * 실행의 끝낸 방식(V25 끄는 조건의 P1 견줌): 끝난 Work 가운데 하나라도 상자에서 끝냈으면 box, 모두 상자 없이(once, armed)
+ * 끝났으면 no_box. 끝난 Work가 없거나 끝낸 방식의 기록이 없는 Work가 있으면 null
+ */
 export function runHow(r) {
   const hows = (r.works ?? []).filter((w) => w.ended).map((w) => w.devices?.end?.how ?? null)
-  if (!hows.length || hows.some((h) => h === null)) return null
-  if (hows.includes('box')) return 'box'
-  if (hows.includes('armed')) return 'armed'
-  return 'once'
+  if (!hows.length || hows.some((h) => h !== 'box' && !NO_BOX.includes(h))) return null
+  return hows.includes('box') ? 'box' : 'no_box'
 }
 
 /**
- * 장치의 최소 n과 끄는 조건(판정 규칙 5: 끄는 조건은 최소 n이 찬 뒤에만 쓴다. 차지 않으면 '모름'). relay3-m21 실행에서 센다.
- * 앱이 세지 않고 사람이나 AI가 판정해야 하는 값(보낸 사실이 고쳐졌는가, 원인을 다 담은 계약, 바로잡은 일)은 여기서 재지 않고
- * 그렇다고 적는다. cmp는 봉인 셋의 m2Compare다(V24의 P2 조건)
+ * 봉인 셋 실행의 리뷰 호출(V23 끄는 조건): Work당과 내보내기당. 리뷰 호출은 다시 쓴 리뷰와 멈춘 리뷰를 뺀 것이다(relay3-arm.mjs
+ * reviewUsage). 내보내기는 Work의 내보내기 수(장치 지표가 없거나 옛 기록이면 1)다. one_branch Work는 내보내기가 하나라 내보내기당이
+ * 곧 Work당이고, 단위 브랜치 Work는 내보내기당이라 규약의 'Work당 리뷰 수(단위 브랜치 Work는 내보내기당)'가 내보내기당 값이다
  */
-export function minNRows(runs, cmp, h2 = H2) {
+export function reviewCalls(runs, h2 = H2) {
+  const sealed = sealedOf(h2)
+  const rs = runs.filter((r) => sealed.includes(r.scenario))
+  const works = rs.flatMap((r) => r.works ?? [])
+  const calls = works.reduce((a, w) => a + (Number(w.review?.calls) || 0), 0)
+  const exports = works.reduce((a, w) => a + (Number(w.devices?.exports) || 1), 0)
+  return {
+    runs: rs.length,
+    works: works.length,
+    perWork: works.length ? calls / works.length : null,
+    perExport: exports ? calls / exports : null,
+  }
+}
+
+/** V23 끄는 조건의 배수: m21의 내보내기당 리뷰 호출이 기준(m2p)의 이것을 넘으면 */
+export const REVIEW_RATIO = 2
+
+/**
+ * 장치의 최소 n과 끄는 조건(판정 규칙 5: 끄는 조건은 최소 n이 찬 뒤에만 쓴다. 차지 않으면 '모름'). relay3-m21 실행에서 센다.
+ * 앱이 세지 않고 사람이나 AI가 판정해야 하는 값(보낸 사실이 고쳐졌는가, 원인을 다 담은 계약, 바로잡은 일, [끝내기] 뒤 순수
+ * 기다림)은 여기서 재지 않고 그렇다고 적는다. cmp는 봉인 셋의 m2Compare다(V24의 P2 조건). base는 V23의 기준인 relay3-m2p
+ * 실행이다(봉인 셋에서 견줌)
+ * @param {object[]} runs relay3-m21 실행
+ * @param {(a: string, b: string, key: string) => object | null} cmp
+ * @param {string} [h2]
+ * @param {object[]} [base] relay3-m2p 실행
+ */
+export function minNRows(runs, cmp, h2 = H2, base = []) {
   const works = runs.flatMap((r) => r.works ?? [])
   const dev = works.filter((w) => w.devices)
   const sum = (fn) => dev.reduce((a, w) => a + (fn(w.devices) ?? 0), 0)
   const state = (n, min) => (n >= min ? '찼음' : '모름(n 모자람)')
-  const once = dev.filter((w) => w.ended && w.devices.end?.how === 'once').length
+  const noBox = dev.filter((w) => w.ended && NO_BOX.includes(w.devices.end?.how)).length
   const p1Of = (how) => {
     const rs = runs.filter((r) => runHow(r) === how && typeof r.outcome?.success === 'boolean')
     return rs.length ? rs.filter((r) => r.outcome.success).length / rs.length : null
@@ -394,14 +461,39 @@ export function minNRows(runs, cmp, h2 = H2) {
   const reviewedExports = dev.flatMap((w) =>
     (w.devices.raises?.exports ?? []).filter((x) => x.reviewed),
   )
+  // V23: 봉인 셋에서 m21과 기준(m2p)의 리뷰 호출. 최소 n은 봉인 시나리오마다 두 쪽 5회
+  const sealed = sealedOf(h2)
+  const own = reviewCalls(runs, h2)
+  const before = reviewCalls(base, h2)
+  const fiveEach = sealed.every(
+    (id) =>
+      runs.filter((r) => r.scenario === id).length >= 5 &&
+      base.filter((r) => r.scenario === id).length >= 5,
+  )
+  const ratio =
+    before.perExport > 0 && own.perExport !== null ? own.perExport / before.perExport : null
+  const ratioText =
+    ratio === null
+      ? '배수 모름(기준 없음)'
+      : ratio > REVIEW_RATIO
+        ? `${f(ratio)}배: ${REVIEW_RATIO}배를 넘음. [끝내기] 뒤 순수 기다림이 반으로 줄지 않았으면 PR과 [끝내기] 계기로 돌아간다`
+        : `${f(ratio)}배: ${REVIEW_RATIO}배를 넘지 않아 끄지 않는다`
   return [
     [
       'V25 한 번 끝',
-      '한 번에 끝낸 Work',
-      `${once}`,
+      '상자 없이 끝낸 Work(한 번·걸림)',
+      `${noBox}`,
       '30',
-      state(once, 30),
-      `P1 한 번 ${f(p1Of('once'))}, 상자 ${f(p1Of('box'))}(δ 10%p 넘게 낮으면 두 단계로). 끝낸 뒤 바로잡은 일은 사람이 센다`,
+      state(noBox, 30),
+      `P1 상자 없이 ${f(p1Of('no_box'))}, 상자 ${f(p1Of('box'))}(상자 없이가 δ 10%p 넘게 낮으면 두 단계로). 끝낸 뒤 바로잡은 일은 사람이 센다`,
+    ],
+    [
+      'V23 미리 리뷰(계기)',
+      `봉인 셋 실행(${M21} · 기준 ${M2P})`,
+      `${own.runs} · ${before.runs}`,
+      '시나리오마다 5 · 5',
+      fiveEach ? '찼음' : '모름(n 모자람)',
+      `리뷰 호출/Work ${f(own.perWork)} · ${f(before.perWork)}, /내보내기 ${f(own.perExport)} · ${f(before.perExport)}(${ratioText}). [끝내기] 뒤 순수 기다림: 분류에서(5.4 P3 갈래)`,
     ],
     [
       'V24 되먹임(결정론)',
@@ -445,7 +537,7 @@ export function minNRows(runs, cmp, h2 = H2) {
       `${passedExports.length}`,
       '30',
       state(passedExports.length, 30),
-      `거짓 올림 ${pct(falseRaise, passedExports.length)}(15% 넘으면 메모로). 잡음은 O2 리뷰 재생에서 잰다`,
+      `거짓 올림 ${pct(falseRaise, passedExports.length)}(15% 넘으면 메모로). 잡음은 run.json에서 세지 못한다(관문의 까닭을 남기지 않음): 배치 뒤 M2.1 묶음(m2.1.jsonl)을 request_gap을 메모로 두고 관문 재생해 잰다. 오프라인은 O2`,
     ],
     [
       'V26 올림 기준',
@@ -477,6 +569,18 @@ export function loadM21Runs(dirs) {
   )
 }
 
+/** 시범 결과 폴더의 이름(규약 9절 1: m21-pilot-*). 시범은 판정에 넣지 않는다 */
+export const PILOT = /^m21-pilot-/
+
+/** 결과 폴더 가운데 시범 폴더(경로의 어느 마디가 m21-pilot-로 시작) */
+export const pilotDirs = (dirs = []) =>
+  dirs.filter((d) =>
+    path
+      .resolve(d)
+      .split(path.sep)
+      .some((x) => PILOT.test(x)),
+  )
+
 /** 시나리오의 묶음: 봉인, 설계, 그 밖 */
 const groupOf = (id, h2) =>
   sealedOf(h2).includes(id) ? '봉인' : DESIGN.includes(id) ? '설계(기제만)' : '그 밖'
@@ -500,9 +604,16 @@ export function m21Report(runs, o = {}) {
   const ids = [...new Set(ok.map((r) => r.scenario))].sort(
     (a, b) => GROUPS.indexOf(groupOf(a, h2)) - GROUPS.indexOf(groupOf(b, h2)) || a.localeCompare(b),
   )
+  const pilots = pilotDirs(o.dirs)
   const lines = [
     '# M2.1 평가 주지표 (relay-v3 docs/m2.1-design.md 14절)',
     '',
+    ...(pilots.length
+      ? [
+          `> 경고: 시범 결과 폴더(m21-pilot-*)가 들어 있다: ${pilots.map((d) => `\`${d}\``).join(', ')}. 시범은 판정에 넣지 않는다(규약 9절 1). 이 보고서의 판정을 쓰지 말고 배치 폴더만 주어 다시 모은다`,
+          '',
+        ]
+      : []),
     ...(o.dirs?.length ? [`- 결과 폴더: ${o.dirs.map((d) => `\`${d}\``).join(', ')}`] : []),
     `- 실행 ${runs.length}개, 도구 문제로 뺀 실행 ${excluded.length}개${excluded.length ? ` (${excluded.map((r) => `${r.scenario} ${r.arm}#${r.index} ${r.ending}`).join(', ')})` : ''}`,
     `- 숨긴 시험을 판정하지 못한 실행(P1에서 뺌): ${ok.filter((r) => typeof r.outcome?.success !== 'boolean').length}개`,
@@ -660,7 +771,15 @@ export function m21Report(runs, o = {}) {
   lines.push(
     '## 최소 n과 끄는 조건 (판정 규칙 5, relay3-m21)',
     '',
-    table(['장치', '센 것', 'n', '최소 n', '상태', '값'], minNRows(m21, cmp, h2)),
+    table(
+      ['장치', '센 것', 'n', '최소 n', '상태', '값'],
+      minNRows(
+        m21,
+        cmp,
+        h2,
+        ok.filter((r) => r.arm === M2P),
+      ),
+    ),
     '',
   )
 
@@ -704,6 +823,7 @@ export function m21Report(runs, o = {}) {
   )
   return {
     text: lines.join('\n'),
+    pilots,
     verdicts: v,
     falseAuto: fa,
     shadow: g,
@@ -722,7 +842,9 @@ if (isMain(import.meta.url)) {
     )
     process.exit(2)
   }
-  const { text } = m21Report(loadM21Runs(positionals), { dirs: positionals, h2: v.h2 })
+  const { text, pilots } = m21Report(loadM21Runs(positionals), { dirs: positionals, h2: v.h2 })
+  if (pilots.length)
+    console.error(`경고: 시범 결과 폴더가 들어 있다(판정에 쓰지 않는다): ${pilots.join(', ')}`)
   if (v.out) fs.writeFileSync(v.out, text)
   console.log(text)
 }

@@ -16,9 +16,11 @@ import {
   feedbackMetrics,
   feedbackOutcomes,
   findingKey,
+  integrationMetrics,
   probeMetrics,
   raiseMetrics,
   raises,
+  raisesV4,
   savedDevices,
 } from '../lib/relay3-devices.mjs'
 import {
@@ -476,6 +478,7 @@ describe('장치 지표', () => {
       ],
     )
     expect(r).toEqual({
+      rule: 'v26',
       exports: [
         {
           unit: null,
@@ -497,6 +500,100 @@ describe('장치 지표', () => {
         },
       ],
       requestGapBundles: 1,
+    })
+  })
+
+  it('옛 규칙(V4, M2·relay3-m2p의 관문): 갈래가 있는 지적은 구조/low도 올림이고 갈래가 없는 것만 메모다', () => {
+    expect(
+      [
+        { raise: 'structure', severity: 'low' },
+        { raise: 'request_gap', severity: 'low' },
+        { raise: null, severity: 'high' },
+        { severity: 'high' },
+      ].map(raisesV4),
+    ).toEqual([true, true, false, false])
+    const last = {
+      review: {
+        status: 'done',
+        findings: [
+          { raise: 'structure', severity: 'low', text: 'a' },
+          { raise: 'structure', severity: 'low', text: 'b' },
+          { severity: 'medium', text: 'c' },
+        ],
+      },
+    }
+    const finals = [{ unit: null, bundle: last }]
+    expect(raiseMetrics([last], finals, 'v4')).toMatchObject({
+      rule: 'v4',
+      exports: [{ raised: 2, notes: 1, byKind: { structure: 2 }, bySeverity: { low: 2 } }],
+    })
+    expect(raiseMetrics([last], finals)).toMatchObject({
+      rule: 'v26',
+      exports: [{ raised: 0, notes: 3, byKind: {} }],
+    })
+    // request_gap은 올림 규칙과 상관없이 리뷰어가 낸 것을 센다: 메모 빌드(V30 메모)에서는 메모로 가르고 수는 그대로
+    const gap = {
+      review: { status: 'done', findings: [{ raise: 'request_gap', severity: 'low', text: 'g' }] },
+    }
+    const gapFinals = [{ unit: null, bundle: gap }]
+    expect(raiseMetrics([gap], gapFinals)).toMatchObject({
+      exports: [{ raised: 1, notes: 0, requestGap: 1 }],
+      requestGapBundles: 1,
+    })
+    expect(raiseMetrics([gap], gapFinals, 'memo')).toMatchObject({
+      rule: 'memo',
+      exports: [{ raised: 0, notes: 1, requestGap: 1 }],
+      requestGapBundles: 1,
+    })
+    // 그 빌드의 관문 규칙으로 센다: M2.1 기록(exports[])은 V26, 옛 기록(M2, relay3-m2p)은 V4
+    const old = deviceMetrics({ events: [], rec: { gate: null }, finals, all: [last] })
+    expect(old.raises).toMatchObject({ rule: 'v4', exports: [{ raised: 2, notes: 1 }] })
+    const modern = deviceMetrics({ events: [], rec: { exports: [{}] }, finals, all: [last] })
+    expect(modern.raises).toMatchObject({ rule: 'v26', exports: [{ raised: 0, notes: 3 }] })
+  })
+
+  it('통합 증거(V22): 잰 수, 마지막 것의 열린 것, 커밋이 Work 브랜치에 없는 단위 브랜치(마지막 관문의 사실, 브랜치마다 한 번)', () => {
+    const outside = (b) => `통합 증거: 단위 브랜치의 커밋이 Work 브랜치에 없음: ${b}`
+    const rec = {
+      exports: [
+        {
+          unit: 'csv',
+          gate: {
+            conclusion: 'human_merge',
+            decisive: outside('relay/x--money'),
+            reasons: [outside('relay/x--money'), '통합 증거: 수용 시험 줄 1: 못 미침'],
+          },
+        },
+        {
+          unit: 'money',
+          gate: { conclusion: 'human_merge', reasons: [outside('relay/x--money')] },
+        },
+        { unit: 'report', gate: null },
+      ],
+    }
+    const events = [
+      { type: 'evidence', head: 'a', integration: true, open: 0 },
+      { type: 'evidence', head: 'a', export: false, unit: 'csv', conclusion: 'human_merge' },
+      { type: 'evidence', head: 'b', integration: true, open: 2 },
+    ]
+    expect(integrationMetrics(events, rec)).toEqual({
+      measures: 2,
+      lastOpen: true,
+      notOnWorkBranch: 1,
+    })
+    expect(
+      integrationMetrics([{ type: 'evidence', head: 'b', integration: true, open: 0 }], rec),
+    ).toMatchObject({ measures: 1, lastOpen: false })
+    // one_branch와 옛 기록: 통합 증거가 없다
+    expect(integrationMetrics([{ type: 'evidence', head: 'a', export: true }], {})).toEqual({
+      measures: 0,
+      lastOpen: null,
+      notOnWorkBranch: 0,
+    })
+    expect(deviceMetrics({ events, rec }).integration).toEqual({
+      measures: 2,
+      lastOpen: true,
+      notOnWorkBranch: 1,
     })
   })
 
@@ -673,6 +770,7 @@ describe('앱 저장소 읽기 (M2.1 work.json)', () => {
         { type: 'review', trigger: 'prepared', status: 'done', findings: 1 },
         { type: 'feedback', n: 1, head: earlier, by: 'relay', facts: 1, findings: 0, keys: [] },
         { type: 'probe', tool: 'submit_contract', ran: true, problems: 0, ms: 1000 },
+        { type: 'evidence', head, integration: true, open: 1 },
         { type: 'evidence', head, export: true, conclusion: 'human_merge', shadow: true },
         { type: 'evidence', head, export: true, unit: 'csv', conclusion: 'human_merge' },
         { type: 'review', trigger: 'end', reused: true, status: 'done', findings: 1 },
@@ -700,7 +798,8 @@ describe('앱 저장소 읽기 (M2.1 work.json)', () => {
         feedback: { rounds: 1, facts: 1 },
         probe: { calls: 1, ran: 1, rejected: 0, ms: [1000] },
         examples: { bundles: 2, absent: 1, facts: 1, final: ['same', null] },
-        raises: { requestGapBundles: 1 },
+        raises: { rule: 'v26', requestGapBundles: 1 },
+        integration: { measures: 1, lastOpen: true, notOnWorkBranch: 0 },
       },
     })
     expect(w.devices.raises.exports.map((x) => [x.unit, x.raised, x.notes])).toEqual([

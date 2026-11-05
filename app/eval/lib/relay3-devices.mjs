@@ -5,7 +5,10 @@
 //   ended {how: once | armed | box, head}, end_armed {head}, end_box {head, open}, end_cancelled {head, armed, reason},
 //   end_moved {from, to, armed}, end_failed {head}, feedback {n, head, by: relay | human, facts, findings, keys},
 //   feedback_held {head, reason: cap | human_findings | draft | human_input, facts, findings},
-//   probe {tool, ran, problems, ms, note?}, export_missing {unit, branch}, review {trigger, reused?, aborted?, status, findings}
+//   probe {tool, ran, problems, ms, note?}, export_missing {unit, branch}, review {trigger, reused?, aborted?, status, findings},
+//   evidence {head, integration: true, open}(V22 통합 증거, works-evidence.ts integrate)
+// 단위 브랜치의 커밋이 Work 브랜치에 없다는 사실(통합 증거의 not_on_work_branch)은 events.jsonl에 남지 않아 work.json 내보내기의
+// 마지막 관문(exports[].gate.reasons)에서 읽는다(works-types.ts outsideFact, core/gate.ts integrationFacts의 글 그대로).
 // savedDevices만 결과 폴더의 파일을 읽는다(예전 결과를 다시 모을 때).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -18,6 +21,34 @@ export function raises(f) {
   if (f?.raise === undefined || f?.raise === null) return false
   return f.raise !== 'structure' || f.severity !== 'low'
 }
+
+/**
+ * 옛 규칙(V4)의 올림인가: M2 빌드와 relay3-m2p의 관문(core/gate.ts reviewFacts)은 갈래(raise)가 있는 지적을 모두 사실로
+ * 넣었다. 갈래가 없는 지적만 메모다
+ */
+export function raisesV4(f) {
+  return f?.raise !== undefined && f?.raise !== null
+}
+
+/**
+ * 올림 규칙의 이름마다 그 술어. 그 빌드의 관문이 쓴 규칙으로 센다: M2.1 기록(work.json에 exports[]가 있음)은 V26, 옛 기록
+ * (M2, relay3-m2p)은 V4다(deviceMetrics)
+ */
+export const RAISE_RULES = { v26: raises, v4: raisesV4, memo: raisesMemo }
+
+/**
+ * V30을 메모로 내린 빌드(relay-v3 docs/experiments/m2.1/v30-memo.patch)의 올림: V26에서 request_gap만 메모로 둔다.
+ * O2를 넘지 못해 그 패치로 배치를 돌리면 deviceMetrics의 M2.1 규칙을 이것으로 바꾼다(규약 6절)
+ */
+export function raisesMemo(f) {
+  return f?.raise !== 'request_gap' && raises(f)
+}
+
+/**
+ * M2.1 기록(relay3-m21)을 세는 규칙. 기본은 V26이고, V30을 메모로 내린 빌드로 배치를 돌리면 RELAY3_RAISE_RULE=memo로
+ * 준다(relay-v3 docs/experiments/m2.1/protocol.md 6절). 모르는 값은 V26이다
+ */
+export const M21_RULE = process.env.RELAY3_RAISE_RULE === 'memo' ? 'memo' : 'v26'
 
 const count = (xs, pred) => xs.filter(pred).length
 const sum = (xs, fn) => xs.reduce((a, x) => a + (Number(fn(x)) || 0), 0)
@@ -238,14 +269,20 @@ const doneFindings = (b) =>
   b?.review?.status === 'done' && Array.isArray(b.review.findings) ? b.review.findings : []
 
 /**
- * 리뷰 올림(V26, V30): 내보내기마다 마지막 묶음의 끝난 리뷰에서 올림과 메모(raises), 갈래별·심각도별 올림, request_gap 올림을
- * 센다. requestGapBundles는 이 Work에서 잰 묶음 가운데 리뷰가 request_gap을 올린 묶음의 수다(마지막이 아니어도)
+ * 리뷰 올림(V26, V30): 내보내기마다 마지막 묶음의 끝난 리뷰에서 올림과 메모, 갈래별·심각도별 올림, request_gap 올림을 센다.
+ * 올림과 메모는 rule의 규칙(RAISE_RULES: v26은 core raises, v4는 갈래가 있으면 올림)으로 가르고, 그 이름을 rule에 둔다.
+ * requestGapBundles는 이 Work에서 잰 묶음 가운데 리뷰가 request_gap을 올린 묶음의 수다(마지막이 아니어도)
+ * @param {object[]} all
+ * @param {{ unit: string | null, bundle: object | null }[]} finals
+ * @param {'v26' | 'v4' | 'memo'} [rule]
  */
-export function raiseMetrics(all, finals) {
+export function raiseMetrics(all, finals, rule = 'v26') {
+  const name = Object.hasOwn(RAISE_RULES, rule) ? rule : 'v26'
+  const isRaise = RAISE_RULES[name]
   const exports = finals.map(({ unit, bundle }) => {
     const reviewed = bundle?.review?.status === 'done'
     const found = doneFindings(bundle)
-    const raised = found.filter(raises)
+    const raised = found.filter(isRaise)
     const byKind = {}
     const bySeverity = {}
     for (const f of raised) {
@@ -257,14 +294,44 @@ export function raiseMetrics(all, finals) {
       reviewed,
       raised: raised.length,
       notes: found.length - raised.length,
-      requestGap: count(raised, (f) => f.raise === 'request_gap'),
+      // 리뷰어가 request_gap을 냈는지는 올림 규칙과 상관없이 센다(메모 빌드에서도)
+      requestGap: count(found, (f) => f.raise === 'request_gap'),
       byKind,
       bySeverity,
     }
   })
   return {
+    rule: name,
     exports,
     requestGapBundles: count(all, (b) => doneFindings(b).some((f) => f.raise === 'request_gap')),
+  }
+}
+
+/** 통합 증거의 사실 가운데 커밋이 Work 브랜치에 다 있지 않은 단위 브랜치(relay-v3 works-types.ts outsideFact) */
+const OUTSIDE = /단위 브랜치의 커밋이 Work 브랜치에 없음: (.+)$/
+
+/**
+ * 통합 증거(V22, branch_per_unit): Work 브랜치를 계약 전체로 잰 결정론 증거(리뷰·관문·장부 없음). measures는 잰 수(evidence
+ * 기록 가운데 integration인 것), lastOpen은 마지막 것에 열린 것(open > 0)이 있었나다(재지 않았으면 null). open은 묶음의 열린
+ * 것만이고 단위 브랜치의 커밋이 Work 브랜치에 없다는 사실은 넣지 않는다. notOnWorkBranch는 그 사실(통합 증거의
+ * not_on_work_branch)에 든 단위 브랜치의 수다: events.jsonl에 남지 않아 내보내기마다 마지막 관문(work.json exports[].gate.reasons)
+ * 에서 읽고 브랜치마다 한 번 센다. one_branch와 옛 기록은 0, null, 0이다
+ */
+export function integrationMetrics(events, rec) {
+  const measured = events.filter((e) => e?.type === 'evidence' && e.integration === true)
+  const last = measured.at(-1)
+  const outside = new Set()
+  for (const x of Array.isArray(rec?.exports) ? rec.exports : []) {
+    const reasons = Array.isArray(x?.gate?.reasons) ? x.gate.reasons : []
+    for (const r of reasons) {
+      const m = OUTSIDE.exec(String(r))
+      if (m) outside.add(m[1].trim())
+    }
+  }
+  return {
+    measures: measured.length,
+    lastOpen: last ? (typeof last.open === 'number' ? last.open > 0 : null) : null,
+    notOnWorkBranch: outside.size,
   }
 }
 
@@ -276,8 +343,8 @@ function unitsOf(contract) {
 
 /**
  * Work 하나의 장치 지표. modern은 M2.1 기록(work.json에 내보내기 exports[]가 있음)인가다: 옛 기록(M2, relay3-m2p)에는 한 번
- * 끝·걸린 끝·상자, 되먹임, 제출 때 기준 확인, 예시 자료 견줌이 없어 그 지표는 0이 아니라 '없음'으로 읽는다(올림과 메모는
- * 옛 묶음에도 있다)
+ * 끝·걸린 끝·상자, 되먹임, 제출 때 기준 확인, 예시 자료 견줌, 통합 증거가 없어 그 지표는 0이 아니라 '없음'으로 읽는다(올림과
+ * 메모는 옛 묶음에도 있다). 올림과 메모는 그 빌드의 관문이 쓴 규칙으로 센다: M2.1은 V26, 옛 기록은 V4(raises.rule)
  * @param {object} o
  * @param {object[]} o.events events.jsonl의 기록
  * @param {object} o.rec work.json
@@ -294,17 +361,19 @@ export function deviceMetrics({
   all = [],
   byHead = {},
 }) {
+  const modern = Array.isArray(rec?.exports)
   return {
-    modern: Array.isArray(rec?.exports),
-    exports: Array.isArray(rec?.exports) ? rec.exports.length : 1,
+    modern,
+    exports: modern ? rec.exports.length : 1,
     units: unitsOf(contract),
     delivery: contract?.delivery ?? null,
     missingExports: ofType(events, 'export_missing').length,
+    integration: integrationMetrics(events, rec),
     end: endMetrics(events),
     feedback: { ...feedbackMetrics(events), outcomes: feedbackOutcomes(events, byHead) },
     probe: probeMetrics(events),
     examples: examplesMetrics(all, finals),
-    raises: raiseMetrics(all, finals),
+    raises: raiseMetrics(all, finals, modern ? M21_RULE : 'v4'),
   }
 }
 

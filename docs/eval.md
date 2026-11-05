@@ -36,8 +36,8 @@
 | `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/m2-primary.mjs` | relay-v3 M2 평가 규약의 지표(P1~P5, G1·G2)와 판정 규칙(Q1~Q4). 결과 폴더 여럿(보통 배치와 hands-off 배치)을 합쳐 읽고 hands-off 실행은 `<쪽>-handsoff`로 센다 |
-| `eval/m21-primary.mjs` | relay-v3 M2.1 평가(relay-v3 `docs/m2.1-design.md` 14절)의 주지표(봉인 셋의 P1·P3 마찰 m21 − m2p, P3 막대 m21 − relay@auto), 거짓 자동(14·H2·H3), 온라인 G1·G2, 판정 규칙, 장치 지표와 최소 n. H2의 id는 `--h2`로 바꾼다 |
-| `eval/lib/relay3-arm.mjs`, `eval/lib/relay3-devices.mjs` | relay-v3 앱 띄우기, work.json(M2.1은 내보내기 `exports[]`마다)과 events.jsonl 읽기, 리뷰 세기(다시 쓴 리뷰·멈춘 리뷰는 뺌), 장치 지표(끝낸 방식, 상자, 되먹임과 그 결과, 기준 확인, 예시 자료, 올림) |
+| `eval/m21-primary.mjs` | relay-v3 M2.1 평가(relay-v3 `docs/m2.1-design.md` 14절)의 주지표(봉인 셋의 P1·P3 마찰 m21 − m2p, P3 막대 m21 − relay@auto), 거짓 자동(14·H2·H3), 온라인 G1·G2, 판정 규칙, 장치 지표와 최소 n(V23은 봉인 셋의 relay3-m2p와 견줌). H2의 id는 `--h2`로 바꾼다. 시범 폴더(`m21-pilot-*`)를 주면 경고를 단다 |
+| `eval/lib/relay3-arm.mjs`, `eval/lib/relay3-devices.mjs` | relay-v3 앱 띄우기, work.json(M2.1은 내보내기 `exports[]`마다)과 events.jsonl 읽기, 리뷰 세기(다시 쓴 리뷰·멈춘 리뷰는 뺌), 장치 지표(끝낸 방식, 상자, 되먹임과 그 결과, 기준 확인, 예시 자료, 통합 증거, 올림. 올림과 메모는 그 빌드의 관문 규칙으로 센다: M2.1 기록은 V26, M2·relay3-m2p는 V4) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
 | `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌). 이름을 붙인 봉인은 `HOLDOUT_NAME=<이름>` |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
