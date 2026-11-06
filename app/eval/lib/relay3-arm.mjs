@@ -416,6 +416,15 @@ export class Relay3Arm extends RelayArm {
       throw new Error(`프로젝트 등록 실패: ${await project.innerText()}`)
   }
 
+  /**
+   * 장기 평가의 뒤 Work(run-sequence.mjs): 앞 Work가 남긴 앱 저장소(프로젝트 등록, Work 기록, 실적 장부)로 앱을 다시 띄운다.
+   * 사람이 다음 일을 하려고 앱을 다시 켠 것과 같다
+   */
+  async resume() {
+    await this.launch()
+    await this.win.getByTestId('project').first().waitFor({ timeout: 30_000 })
+  }
+
   /** Work 기록(work.json): 팀원 교대 전의 앱 저장소 것도 */
   records() {
     const out = []

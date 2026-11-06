@@ -182,13 +182,13 @@ export function systemPrompt(kind, scenario, guide, arm, handsOff = false) {
     '- done {summary}, give_up {reason}',
     '',
     '## 끝의 기준',
-    `${w.goal} 네가 납득하고, ${w.did} 내용이 로컬 브랜치에 커밋된 상태. 원격 push나 PR은 하지 않는다(원격 저장소가 평가용이다).`,
+    endCriterion(kind, scenario),
     '',
     '## 도구 설명서 (네가 미리 읽어 둔 것)',
     guide.trim(),
     '',
     '## 네 상황',
-    ...nextWorkLines(kind, scenario),
+    ...(scenario.sequence ? sequenceLines(kind, scenario) : nextWorkLines(kind, scenario)),
     `### 일의 종류: ${w.label}`,
     ...pickTypeLines(arm, scenario),
     '',
@@ -224,6 +224,74 @@ export function pickTypeLines(arm, scenario = {}) {
   return [
     `이번 평가 조건: [새 Work]의 유형은 '${typeLabel(type)}'을(를) 고른다. 일의 종류와 달라 보여도 그대로 고르고, 도구가 다른 유형을 권해도 '${typeLabel(type)}'으로 계속한다.`,
   ]
+}
+
+/**
+ * 끝의 기준. 장기 평가(sequence)의 relay-v3 쪽은 앱의 [머지]로 main에 넣는 것이 끝이다(guides/relay3-sequence.md). 맨 CLI는
+ * 커밋까지이고 도구가 main에 합친다(lib/sequence-git.mjs landCli)
+ */
+export function endCriterion(kind, scenario) {
+  const w = words(scenario)
+  const base = `${w.goal} 네가 납득하고, ${w.did} 내용이`
+  if (scenario.sequence && kind === 'relay3')
+    return `${base} 앱의 [머지]로 main에 머지된 상태(세션이 작업 브랜치를 push하고 PR을 열면 [증거]의 [머지]로 머지한다).`
+  if (scenario.sequence)
+    return `${base} 레포에 커밋된 상태. 원격 push나 PR은 하지 않는다. 브랜치에 커밋했으면 다음 일 전에 도구가 main에 합친다.`
+  return `${base} 로컬 브랜치에 커밋된 상태. 원격 push나 PR은 하지 않는다(원격 저장소가 평가용이다).`
+}
+
+/**
+ * 장기 평가(sequence, lib/sequence.mjs personaScenario): 같은 사람이 같은 레포에서 요청을 차례로 한다. 앞 일의 결과는 main에
+ * 들어갔고, 앞서 한 일은 기억(scenario.persona.works)에 적힌 만큼 안다
+ */
+export function sequenceLines(kind, scenario) {
+  const n = scenario.work?.index ?? 0
+  const count = scenario.work?.count ?? 1
+  const start =
+    kind === 'cli'
+      ? '레포 폴더(main)에서 claude를 새로 띄워 두었다.'
+      : '앱과 프로젝트는 앞 일 그대로이고 앱을 다시 켰다. 이번 일은 [새 Work]로 시작한다(기준 브랜치 main).'
+  const lines = [
+    `너는 이 레포를 맡은 개발자이고, 이 레포에서 요청 ${count}개를 차례로 처리하고 있다. 이번이 ${n + 1}번째 일이다. ${start}`,
+  ]
+  if (n > 0)
+    lines.push(
+      `앞 일들의 변경은 main에 들어가 있다. 화면에 남은 끝난 Work${kind === 'cli' ? '나 대화' : ''}는 앞 일이다.`,
+    )
+  const done = scenario.persona?.works ?? []
+  if (done.length)
+    lines.push(
+      '',
+      '### 앞서 한 일 (네 기억)',
+      ...done.map(
+        (x) =>
+          `- ${x.work}번째 일: ${x.title}${x.ending ? ` (${ENDING_WORD[x.ending] ?? x.ending})` : ''}`,
+      ),
+    )
+  lines.push('')
+  return lines
+}
+
+/** 앞서 한 일의 끝(episode.mjs ending) */
+const ENDING_WORD = {
+  done: '끝냄',
+  give_up: '포기함',
+  timeout: '시간이 다 됨',
+  turn_limit: '차례가 다 됨',
+}
+
+/**
+ * 장기 평가의 relay-v3 설명서: 끝(머리줄의 '- 끝:' 항목과 그 아래 번호 줄)을 guides/relay3-sequence.md로 바꾼다(앱의 [머지]로
+ * main에 넣고, 빚 확인에는 늘 빚으로 남긴다). '- 끝:' 항목이 없으면 던진다(설명서가 바뀌면 이것도 고친다)
+ */
+export function sequenceGuide(guide) {
+  const lines = guide.split('\n')
+  const at = lines.findIndex((l) => l.startsWith('- 끝:'))
+  if (at < 0) throw new Error("relay-v3 설명서에 '- 끝:' 항목이 없음")
+  let end = at + 1
+  while (end < lines.length && !lines[end].startsWith('- ') && lines[end].trim() !== '') end++
+  const own = fs.readFileSync(path.join(GUIDES, 'relay3-sequence.md'), 'utf8').trimEnd()
+  return [...lines.slice(0, at), own, ...lines.slice(end)].join('\n')
 }
 
 /**
@@ -269,7 +337,9 @@ export class Human {
     this.o = o
     this.sessionId = crypto.randomUUID()
     this.started = false
-    const guide = fs.readFileSync(path.join(GUIDES, `${guideName(o.arm, o.kind)}.md`), 'utf8')
+    const read = fs.readFileSync(path.join(GUIDES, `${guideName(o.arm, o.kind)}.md`), 'utf8')
+    // 장기 평가의 relay-v3 쪽은 끝이 앱의 [머지]다(guides/relay3-sequence.md)
+    const guide = o.scenario?.sequence && o.kind === 'relay3' ? sequenceGuide(read) : read
     this.system = systemPrompt(o.kind, o.scenario, guide, o.arm, o.handsOff === true)
     this.costUsd = 0
     this.calls = 0

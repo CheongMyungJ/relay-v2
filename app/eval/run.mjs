@@ -195,11 +195,11 @@ async function main() {
   }
   const scenarios = pickScenarios(v.scenarios, all)
   // 장기 평가는 Work 사이에 앞 Work를 기준 브랜치에 넣고(chain), 사람 역할 하나가 열을 잇고, 끝에 봉인 과제를 기준
-  // 에이전트로 돌려야 한다. 이 도는 길은 아직 없다(docs/eval.md 5절). 지금 길로 돌리면 누적 시험이 앞 Work 없이 판정된다
+  // 에이전트로 돌린다. 그 길은 run-sequence.mjs다(docs/eval.md 5절). 이 길로 돌리면 누적 시험이 앞 Work 없이 판정된다
   const seq = scenarios.filter((s) => s.sequence)
   if (seq.length)
     throw new Error(
-      `장기 평가 시나리오는 아직 run.mjs로 돌리지 않습니다: ${seq.map((s) => s.id).join(', ')} (확인은 node eval/check-scenario.mjs)`,
+      `장기 평가 시나리오는 run.mjs로 돌리지 않습니다: ${seq.map((s) => s.id).join(', ')} (node eval/run-sequence.mjs --scenario <id>)`,
     )
   const given = v.arms
     ?.split(',')

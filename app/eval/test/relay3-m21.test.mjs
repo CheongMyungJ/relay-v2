@@ -47,8 +47,8 @@ const GUIDES = path.resolve(import.meta.dirname, '../guides')
 
 describe('쪽 등록 (M2.1)', () => {
   it('relay3-m21과 relay3-m2p도 relay-v3 쪽이고 환경 변수를 더 받지 않는다. M2의 두 쪽은 그대로다', () => {
-    expect(RELAY3).toEqual(['relay3', 'relay3-noreview', 'relay3-m21', 'relay3-m2p'])
-    expect(RELAY3.map(isRelay3)).toEqual([true, true, true, true])
+    expect(RELAY3).toEqual(['relay3', 'relay3-noreview', 'relay3-m21', 'relay3-m2p', 'relay3-m2'])
+    expect(RELAY3.map(isRelay3)).toEqual([true, true, true, true, true])
     expect(['relay3-m21@auto', 'relay3-m2p-off', 'relay3-m3'].map(isRelay3)).toEqual([
       false,
       false,
@@ -57,11 +57,11 @@ describe('쪽 등록 (M2.1)', () => {
     expect(relay3Env('relay3-m21')).toEqual({})
     expect(relay3Env('relay3-m2p')).toEqual({})
     expect(relay3Env('relay3-noreview')).toEqual({ RELAY_ABLATE: 'review' })
-    expect(RELAY3.map(screenKind)).toEqual(['relay3', 'relay3', 'relay3', 'relay3'])
+    expect(RELAY3.map(screenKind)).toEqual(['relay3', 'relay3', 'relay3', 'relay3', 'relay3'])
   })
 
   it('relay3-m2p만 RELAY3_M2P_APP의 체크아웃이고 나머지는 RELAY3_APP이다(기본은 relay-v2 옆)', () => {
-    expect(RELAY3.map(relay3Build)).toEqual(['main', 'main', 'main', 'm2p'])
+    expect(RELAY3.map(relay3Build)).toEqual(['main', 'main', 'main', 'm2p', 'main'])
     expect(relay3Build('cli')).toBeNull()
     expect(relay3AppOf('relay3-m21')).toBe(RELAY3_APP)
     expect(relay3AppOf('relay3')).toBe(RELAY3_APP)

@@ -141,13 +141,19 @@ const mmss = (ms) => {
  * @param {string} o.workDir 작업 폴더 (/tmp 아래)
  * @param {{ path: string, text: string, sha256: string } | null} [o.overlay] 평가 레포의 첫 커밋에 넣을 품질 기준
  *   (run.mjs --quality-overlay, lib/overlay.mjs). 판정의 기준에도 얹는다
+ * @param {object} [o.sequence] 장기 평가(run-sequence.mjs)의 Work 하나: { n, fresh, repo, remote, base, baseDir, scenario, appEnv }.
+ *   n번째 Work(0부터) 하나만 돈다. 작업 폴더는 지우지 않고(앞 Work의 레포, 앱 저장소, 에이전트 설정이 이어진다) 레포를 만들지
+ *   않는다. fresh면 쪽을 준비(prepare)하고 아니면 다시 띄운다(resume). 사람 역할은 scenario(lib/sequence.mjs personaScenario)를
+ *   받는다. 판정과 기준 브랜치에 넣기는 run-sequence.mjs가 이 결과 뒤에 한다(여기서는 Work의 판정을 하지 않는다)
  */
 export async function runEpisode(o) {
   const { scenario, kind, opts } = o
   const tag = `[${scenario.id} ${kind}#${o.index}]`
   const say = (m) => console.log(`${new Date().toISOString().slice(11, 19)} ${tag} ${m}`)
-  // 같은 결과 폴더로 다시 돌리면 같은 회차 번호의 폴더를 다시 쓴다. 앞 실행의 레포, relay 저장소, 결과가 섞이지 않게 비운다
-  fs.rmSync(o.workDir, { recursive: true, force: true })
+  const seq = o.sequence ?? null
+  // 같은 결과 폴더로 다시 돌리면 같은 회차 번호의 폴더를 다시 쓴다. 앞 실행의 레포, relay 저장소, 결과가 섞이지 않게 비운다.
+  // 장기 평가는 작업 폴더가 앞 Work에서 이어진다
+  if (!seq) fs.rmSync(o.workDir, { recursive: true, force: true })
   fs.rmSync(o.outDir, { recursive: true, force: true })
   // 이 회차의 짝 판정도 새 결과로 다시 해야 한다
   fs.rmSync(path.join(path.dirname(o.outDir), `judge-${o.index}.json`), { force: true })
@@ -158,9 +164,14 @@ export async function runEpisode(o) {
   const overlay = o.overlay ?? null
   const scenarioRepo = path.join(o.scenarioDir, 'repo')
   // 판정의 기준(diff, 숨긴 시험의 바탕)은 평가 레포의 첫 커밋과 같은 내용이다: 덧씌운 파일은 diff에 나오지 않는다
-  const baseDir = baseWithOverlay(scenarioRepo, overlay, path.join(o.workDir, 'base-tree'))
+  // 장기 평가는 이 Work를 시작하는 main의 트리가 기준이다(run-sequence.mjs)
+  const baseDir = seq
+    ? seq.baseDir
+    : baseWithOverlay(scenarioRepo, overlay, path.join(o.workDir, 'base-tree'))
   const repoName = scenario.repoName ?? 'repo'
-  const { repo, remote, base } = makeRepo(o.workDir, repoName, scenarioRepo, overlayFiles(overlay))
+  const { repo, remote, base } = seq
+    ? { repo: seq.repo, remote: seq.remote, base: seq.base }
+    : makeRepo(o.workDir, repoName, scenarioRepo, overlayFiles(overlay))
   // 기준 커밋의 트리. 쪽과 회차가 달라도 같은 시나리오·같은 덧씌우기면 같다(커밋 id는 시각 때문에 다르다)
   const baseTree = git(repo, 'rev-parse', `${base}^{tree}`)
   const agentConfigDir = makeClaudeConfig(path.join(o.workDir, 'cfg-agent'))
@@ -188,7 +199,11 @@ export async function runEpisode(o) {
       : null
   const arm =
     screenType === 'relay3'
-      ? new Relay3Arm({ ...armOpts, appDir: relay3App, appEnv: relay3Env(kind) })
+      ? new Relay3Arm({
+          ...armOpts,
+          appDir: relay3App,
+          appEnv: { ...relay3Env(kind), ...(seq?.appEnv ?? {}) },
+        })
       : screenType === 'relay'
         ? new RelayArm({
             ...armOpts,
@@ -207,7 +222,7 @@ export async function runEpisode(o) {
     const h = new Human({
       kind: screenType,
       arm: kind,
-      scenario: multi ? workScenario(scenario, n) : scenario,
+      scenario: seq ? seq.scenario : multi ? workScenario(scenario, n) : scenario,
       dir: humanDir,
       configDir: makeClaudeConfig(path.join(o.workDir, multi ? `cfg-human-${n + 1}` : 'cfg-human')),
       model: opts.humanModel,
@@ -277,6 +292,8 @@ export async function runEpisode(o) {
   }
 
   const workResults = []
+  /** 장기 평가: 이 Work 앞에 있던 앱 Work(결과 폴더에 다시 옮기지 않는다) */
+  let earlier = null
   // 지금 Work: 시작한 차례, 때, 그때 있던 에이전트 세션·결과 폴더·relay Work
   let part = null
   /** Work 하나를 마친다: 그 Work의 사람 역할 설문과, Work 둘을 잇는 시나리오면 그 Work의 판정과 에이전트 */
@@ -299,12 +316,14 @@ export async function runEpisode(o) {
       summary: partSummary,
       wallMs: Date.now() - p.t,
       survey: partSurvey,
-      human: humanOf(own, parts[p.n]?.knowledge ?? []),
+      human: humanOf(own, p.known),
       ...(p.handoff ? { handoff: p.handoff } : {}),
+      // 이 Work의 사람 역할 비용(장기 평가는 Work마다 따로 센다)
+      humanCostUsd: p.human.costUsd,
     }
     if (multi) {
       // 다시 알려 줌의 감사: 판정 모델이 이 Work에서 사람이 입력한 말을 읽고 가른다(PM1)
-      const known = parts[p.n]?.knowledge ?? []
+      const known = p.known
       try {
         const a = await auditTold({
           knowledge: known,
@@ -320,35 +339,37 @@ export async function runEpisode(o) {
       } catch (e) {
         say(`Work ${p.n + 1} 다시 알려 줌 감사 실패: ${String(e).slice(0, 200)}`)
       }
-      try {
-        arm.snapshot()
-        const ws = workScenario(scenario, p.n)
-        const all = trees()
-        // relay는 이 Work에서 생긴 결과 폴더(worktree)만, 맨 CLI는 레포와 브랜치 모두를 본다
-        const fresh = appScreen ? all.filter((t) => !p.trees.has(t.label)) : all
-        const judged = (fresh.length ? fresh : all).map((t) => ({
-          label: t.label,
-          ...judgeTree({
-            tree: t.path,
-            baseDir,
-            hiddenDir: path.join(o.scenarioDir, 'hidden'),
-            scenario: ws,
-            work: path.join(o.workDir, 'judge', `work-${p.n + 1}`, t.label),
-          }),
-        }))
-        const checks = combineChecks(ws.checks, judged)
-        r.outcome = {
-          success: outcomeSuccess(checks),
-          checks,
-          trees: judged.map((j) => ({
-            label: j.label,
-            files: j.files.map((f) => f.file),
-            repoTestsPass: j.repoTests.pass,
-          })),
+      // 장기 평가는 기준 브랜치에 넣은 뒤 run-sequence.mjs가 판정한다
+      if (!seq)
+        try {
+          arm.snapshot()
+          const ws = workScenario(scenario, p.n)
+          const all = trees()
+          // relay는 이 Work에서 생긴 결과 폴더(worktree)만, 맨 CLI는 레포와 브랜치 모두를 본다
+          const fresh = appScreen ? all.filter((t) => !p.trees.has(t.label)) : all
+          const judged = (fresh.length ? fresh : all).map((t) => ({
+            label: t.label,
+            ...judgeTree({
+              tree: t.path,
+              baseDir,
+              hiddenDir: path.join(o.scenarioDir, 'hidden'),
+              scenario: ws,
+              work: path.join(o.workDir, 'judge', `work-${p.n + 1}`, t.label),
+            }),
+          }))
+          const checks = combineChecks(ws.checks, judged)
+          r.outcome = {
+            success: outcomeSuccess(checks),
+            checks,
+            trees: judged.map((j) => ({
+              label: j.label,
+              files: j.files.map((f) => f.file),
+              repoTestsPass: j.repoTests.pass,
+            })),
+          }
+        } catch (e) {
+          say(`Work ${p.n + 1} 판정 실패: ${String(e).slice(0, 300)}`)
         }
-      } catch (e) {
-        say(`Work ${p.n + 1} 판정 실패: ${String(e).slice(0, 300)}`)
-      }
       // 이 Work에서 새로 생긴 에이전트 세션의 토큰과 질문 수
       const bySession = agentUsageBySession(agentConfigDir)
       const asked = questionsBySession(agentConfigDir)
@@ -383,10 +404,15 @@ export async function runEpisode(o) {
     say(`준비 (${repo})`)
     // 에이전트 세션은 쪽이 claude를 띄우기 전(준비, 다음 Work로 넘김)에 센다. 맨 CLI는 띄울 때 세션이 생길 수 있다
     let sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
-    await timed(() => arm.prepare())
-    for (let w = 0; w < parts.length; w++) {
+    // 장기 평가: 처음 Work는 준비하고, 뒤 Work는 앞 Work가 남긴 앱 저장소(프로젝트 등록 그대로)나 레포에서 다시 띄운다
+    await timed(() => (seq && !seq.fresh ? arm.resume() : arm.prepare()))
+    // 장기 평가: 앞 Work들의 앱 Work 기록은 그 Work의 결과 폴더에 이미 남겼다
+    if (seq) earlier = new Set(arm.works().map((x) => x.id))
+    const first = seq ? seq.n : 0
+    const last = seq ? seq.n + 1 : parts.length
+    for (let w = first; w < last; w++) {
       let handoff = null
-      if (w > 0) {
+      if (w > first) {
         sessionsBefore = new Set(agentUsageBySession(agentConfigDir).keys())
         arm.snapshot()
         let moved
@@ -418,6 +444,8 @@ export async function runEpisode(o) {
         // done 거절(E11)은 다음 Work로 넘긴 뒤 메시지가 늘어난 세션으로 본다. 맨 CLI는 새로 띄울 때 세션이 생기고 그
         // 세션에서 일할 수 있어, 새 세션이 있는지로는 가르지 못한다
         started: messageCounts(),
+        // 사람 역할이 이 Work에서 아는 것(다시 알려 줌과 그 감사의 번호)
+        known: human.o.scenario.knowledge ?? [],
         trees: new Set(trees().map((t) => t.label)),
         works: new Set(arm.works().map((x) => x.id)),
         handoff,
@@ -680,7 +708,8 @@ export async function runEpisode(o) {
   try {
     arm.snapshot()
     works = arm.works()
-    final = trees().map((t) => {
+    // 장기 평가는 run-sequence.mjs가 기준 브랜치에서 판정한다
+    final = (seq ? [] : trees()).map((t) => {
       const j = judgeTree({
         tree: t.path,
         baseDir,
@@ -835,14 +864,16 @@ export async function runEpisode(o) {
   if (fs.existsSync(shots) && fs.readdirSync(shots).length)
     fs.cpSync(shots, path.join(o.outDir, 'shots'), { recursive: true })
   // relay의 Work 기록(산출물, handoff, pty.log)도 남긴다. relay-v3는 마지막 증거 묶음과 실적 장부도(files)
-  for (const w of works) {
+  for (const w of works.filter((x) => !earlier?.has(x.id))) {
     const dest = path.join(o.outDir, 'works', w.id)
     fs.cpSync(w.dir, dest, { recursive: true })
     for (const [name, file] of Object.entries(w.files ?? {}))
       if (fs.existsSync(file)) fs.cpSync(file, path.join(dest, name))
   }
   say(
-    `결과: ${result.outcome.success ? '성공' : '실패'} (${checks.map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${turns.length}, 사람 비용 $${humanCost.toFixed(2)}`,
+    seq
+      ? `차례 ${turns.length}, 사람 비용 $${humanCost.toFixed(2)} (판정은 기준 브랜치에 넣은 뒤)`
+      : `결과: ${result.outcome.success ? '성공' : '실패'} (${checks.map((c) => `${c.name} ${c.pass ? 'O' : 'X'}`).join(', ')}), 차례 ${turns.length}, 사람 비용 $${humanCost.toFixed(2)}`,
   )
   return result
 }

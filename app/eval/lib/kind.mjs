@@ -109,12 +109,16 @@ export const armBase = (arm) => String(arm ?? '').replace(/@[a-z]+$/, '')
  * - M2.1 규약(relay-v3 docs/m2.1-design.md 14절): relay3-m21은 M2.1을 만든 빌드(RELAY3_APP), relay3-m2p는 M2 빌드에 미룬
  *   고침을 합친 빌드(RELAY3_M2P_APP, 같은 날 도는 기준). 화면 흐름이 다르다(m2p는 M2의 [끝 확정]과 [고쳐 달라고 하기]):
  *   사람 역할의 설명서는 쪽 이름의 설명서가 있으면 그것이다(human.mjs guideName, guides/relay3-m2p.md)
+ * - 장기 평가(docs/eval.md 5절, run-sequence.mjs): relay3(M3 장치 켬, 앱 기본)와 relay3-m2(RELAY_M3=off)
  */
 const RELAY3_ARMS = {
   relay3: { env: {}, build: 'main' },
   'relay3-noreview': { env: { RELAY_ABLATE: 'review' }, build: 'main' },
   'relay3-m21': { env: {}, build: 'main' },
   'relay3-m2p': { env: {}, build: 'm2p' },
+  // 장기 평가(relay-v3 docs/m3-design.md 6절): relay3는 M3 장치를 켠 앱 기본, relay3-m2는 같은 빌드에서 M3 장치를 모두 끈
+  // 것이다(RELAY_M3=off, relay-v3 engine/m3.ts·V39)
+  'relay3-m2': { env: { RELAY_M3: 'off' }, build: 'main' },
 }
 
 /** relay-v3 앱의 쪽인가 */

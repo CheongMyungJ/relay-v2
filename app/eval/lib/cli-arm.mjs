@@ -100,6 +100,11 @@ export class CliArm {
     await this.open(true)
   }
 
+  /** 장기 평가의 뒤 Work(run-sequence.mjs): 같은 레포 폴더(main)에서 claude를 새로 띄운다 */
+  async resume() {
+    await this.open(true)
+  }
+
   cur() {
     return this.terms[this.active]
   }

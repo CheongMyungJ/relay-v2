@@ -2,7 +2,8 @@
 // events.jsonl과 work.json, 증거 묶음에서 센다. 앱을 부르지 않는다. 옛 기록(M2, relay3-m2p)에는 이 기록들이
 // 없어 0이거나 null이다. 기록의 이름과 칸은 relay-v3 main(works-end.ts, works-feedback.ts, works-probe.ts, works-review.ts,
 // works-evidence.ts)이 남기는 그대로다:
-//   ended {how: once | armed | box, head}, end_armed {head}, end_box {head, open}, end_cancelled {head, armed, reason},
+//   ended {how: once | armed | box | handed, head, memos}, end_armed {head, handed?}, end_box {head, open},
+//   end_handed {head, facts, findings}, end_cancelled {head, armed, handed?, reason: human | contract | human_input | hand_failed},
 //   end_moved {from, to, armed}, end_failed {head}, feedback {n, head, by: relay | human, facts, findings, keys},
 //   feedback_held {head, reason: cap | human_findings | draft | human_input, facts, findings},
 //   probe {tool, ran, problems, ms, note?}, export_missing {unit, branch}, review {trigger, reused?, aborted?, status, findings},
@@ -116,6 +117,27 @@ export function endMetrics(events) {
     }
   }
   return out
+}
+
+/**
+ * 끝의 까닭(M2.2 V35·V37): handed는 상자의 [세션에 넘기기]로 다시 건 끝의 수(end_handed), endedHanded는 그 끝으로 끝났는가
+ * (ended how handed), cancelled는 걸린 끝·상자·넘긴 끝을 푼 까닭마다 수(end_cancelled reason: human | contract | human_input |
+ * hand_failed), memos는 끝낼 때 남은 리뷰 메모 수(마지막 ended memos. 칸이 없으면 null)
+ */
+export function endReasons(events) {
+  const ended = ofType(events, 'ended').at(-1) ?? null
+  const cancelled = {}
+  for (const e of ofType(events, 'end_cancelled')) {
+    const k = typeof e.reason === 'string' ? e.reason : '?'
+    cancelled[k] = (cancelled[k] ?? 0) + 1
+  }
+  return {
+    how: ended?.how ?? null,
+    handed: ofType(events, 'end_handed').length,
+    endedHanded: ended?.how === 'handed',
+    cancelled,
+    memos: typeof ended?.memos === 'number' ? ended.memos : null,
+  }
 }
 
 /**
@@ -370,6 +392,7 @@ export function deviceMetrics({
     missingExports: ofType(events, 'export_missing').length,
     integration: integrationMetrics(events, rec),
     end: endMetrics(events),
+    endReasons: endReasons(events),
     feedback: { ...feedbackMetrics(events), outcomes: feedbackOutcomes(events, byHead) },
     probe: probeMetrics(events),
     examples: examplesMetrics(all, finals),

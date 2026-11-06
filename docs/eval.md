@@ -18,6 +18,7 @@
   ├─ 다른 빌드 쪽(--app 이름=폴더): eval/ref-app.sh로 만든 다른 커밋의 앱. 이름-off는 그 빌드에서 지식을 끔
   ├─ relay-v3 쪽(relay3, relay3-noreview): RELAY3_APP(기본 relay-v2 옆의 relay-v3)의 빌드한 앱. noreview는 RELAY_ABLATE=review
   ├─ relay-v3 M2.1 쪽(relay3-m21, relay3-m2p): relay3-m21은 RELAY3_APP의 빌드, relay3-m2p는 RELAY3_M2P_APP(기본 relay-v2 옆의 relay-v3-m2p)의 빌드
+  ├─ relay-v3 장기 평가 쪽(relay3, relay3-m2, run-sequence.mjs): RELAY3_APP의 빌드. relay3는 앱 기본(M3 장치 켬), relay3-m2는 RELAY_M3=off
   └─ 맨 CLI 쪽: 레포 폴더의 bash(PTY)에서 claude를 띄워 둔다
 사람 역할(claude -p 세션 하나) ── 화면을 보고 행동을 JSON으로 고른다
 판정: 숨긴 시험, 바뀐 파일, 설문, 짝 판정(claude -p)
@@ -36,8 +37,16 @@
 | `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
 | `eval/m2-primary.mjs` | relay-v3 M2 평가 규약의 지표(P1~P5, G1·G2)와 판정 규칙(Q1~Q4). 결과 폴더 여럿(보통 배치와 hands-off 배치)을 합쳐 읽고 hands-off 실행은 `<쪽>-handsoff`로 센다 |
+| `eval/run-sequence.mjs` | 장기 평가(`sequence`, 5절)를 돌린다: 쪽 × 회차마다 한 레포에서 요청 열을 차례로, 끝에 봉인 과제. 같은 `--out`으로 다시 돌리면 이어 간다 |
+| `eval/lib/sequence-run.mjs` | 장기 평가 한 줄(쪽 × 회차): Work마다 episode 한 번, 기준 브랜치에 넣기, main의 누적 숨긴 시험, 사람 역할의 기억, 체크포인트, 봉인 과제, 구조 지표, 모음(`run.json`). 건식(`--dry`) Work |
+| `eval/lib/sequence.mjs` | 장기 평가의 순수한 부분: 걸음의 차례(이어 돌기), 사람 역할의 기억(실제로 말한 규칙만 이미 말함), 누적 시험 요약, 봉인 과제의 통과 |
+| `eval/lib/sequence-git.mjs` | Work의 결과를 main에 넣기(맨 CLI는 남은 변경 커밋과 브랜치 머지, relay-v3는 원격에서 가져오기와 머지되지 않은 Work 브랜치), 기준 트리 꺼내기, 체크포인트 묶기·풀기와 커밋·push |
+| `eval/lib/fake-gh.mjs` | 장기 평가의 relay-v3 쪽 gh: relay-v3 가짜 gh(`test/support/fake-gh/gh.mjs`)에 넘기고 `pr merge`만 원격(bare)에 실제로 머지한다(앱의 [머지]가 main을 움직이게) |
+| `eval/lib/sealed-run.mjs` | 봉인 과제 하나: 마지막 레포 사본에서 기준 에이전트(맨 `claude -p`)를 돌리고 과제의 시험과 남은 누적 시험으로 판정한다. 과제의 시험 이름·출력은 남기지 않는다 |
+| `eval/lib/structure.mjs`, `eval/lib/m3-metrics.mjs` | 구조 지표(가장 긴 파일, 상한을 넘는 파일, 6줄 창 중복, 두 파일에 같은 이름의 함수)와 M3 장치 지표(work.json `m3`·`unrecorded`, request.md의 relay 절, 묶음의 `knowledge`·`debt_commit`·`debt_covered`·`tidy`, `debt_recorded`, 장부의 받아들임·기록, 마지막 레포의 `.relay/debt`) |
+| `eval/m3-primary.mjs` | 장기 평가(relay-v3 `docs/m3-design.md` 6절)의 주지표(봉인 과제 통과율·토큰·시간, 누적 숨긴 시험, 다시 말하기)와 보조(구조, Work당 비용), 짝(relay3 − relay3-m2 등)의 구간과 동등 판정, Work마다 표, M3 장치와 끝의 까닭 |
 | `eval/m21-primary.mjs` | relay-v3 M2.1 평가(relay-v3 `docs/m2.1-design.md` 14절)의 주지표(봉인 셋의 P1·P3 마찰 m21 − m2p, P3 막대 m21 − relay@auto), 거짓 자동(14·H2·H3), 온라인 G1·G2, 판정 규칙, 장치 지표와 최소 n(V23은 봉인 셋의 relay3-m2p와 견줌). H2의 id는 `--h2`로 바꾼다. 시범 폴더(`m21-pilot-*`)를 주면 경고를 단다 |
-| `eval/lib/relay3-arm.mjs`, `eval/lib/relay3-devices.mjs` | relay-v3 앱 띄우기, work.json(M2.1은 내보내기 `exports[]`마다)과 events.jsonl 읽기, 리뷰 세기(다시 쓴 리뷰·멈춘 리뷰는 뺌), 장치 지표(끝낸 방식, 상자, 되먹임과 그 결과, 기준 확인, 예시 자료, 통합 증거, 올림. 올림과 메모는 그 빌드의 관문 규칙으로 센다: M2.1 기록은 V26, M2·relay3-m2p는 V4) |
+| `eval/lib/relay3-arm.mjs`, `eval/lib/relay3-devices.mjs` | relay-v3 앱 띄우기, work.json(M2.1은 내보내기 `exports[]`마다)과 events.jsonl 읽기, 리뷰 세기(다시 쓴 리뷰·멈춘 리뷰는 뺌), 장치 지표(끝낸 방식, 상자, 끝의 까닭(M2.2: 넘긴 끝 `handed`, 푼 까닭 `human_input`·`hand_failed`, 끝낼 때 메모), 되먹임과 그 결과, 기준 확인, 예시 자료, 통합 증거, 올림. 올림과 메모는 그 빌드의 관문 규칙으로 센다: M2.1 기록은 V26, M2·relay3-m2p는 V4) |
 | `eval/ref-app.sh` | 견줄 다른 커밋의 앱을 git worktree로 꺼내 빌드한다 |
 | `eval/unseal.sh` | 봉인한 hold-out(`eval/sealed/`)을 연다(열쇠는 사람이 줌). 이름을 붙인 봉인은 `HOLDOUT_NAME=<이름>` |
 | `eval/lib/relay-arm.mjs` | 앱 띄우기와 프로젝트 등록, 화면 읽기(스크린샷, 보이는 글자, 누를 수 있는 요소), 행동, 비정상 종료 |
@@ -54,7 +63,7 @@
 | `eval/lib/kind.mjs` | 시나리오 유형에 따른 낱말 |
 | `eval/lib/util.mjs` | 작은 도움 함수 |
 | `eval/lib/dialogs.mjs` | Claude Code 첫 실행 창(폴더 신뢰, 권한 우회 경고) 수락. 두 쪽 같고 사람의 부담에 넣지 않는다 |
-| `eval/guides/*.md` | 사람 역할이 미리 읽어 둔 도구 설명서 |
+| `eval/guides/*.md` | 사람 역할이 미리 읽어 둔 도구 설명서. `relay3-sequence.md`는 장기 평가에서 relay-v3 설명서의 '끝' 항목을 바꾼다([머지]로 main에, 빚 확인 규칙) |
 | `eval/scenarios/<id>/` | 시나리오 |
 | `eval/test/` | 평가 도구의 측정 로직 시험(맨 CLI의 흩어진 브랜치, 결과 판정과 지식 파일 빼기, 대화 기록 집계, Work 여럿, 장기 평가의 규칙과 누적 시험, bootstrap). 모델을 부르지 않는다. `npm run test:eval`이 이 시험과 `check-scenario.mjs all`을 돌고, `app-ci`가 push마다 돈다(relay `implementation.md` 8.1) |
 
@@ -81,6 +90,7 @@
 - 끝나면 같은 세션에서 설문(1~7)에 답한다: 수고, 명확함, 통제감, 결과 확신, 신뢰, 복구, 다시 쓰고 싶음, 좋았던 점, 불편했던 점.
 - **손 뗀 사람(`--human-mode hands-off`):** 의도·계약을 승인한 뒤 결과를 확인하지 않는다. `inspect_diff`를 쓰지 않고, 결과가 아는 사실과 어긋나도 지적하지 않으며, 에이전트가 끝났다고 하면 받아들인다. 질문에는 평소처럼 답한다. 설명서의 확인·고치기 안내보다 이 규칙이 앞서고, 끝내는 방법(완료·끝내기·끝 확정)만 설명서대로 따른다(끝내기 전에 보이는 판정표·증거·리뷰 지적도 따지지 않는다). 기계로 세는 어김(`inspect_diff`, 변경 화면 열기, 터미널의 `git diff`·`show`·`log -p`)은 `run.json`의 `human.handsOffViolations`에 둔다. 결과 폴더를 합쳐 읽을 때 이 실행은 `<쪽>-handsoff`다.
 - relay-v3 쪽의 설명서는 `guides/relay3.md`(두 쪽 같음)다. 끝내기는 두 단계다: [끝내기]가 내보내기 증거와 리뷰를 돌려 [증거]에 확인 상자를 띄우고(리뷰를 끈 쪽은 '리뷰가 꺼져 있음'), 사람이 고칠 것을 세션에게 말하거나 [끝 확정]을 누른다.
+- **장기 평가의 사람(5절 '장기 평가 돌리기'):** 같은 사람이 열을 잇는다. 세션은 Work마다 새로 두고 기억(앞서 한 일, 실제로 말한 규칙)을 프롬프트로 잇는다. 이미 말한 규칙은 먼저 꺼내지 않고 다시 물으면 다시 말한다(PM1). relay-v3 쪽의 끝은 세션에게 push와 PR을 시킨 뒤 [머지]이고, 빚 확인에는 늘 '빚으로 남기고 …'를 누른다(`guides/relay3-sequence.md`). 맨 CLI의 끝은 커밋이고 도구가 main에 합친다. 봉인 과제에는 사람이 없다.
 
 ## 5. 시나리오
 
@@ -127,7 +137,7 @@
 | 38-price-sweep | (커스텀 유형 '조사 후 적용', relay D447~D463) 옛 금액 표시 함수를 레포 전체에서 새 함수로 바꾸고 지움. 함정: 테스트가 덮지 않는 운영 스크립트(`scripts/monthly-report.js`)에도 쓰임. 사람만 앎: scripts/는 운영 cron이 돈다 | relay(커스텀 유형) 대 같은 일을 일반 유형으로 한 relay(`relay@general`, D463). 사람이 쓴 조사 단계 절차가 덮지 않는 쓰임을 찾게 하는지(guard), 단계가 늘어난 수고 |
 | h-tidy-bug-library | (버그 수정, 정리 요청 없음, 지식 정리 후속 실험의 hold-out이었고 열었음) 37과 같은 모양, 다른 도메인(도서관 대출) | 37과 같음 |
 | h-tidy-route-dispatch | (일반, 대규모 기능 실험 F3의 hold-out이었고 열었음) 같은 모양, 다른 도메인(배차): 중복 두 쌍, 낡은 항목 둘, 사람만 아는 어긋난 쌍, 멀쩡한 항목 넷, 지식 형식 guard | 36과 같음 |
-| 48-long-shop | (장기 평가, relay-v3 `docs/m3-design.md` 6절) 주문·청구·알림 영역의 JS 서비스 하나(기준 3,101줄)에 요청 15개를 차례로 한다: 기능 8, 버그 4, 리팩터링 2, 규칙이 바뀌는 요청 1. 셋은 대충 쓴 요청이고 여럿이 앞 Work의 영역을 다시 건드린다. 처음부터 600줄 가까운 파일 하나와 중복 둘이 있고, 사람만 아는 규칙이 다섯이다. 열이 끝나면 봉인 과제 셋 | 뒤 Work 비용(봉인 과제 통과율·토큰·시간), 누적 숨긴 시험, 다시 말하기, 구조(가장 긴 파일, 중복). `run.mjs`로는 아직 돌지 않는다(아래) |
+| 48-long-shop | (장기 평가, relay-v3 `docs/m3-design.md` 6절) 주문·청구·알림 영역의 JS 서비스 하나(기준 3,101줄)에 요청 15개를 차례로 한다: 기능 8, 버그 4, 리팩터링 2, 규칙이 바뀌는 요청 1. 셋은 대충 쓴 요청이고 여럿이 앞 Work의 영역을 다시 건드린다. 처음부터 600줄 가까운 파일 하나와 중복 둘이 있고, 사람만 아는 규칙이 다섯이다. 열이 끝나면 봉인 과제 셋 | 뒤 Work 비용(봉인 과제 통과율·토큰·시간), 누적 숨긴 시험, 다시 말하기, 구조(가장 긴 파일, 중복). `run-sequence.mjs`로 돈다(아래) |
 
 `scenario.json`의 필드:
 
@@ -165,7 +175,22 @@
 - `sealed: { dir, tasks }`: 봉인 과제. `<dir>/tasks.json`의 `tasks[]`가 `{ id, type, report, checks, retires }`이고, 숨긴 시험은 `<dir>/hidden/`, 정답은 `<dir>/reference-<id>.patch`다. 과제는 요청 열이 끝난 뒤 각 쪽의 마지막 레포에서 같은 기준 에이전트가 사람 없이 하므로 `report`가 혼자 다 말한다. 판정은 그 과제의 시험과, 마지막 Work의 누적 시험 가운데 과제의 `retires`를 뺀 것이다.
 - 정답은 Work마다 `reference-<n>.patch`이고 앞 정답을 쌓은 레포 위의 diff다. `check-scenario.mjs`가 확인한다: 기준에서 모든 숨긴 시험이 실패, n번째 Work의 시험은 `reference-1..n-1`에서 실패하고 `reference-1..n`에서 누적 시험과 `npm test`가 통과, 기준과 마지막 레포의 줄 수가 `lines` 안, 봉인 과제마다 마지막 레포에서 실패하고 정답을 얹으면 통과(누적 시험도). 봉인 과제는 이름과 출력을 찍지 않고 수만 찍는다.
 - 봉인: 숨긴 시험(`hidden/`), 정답 패치(`reference-*.patch`), 봉인 과제 폴더(`sealed/`)는 트리에 평문으로 있다. relay-v3 설계자는 결과를 고정할 때까지 이 셋을 열지 않는다(M2.1 규약의 H2와 같음). 요청 글, 규칙, 레포는 열어도 된다.
-- 아직 없는 것: `run.mjs`는 장기 평가를 돌리지 않는다(고르면 막는다). 도는 길에는 Work 사이에 앞 Work를 기준 브랜치에 넣기, 한 사람 역할 세션으로 열 잇기, 봉인 과제를 기준 에이전트로 돌리기, 구조 지표 세기가 더 필요하다.
+- `run.mjs`는 장기 평가를 돌리지 않는다(고르면 막는다). 도는 길은 `run-sequence.mjs`다(아래).
+
+**장기 평가 돌리기(`run-sequence.mjs`, relay-v3 `docs/m3-design.md` 6·7절):** 쪽은 `relay3`(relay-v3 앱 기본: M3 장치 켬), `relay3-m2`(같은 빌드에 `RELAY_M3=off`: M3 장치 모두 끔, relay-v3 `engine/m3.ts`·V39), `cli`(맨 claude CLI)이고, 정한 규모는 요청 15개 × 3쪽 × 3회 = Work 135개다. 쪽 × 회차 하나(줄)마다 레포 하나에서 Work를 차례로 한다. 정한 것:
+
+- **Work 하나 = episode 한 번.** Work마다 쪽을 새로 띄운다: relay-v3는 같은 앱 저장소(`RELAY_HOME`: 프로젝트 등록, Work 기록, 실적 장부)로 앱을 다시 켜고(첫 Work만 프로젝트를 등록), 맨 CLI는 같은 레포 폴더(main)에서 claude를 새로 띄운다. 에이전트 설정 폴더는 줄 내내 하나다(Claude Code 프로젝트 메모리가 이어진다). 사람 역할의 '바뀐 코드'와 판정의 diff 기준은 그 Work를 시작한 main의 트리다.
+- **결과를 기준 브랜치에 넣기.** relay-v3 쪽은 앱의 머지 흐름을 쓴다(앱의 실적 장부가 머지를 본다): 사람 역할이 세션에게 작업 브랜치 push와 PR 열기를 시키고 [증거]의 [머지]를 누른다(`guides/relay3-sequence.md`). 앱(`RELAY_GH_BIN`)과 세션(PATH 맨 앞의 `gh`)이 쓰는 gh는 `lib/fake-gh.mjs`다: relay-v3 가짜 gh(v2 녹화본 모양)에 넘기고, `pr merge`만 원격(로컬 bare)의 main에 머지 방식대로(기본 squash) 실제로 넣는다(충돌이면 GitHub처럼 머지할 수 없음). 앱은 fetch하지 않으므로 Work가 끝나면 도구가 레포에서 fetch하고 main을 맞춘다. 앱으로 머지되지 않은 Work 브랜치(시간 제한, [끝내기]로 끝남)는 도구가 머지하고 `landing.via`에 `harness`로 적는다(버린 Work는 넣지 않음). 맨 CLI는 도구가 커밋하지 않은 변경을 커밋하고(`leftovers`), main 밖 브랜치 가운데 main에 없는 커밋이 있는 것을 오래된 차례로 main에 머지해(충돌하면 뒤 브랜치 쪽 `-X theirs`) push한다.
+- **누적 숨긴 시험.** 넣은 뒤 main의 트리에서 그 Work까지의 숨긴 시험(`activeChecks`, `retires`를 뺌)을 돌린다. Work마다 `cumulative { total, pass, own, regression, broken }`. 결과에는 시험 이름과 통과만 남기고 출력은 남기지 않는다(봉인).
+- **한 사람 역할과 기억.** 같은 사람이 열을 잇는다. 사람 역할 세션은 Work마다 새로 두되(화면이 쌓여 맥락이 넘치지 않게, 컨테이너가 다시 떠도 이어 가게), 기억(`state.json`의 `memory`)을 다음 Work의 프롬프트에 넣는다: 앞서 한 일(요청 첫 줄과 끝)과 실제로 말한 규칙. 규칙은 사람이 그 글을 실제로 말했으면(다시 알려 줌의 감사, 없으면 자기 보고) 다음 Work에서 '이미 말함'이고, 규칙이 든 Work에서 에이전트가 묻지 않아 말하지 않았으면 다음에도 '물으면 답함'이다(`lib/sequence.mjs` `personaKnowledge`. 정적인 `ruleKnowledge`와 다른 점). 바뀌는 Work는 요청이 새 규칙을 말하므로 '처음부터 앎'이고 끝나면 새 글로 말한 것이다. 이미 말한 규칙을 다시 말한 수가 PM1(`carriedToldAudit`, 없으면 `carriedTold`)이다.
+- **빚 확인 규칙(M3b).** 앱이 [머지]나 [그래도 끝내기]에서 '빚으로 남기고 …' / '그냥 …'을 물으면 사람 역할은 늘 '빚으로 남기고 …'를 누른다(`DEBT_RULE = always-record`, 설명서에 적음). 사람마다 다른 판단이 장치의 효과와 섞이지 않게 고정한다. 장부의 '받아들였지만 기록하지 않음'은 그래도 생길 수 있다(앱 밖 머지, 도구의 머지, 사람 역할이 규칙을 어김).
+- **봉인 과제.** 모든 Work가 끝나면 줄의 마지막 main을 새로 clone한 사본에서 과제마다 기준 에이전트를 돌린다: 맨 `claude -p --dangerously-skip-permissions`, 쪽과 상관없이 같은 모델·effort(`--baseline-model`, `--baseline-effort`, 기본 sonnet·medium)·시간 제한(`--baseline-minutes`, 기본 30)·프롬프트(과제의 `report`와 '물을 수 없으니 끝까지 하고 커밋한다' 한 줄), 사람 없음. 판정은 과제의 시험(`sealed/hidden`)과 마지막 Work의 누적 시험 가운데 과제의 `retires`를 뺀 것이 모두 통과하면 통과다. 토큰(대화 기록), 걸린 시간, 비용을 남긴다. 과제의 시험은 차례 번호와 통과만 남긴다.
+- **구조 지표(보조).** 마지막 main과 기준 레포에서: `lines.include`의 줄 수와 가장 긴 파일, 상한(`bait.maxLines`)을 넘는 파일 수, `src/**/*.js`의 6줄 창 글 중복 비율, 두 파일 이상에 정의된 같은 이름의 함수 수(48의 금액 표시처럼 글은 달라도 이름이 같은 도우미). relay-v3 쪽은 장부의 받아들임·기록, 마지막 레포의 `.relay/debt`·`docs/knowledge`도.
+- **Work마다 지표.** episode의 Work 결과(사람의 부담, 다시 알려 줌과 감사, 설문, 그 Work에서 생긴 에이전트 세션의 토큰 + 그 Work의 앱 Work가 부른 독립 리뷰)에 더해, relay-v3 쪽은 그 Work에서 생긴 앱 Work마다 관문 요약, 끝(`end`), 장치 지표(M2.1 지표와 끝의 까닭 `endReasons`: `ended.how` once·armed·box·handed, 넘긴 끝, 푼 까닭 human·contract·human_input·hand_failed, `ended.memos`)와 M3 지표(`m3`: 스위치, 기록 안 된 나빠짐, request.md의 관련 지식·기록 안 된 나빠짐·이 레포의 빚 항목 수, 지식 확인, 근거 knowledge, 빚 기록·덮음, 곁들일 정리, 끝낼 때 메모)와 장부.
+- **이어 돌기.** 걸음은 Work 하나, 봉인 과제 하나, 구조 지표다. 걸음이 끝날 때마다 줄의 작업 폴더와 결과 폴더를 체크포인트 하나(`<checkpoints>/<시나리오>/<쪽>-<회차>.tar.gz`, 같은 절대 경로로 풂)로 쓴다(판정 폴더, 스크린샷, 사람 역할 설정, 에이전트 대화 기록, node_modules는 뺀다). 같은 `--out`으로 다시 돌리면 끝낸 걸음은 건너뛰고, 걸음 중간에 끊겼거나(state의 `inProgress`) 결과 폴더가 없으면(컨테이너가 다시 뜸) 마지막 체크포인트를 풀어 그 걸음부터 다시 한다. 작업 폴더는 `/tmp/relay-eval/<결과 폴더 이름>/`이라 같은 `--out` 이름이면 경로가 같다. 컨테이너가 다시 떠도 남게 하려면 `--checkpoints`를 git 체크아웃 안에 두고 `--archive-push`를 붙인다(걸음마다 커밋·push, relay-v3 `docs/experiments/m2.1/run-batch.sh`와 같은 방식, 끝에 붙일 줄은 `RELAY_BATCH_TRAILER`). 결과 폴더도 체크포인트에 들어 있다. 도구 문제(harness_error, human_error)로 멈춘 걸음은 체크포인트에서 `--retries`(기본 1)번 다시 하고, 다시 한 걸음은 `attempts`에 남아 집계가 표시한다. 이어 돌 때 모델·기준 에이전트·덧씌우기 같은 고정 값이 앞 `config.json`과 다르면 멈춘다.
+- **품질 기준 덧씌우기.** 기본으로 모든 쪽의 첫 커밋에 relay-v3 `relay init` 초안의 `.relay/quality.json`을 넣는다(M2·M2.1 규약과 같음. 빚 기록은 래칫이 있어야 묻는다). `--no-quality-overlay`로 끈다.
+- **건식(`--dry`).** 사람 역할과 에이전트 대신 그 Work의 정답 패치를 얹는다(relay-v3 쪽은 작업 브랜치 push, 가짜 gh로 PR 열기와 squash 머지까지), 봉인 과제는 과제의 정답을 얹는다. 모델을 부르지 않고 앱을 띄우지 않는다. 도구의 길(차례, 넣기, 누적 시험, 기억, 체크포인트, 봉인 과제, 구조, 집계)을 확인할 뿐 결과가 아니다. 평가 도구에는 사람 역할까지 대신하는 가짜 claude가 없다.
+- 결과: `<out>/<시나리오>/<쪽>-<회차>/`에 `state.json`, `work-NN/`(episode의 `run.json`, `turns.jsonl`, 앱 Work 기록, `sequence.json`), `sealed-<id>.json`, `structure.json`, `run.json`(모음). 집계는 `m3-primary.mjs`(6절).
 
 **팀원 교대(`teammate: true`):** 그 Work 전에 도구가 앞 사람 레포의 브랜치 가운데 main에 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지 흉내, 충돌하면 뒤 브랜치 쪽으로 머지하고 `handoffs`에 적음), 팀 원격(bare)에 올린 뒤 새로 clone한다. relay는 새 앱 저장소(`RELAY_HOME`)와 새 Electron 사용자 폴더로 그 clone을 프로젝트로 등록해 두고, 맨 CLI는 그 폴더에서 claude를 새로 띄운다. 커밋하지 않은 변경과 앱 저장소에만 있는 것은 건너가지 않는다. 레포 경로가 바뀌어 Claude Code의 프로젝트 메모리도 이어지지 않는다. 사람 역할은 Work를 [완료만]으로 끝내므로 Work 브랜치에 커밋된 것만 다음 사람에게 간다. 팀원 교대 뒤의 Work는 앞 Work의 정답이 머지된 상태에서 판정하므로, `check-scenario.mjs`가 `reference-1..n`을 차례로 모두 적용해도 모든 시험이 통과하는지 확인한다.
 
@@ -188,6 +213,7 @@
   - relay는 task마다 세션 id로 대화 기록을 맞춰 단계별 토큰(입력(캐시 포함), 캐시 쓰기, 출력)과 `context.md` 글자 수를 `run.json`의 `agentSteps`에 두고, 보고서의 "relay 단계별 에이전트" 표에 단계마다 평균으로 보인다(eval-findings R9). 대화 기록을 찾지 못한 세션은 빼고 센다.
 - **설문:** 4절.
 - **relay-v3 쪽(자동):** Work마다 계약 승인, 관문 결론(마지막 evidence 기록이 내보내기이고 그 head가 내보낸 head이자 끝낸 때의 worktree HEAD면 내보내기 결론. G1·G2는 이것만 센다), 리뷰 호출·토큰, 리뷰 뒤 세션이 더 일했는지, Work의 끝(`end`)을 `run.json`의 `works`에 둔다. 끝은 `confirmed`([끝 확정]), `merged`·`closed`(PR), `prepared`([끝 확정] 없이 끝났지만 끝낸 커밋이 내보내기 증거·리뷰를 받은 그 커밋이고 커밋하지 않은 변경이 없음), `stale`([끝내기] 뒤 커밋이 더 생겼거나 커밋 안 된 변경이 남음), `abandoned`, `null`([끝내기] 없음)이다. 끝의 기준은 커밋된 상태라 앞의 넷을 relay@auto의 [Work 완료]와 같은 수준의 끝으로 센다(`ended`). 사람 역할의 `done`은 쪽과 상관없이 받고([끝 확정]·[Work 완료]를 누르지 않았어도), 숨긴 시험은 다른 쪽처럼 worktree 그대로로 판정한다.
+- **장기 평가(`m3-primary.mjs`, relay-v3 `docs/m3-design.md` 6절):** 분석 단위는 줄(쪽 × 회차)이다. 주지표: S1 봉인 과제 통과율, S2·S3 봉인 과제의 기준 에이전트 입력 토큰(천, 캐시 포함)과 걸린 시간(뒤 Work 비용), C1 누적 숨긴 시험 통과(Work마다 비율의 평균), C2 마지막 Work 뒤 통과 비율, PM1 다시 말하기(열 전체 수). 보조: T1 가장 긴 파일, T2 상한을 넘는 파일, T3 중복 줄 비율, T4 같은 이름의 함수, W1·W2 Work당 에이전트 토큰·사람 차례. 쪽마다 평균, 짝(relay3 − relay3-m2, relay3 − cli, relay3-m2 − cli)의 차이와 bootstrap 95% 구간(시나리오마다 층, M2·M2.1과 같은 `compare`), 동등 판정(±δ, `equivalence`)을 보인다. δ는 제안(S1·C1·C2 10%포인트, PM1 1회, 나머지는 0을 넘는지)이고 규약에서 결과 전에 고정한다. 덜 한 줄은 그 지표에서 빠진다(봉인 과제가 없으면 S, Work가 모자라면 C·PM1·W). Work마다 누적 통과·넣기 방식·깨진 앞 Work 시험의 수, relay-v3 쪽의 M3 장치와 끝의 까닭 표가 따른다. 봉인 과제는 id와 통과 수만 보인다.
 - **짝 판정:** 같은 시나리오 같은 회차의 relay와 맨 CLI(`works`가 있는 21~27은 relay와 relay-off, `--pairs`를 주면 그 짝들)를 A, B로 무작위로 놓고 판정 모델이 비교한다.
   - 결과 판정(가림): 코드 차이와 시험 결과만 본다. 커밋 메시지는 보이지 않는다. correctness, scope, quality, tests (1~5), 선호. `--no-judge-purpose`(relay-v3 쪽이 돌면 늘)면 판정 모델에 시나리오의 평가 목적(무엇이 relay의 강점인지)을 주지 않는다.
   - 경험 판정: 차례 기록과 설문을 본다. 기록에 도구가 드러나므로 가릴 수 없다. burden, clarity, control, recovery, confidence, overall의 우세와 점수(1~10).
@@ -213,6 +239,12 @@ node eval/m2-primary.mjs eval/results/<보통 배치> eval/results/<hands-off �
 # relay-v3 M2.1 평가(설계 14절. 규약은 relay-v3 docs/experiments/m2.1/protocol.md에 고정): relay-v3와 relay-v3-m2p에서 먼저 빌드
 node eval/run.mjs --scenarios 39,<H2>,9 --runs 5 --arms relay3-m21,relay3-m2p,relay@auto --parallel 2 --quality-overlay --no-judge-purpose
 node eval/m21-primary.mjs eval/results/<봉인 배치> eval/results/<설계 배치> --out m21.md   # 주지표와 판정 규칙
+# relay-v3 M3 장기 평가(m3-design 6·7절, 5절의 '장기 평가 돌리기'): RELAY3_APP(고정한 worktree)에서 먼저 npm ci && npm run build
+node eval/run-sequence.mjs --dry --arms relay3,cli --out /tmp/m3-dry           # 건식: 도구의 길만(모델·앱 없음)
+node eval/run-sequence.mjs --arms cli --until 2 --no-sealed --out eval/results/m3-pilot   # 작은 시범: Work 1~2
+node eval/run-sequence.mjs --runs 3 --arms relay3,relay3-m2,cli --out eval/results/m3-seq \
+  --checkpoints <git 체크아웃>/m3-runs --archive-push            # 배치. 같은 --out으로 다시 돌리면 이어 간다
+node eval/m3-primary.mjs eval/results/m3-seq --out m3.md             # 주지표와 짝의 구간
 ```
 
 - 기본값: 에이전트 `sonnet`·effort `medium`, 사람 역할 `sonnet`·effort `medium`, 판정 `sonnet`. 옵션 전체(`--human-effort`, `--no-vision`, `--max-minutes`, `--max-turns`, `--no-judge` 포함)는 `node eval/run.mjs --help`로 본다.
@@ -225,7 +257,8 @@ node eval/m21-primary.mjs eval/results/<봉인 배치> eval/results/<설계 배�
 
 - 사람 역할과 판정이 모두 Claude다. 같은 계열 모델의 편향이 있을 수 있고, AI 사람은 실제 사람보다 설명서를 잘 따르고 덜 지친다.
 - 화면은 Linux 가상 화면이다. 주 플랫폼인 Windows(D12)의 글꼴과 ConPTY 차이는 보지 못한다.
-- PR 진행(M9~M11)은 시나리오에 없다. 이 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않는다(`spikes.md` S7). 가짜 gh로 넣을 수는 있다.
+- PR 진행(M9~M11)은 시나리오에 없다. 이 세션에서는 GitHub GraphQL이 막혀 gh의 PR 명령이 돌지 않는다(`spikes.md` S7). 장기 평가의 relay-v3 쪽만 가짜 gh(`lib/fake-gh.mjs`)로 PR을 열고 머지한다: CI가 없고(statusCheckRollup 빈 것), 서버 보호가 없고, 머지할 수 있는지는 충돌로만 가린다.
+- 장기 평가의 사람 역할은 Work마다 새 세션이고, 이어지는 것은 기억 파일(앞서 한 일, 실제로 말한 규칙)뿐이다. 실제 사람의 흐린 기억(말했는지 헷갈림)은 흉내 내지 않는다.
 - 회차가 적으면 편차가 크다. 시나리오마다 3회 이상을 권한다.
 
 ## 9. 도구 확인 기록
@@ -245,3 +278,10 @@ node eval/m21-primary.mjs eval/results/<봉인 배치> eval/results/<설계 배�
 
 
 2026-10-02: Work 둘을 잇는 시나리오(`works`)와 relay-off 쪽을 더한 뒤 가짜 `claude`로 21-invoice-credit을 relay, relay-off, 맨 CLI로 한 번씩 돌려 Work 1 → Work 2, Work마다의 판정과 보고서를 확인했다(도구 확인만).
+
+
+2026-11-06: 장기 평가 도구(`run-sequence.mjs`) 확인(평가 결과가 아니다). 앱 커밋 4a968b0 위의 작업 트리, Claude Code 2.1.318.
+
+- 건식(`--dry --arms relay3,relay3-m2,cli --parallel 3`): 세 줄 모두 Work 15, 봉인 과제 3, 구조 지표까지 돌았다(약 3분, 모델·앱 없음). Work마다 누적 숨긴 시험이 모두 통과(마지막 28/28), 봉인 과제 3/3. relay-v3 두 쪽은 가짜 gh로 PR을 열고 squash로 머지해 넣기가 15번 모두 `app`, cli는 `harness`. 걸음 중간에 끊긴 상태(state의 `inProgress`, 레포에 남은 파일)에서 다시 돌리면 체크포인트로 돌아가 그 Work부터 했다. 체크포인트는 줄마다 약 0.5MB.
+- 작은 실제 시범(`--arms cli --until 2 --no-sealed`, 에이전트·사람 역할·감사 sonnet): Work 1·2 모두 done, 넣기 `harness`(남은 변경 0, 머지할 브랜치 없음: 에이전트가 main에 커밋), 누적 숨긴 시험 Work 1 1/2, Work 2 3/4(실패한 앞 Work 시험 w01-1은 Work 1부터 실패, 깨뜨린 것 아님), 사람 차례 6·4, 다시 말함 0. 걸린 시간 Work마다 2.0·1.4분(줄 전체 약 4분). 비용: 사람 역할 $0.74, 다시 알려 줌의 감사 $0.02, 에이전트 토큰 Work 1 입력(캐시 포함) 54만·출력 7.9천, Work 2 46만·4.9천(sonnet 값으로 약 $0.78). 합 약 $1.5.
+- relay-v3 쪽의 실제 Work(세션의 PR, 앱의 [머지], 빚 확인)는 돌리지 않았다. 앱을 장기 평가처럼 준비하고 닫은 뒤 같은 앱 저장소로 다시 띄워(`resume`) 프로젝트가 남는 것과, 앱 환경에 가짜 gh(`RELAY_GH_BIN`, PATH)가 들어가는 것만 확인했다. 배치 전에 relay-v3 쪽 시범(Work 1~2)이 필요하다.
