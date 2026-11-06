@@ -73,6 +73,18 @@ export function withTempDir(prefix, fn) {
   return out
 }
 
+/**
+ * 실행 하나가 끝난 뒤 그 작업 폴더를 지운다(run.mjs --clean-work). 뒤 회차의 에이전트가 같은 시나리오 앞 회차의 풀이(레포, relay
+ * 저장소)를 이웃 폴더에서 읽지 못하게 한다(relay-v3 M4 규약 7절). Work 기록(works/<id>)은 결과 폴더에 이미 복사되어 있다.
+ * 작업 뿌리(workRoot) 안의 폴더만 지우고, 뿌리 자신이나 밖이면 던진다
+ */
+export function removeWorkDir(workDir, workRoot) {
+  const rel = path.relative(path.resolve(workRoot), path.resolve(workDir))
+  if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel))
+    throw new Error(`작업 뿌리 안의 폴더가 아님: ${workDir}`)
+  fs.rmSync(workDir, { recursive: true, force: true })
+}
+
 export function copyTree(from, to) {
   fs.rmSync(to, { recursive: true, force: true })
   fs.cpSync(from, to, {

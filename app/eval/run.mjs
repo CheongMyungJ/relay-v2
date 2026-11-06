@@ -15,7 +15,7 @@ import { cleanEnv, findClaude } from './lib/env.mjs'
 import { armBase, armType, isRelay3, RELAY3, words } from './lib/kind.mjs'
 import { overlayRecord, qualityOverlay, relay3Cli } from './lib/overlay.mjs'
 import { RELAY3_APP, RELAY3_M2P_APP, relay3AppOf } from './lib/relay3-arm.mjs'
-import { sleep, writeJson } from './lib/util.mjs'
+import { removeWorkDir, sleep, writeJson } from './lib/util.mjs'
 import { pairOf } from './lib/works.mjs'
 import { buildReport, judgeAll } from './report.mjs'
 
@@ -64,6 +64,9 @@ const HELP = `쓰는 법: node eval/run.mjs [옵션]
   --quality-overlay        모든 쪽의 평가 레포 첫 커밋에 relay-v3 relay init 초안의 .relay/quality.json을 넣는다
                            (RELAY3_APP의 relay-v3로 시나리오마다 만든다. 판정의 기준에도 얹어 diff에 나오지 않는다)
   --out <폴더>             결과 폴더 (기본 eval/results/<시각>)
+  --clean-work             실행 하나가 끝나면 그 작업 폴더(/tmp/relay-eval/<결과 폴더 이름>/<시나리오>-<쪽>-<회>)를 지운다.
+                           뒤 회차가 앞 회차의 풀이를 이웃 폴더에서 읽지 못하게 한다(relay-v3 M4 규약 7절). 평가 레포의 git
+                           이력은 남지 않는다(Work 기록은 결과 폴더에 있다). --parallel 1과 함께 쓴다
 `
 
 export function listScenarios() {
@@ -181,6 +184,7 @@ async function main() {
       'human-mode': { type: 'string', default: 'normal' },
       'no-judge-purpose': { type: 'boolean' },
       'quality-overlay': { type: 'boolean' },
+      'clean-work': { type: 'boolean' },
       out: { type: 'string' },
     },
   })
@@ -274,6 +278,8 @@ async function main() {
     judgePurpose: !v['no-judge-purpose'] && !arms.some(isRelay3),
     // 품질 기준 덧씌우기(relay-v3 M2 평가 규약 7절, lib/overlay.mjs). 시나리오마다의 파일은 overlays
     qualityOverlay: !!v['quality-overlay'],
+    // 실행 하나가 끝나면 작업 폴더를 지운다(--clean-work, relay-v3 M4 규약 7절)
+    cleanWork: !!v['clean-work'],
   }
   if (!['normal', 'hands-off'].includes(v['human-mode']))
     throw new Error(`--human-mode는 normal이나 hands-off입니다: ${v['human-mode']}`)
@@ -353,6 +359,7 @@ async function main() {
       const job = jobs.shift()
       if (!job) return
       const { s, kind, i } = job
+      const workDir = path.join(workRoot, `${s.id}-${kind}-${i}`)
       try {
         await runEpisode({
           scenario: s,
@@ -361,12 +368,13 @@ async function main() {
           index: i,
           opts,
           outDir: path.join(outDir, s.id, `${kind}-${i}`),
-          workDir: path.join(workRoot, `${s.id}-${kind}-${i}`),
+          workDir,
           overlay: overlays[s.id] ?? null,
         })
       } catch (e) {
         console.log(`[${s.id} ${kind}#${i}] 실행 실패: ${e instanceof Error ? e.stack : e}`)
       }
+      if (opts.cleanWork) removeWorkDir(workDir, workRoot)
       done++
       console.log(`== 진행 ${done}/${total}`)
     }

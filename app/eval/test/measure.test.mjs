@@ -6,7 +6,14 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CliArm } from '../lib/cli-arm.mjs'
 import { codeOutcome, judgeTree, makeRepo, withoutKnowledge } from '../lib/repo.mjs'
-import { agentUsage, agentUsageBySession, git, questionsBySession, stats } from '../lib/util.mjs'
+import {
+  agentUsage,
+  agentUsageBySession,
+  git,
+  questionsBySession,
+  removeWorkDir,
+  stats,
+} from '../lib/util.mjs'
 import { measuredWorks, pairOf, workParts, workScenario } from '../lib/works.mjs'
 import { pickTypeLines } from '../lib/human.mjs'
 import { armType } from '../lib/kind.mjs'
@@ -301,5 +308,19 @@ describe('통계와 지식', () => {
     expect(kindOf('---\nkind: pitfall\n---\n본문')).toBe('pitfall')
     expect(kindOf('---\nkind: 규칙\n---\n')).toBe('기타')
     expect(kindOf('머리글 없음')).toBe('없음')
+  })
+})
+
+describe('작업 폴더 지우기 (run.mjs --clean-work)', () => {
+  it('작업 뿌리 안의 실행 폴더만 지우고 이웃과 뿌리는 남긴다, 뿌리 자신이나 밖은 던진다', () => {
+    const root = tmp()
+    write(root, { 'a-relay3-1/repo/x.js': '1', 'a-relay3-2/repo/x.js': '2' })
+    removeWorkDir(path.join(root, 'a-relay3-1'), root)
+    expect(fs.existsSync(path.join(root, 'a-relay3-1'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'a-relay3-2', 'repo', 'x.js'))).toBe(true)
+    expect(() => removeWorkDir(root, root)).toThrow('작업 뿌리 안의 폴더가 아님')
+    expect(() => removeWorkDir(path.join(root, '..', 'elsewhere'), root)).toThrow(
+      '작업 뿌리 안의 폴더가 아님',
+    )
   })
 })
