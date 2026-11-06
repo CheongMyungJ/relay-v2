@@ -13,13 +13,18 @@ import {
   changedFixed,
   configCopy,
   previousConfig,
+  sequenceJobs,
 } from '../run-sequence.mjs'
 import {
+  deviceCounts,
   m3Compare,
   m3Report,
+  m3Verdict,
   M3_METRICS,
+  permutationP,
   perWorkRows,
   retellsOf,
+  v35Rows,
   withFlags,
 } from '../m3-primary.mjs'
 import { endCriterion, sequenceGuide, systemPrompt } from '../lib/human.mjs'
@@ -29,6 +34,7 @@ import {
   parseLedger,
   REQUEST_SECTIONS,
   repoM3,
+  repoRules,
   requestSections,
 } from '../lib/m3-metrics.mjs'
 import { endReasons } from '../lib/relay3-devices.mjs'
@@ -47,8 +53,15 @@ import {
   sealedPass,
 } from '../lib/sequence.mjs'
 import { landCli, restoreCheckpoint, saveCheckpoint } from '../lib/sequence-git.mjs'
-import { runSealedTask } from '../lib/sealed-run.mjs'
-import { composeRun, jobPaths, landRelay3, runJob } from '../lib/sequence-run.mjs'
+import { envMarks, evalMarks, outsideReach, runSealedTask } from '../lib/sealed-run.mjs'
+import {
+  agentMemory,
+  composeRun,
+  jobPaths,
+  landRelay3,
+  runJob,
+  workAudit,
+} from '../lib/sequence-run.mjs'
 import { duplicateDefinitions, duplication, structureMetrics } from '../lib/structure.mjs'
 
 const dirs = []
@@ -697,9 +710,9 @@ describe('평가의 공정성 (숨긴 시험의 격리, 봉인 과제, 넣기, �
       return base(a)
     }
     const r = await runJob(job(dir, scenario, { sealedAgent: peek }))
-    expect(r.sealed[0].outside).toEqual({ calls: 3, reach: 2 })
+    expect(r.sealed[0].outside).toEqual({ calls: 3, reach: 2, seen: 0, github: 0 })
     const clean = await runJob(job(dir, scenario, { sealedAgent: base }))
-    expect(clean.sealed[0].outside).toEqual({ calls: 0, reach: 0 })
+    expect(clean.sealed[0].outside).toEqual({ calls: 0, reach: 0, seen: 0, github: 0 })
     const { text } = m3Report([withFlags({ ...r, kind: 'cli' }, { works: 3, sealed: 1 })])
     expect(text).toMatch(/\| cli#1 \|.*\| s1 \|/)
   })
@@ -994,6 +1007,7 @@ describe('M3 장치 지표', () => {
       debt: { items: 2, kinds: { accepted_regression: 1, tidy: 1 } },
       knowledge: 1,
       quality: true,
+      rules: { items: 0, withCheck: 0, promotedItems: 0, promoted: [], rules: [] },
     })
   })
 
@@ -1101,9 +1115,372 @@ describe('집계 (m3-primary)', () => {
 
   it('보고서: 줄마다, 쪽마다 평균, 차이, Work마다 누적 통과. 봉인 과제는 id와 통과만', () => {
     const { text, comparisons } = m3Report(runs, { dirs: ['x'] })
-    expect(text).toContain('| relay3#2 | 2 | 2/3 (s1 O, s2 O, s3 X) | 8/10 | 1 | work-01 |')
+    expect(text).toContain(
+      '| relay3#2 | 2 | 2/3 (s1 O, s2 O, s3 X) | 8/10 | 1 / 0 | work-01 (?) | - | 0 / 0 / 0 |',
+    )
     expect(text).toContain('| relay3 − relay3-m2 | **S1** |')
     expect(comparisons['relay3:relay3-m2:S1'].reading).toBe('다름')
     expect(perWorkRows(runs, ['relay3', 'cli'])[1]).toEqual(['2', '0.90 (n 2; app 2)', '-'])
+  })
+})
+
+describe('규약 고정 전의 셈 (relay-v3 docs/experiments/m3/protocol.md 5.5, 6, 7, 9절)', () => {
+  const metric = (k) => M3_METRICS.find((m) => m.key === k)
+  const job = (dir, scenario, extra = {}) => {
+    const out = tmp('proto-out')
+    return {
+      scenario,
+      scenarioDir: dir,
+      arm: 'cli',
+      index: 1,
+      opts: { dry: true, baseline: { model: 'x', effort: 'low', minutes: 1 } },
+      outDir: out,
+      workRoot: tmp('proto-work'),
+      checkpoints: path.join(out, 'checkpoints'),
+      log: () => {},
+      ...extra,
+    }
+  }
+  const transcript = (configDir, lines) => {
+    const d = path.join(configDir, 'projects', 'k')
+    fs.mkdirSync(d, { recursive: true })
+    fs.writeFileSync(path.join(d, 's.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n'))
+  }
+  const use = (id, command) => ({
+    message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] },
+  })
+  const result = (id, text) => ({
+    message: { content: [{ type: 'tool_result', tool_use_id: id, content: text }] },
+  })
+
+  it('순열 p: 3 대 3은 20가지 나눔이라 다 갈려도 0.1이고, 2 대 2는 1/3보다 작아지지 않는다', () => {
+    expect(permutationP([1, 1, 1], [0, 0, 0])).toBeCloseTo(0.1)
+    expect(permutationP([3, 2, 1], [6, 5, 4])).toBeCloseTo(0.1)
+    expect(permutationP([1, 0, 1], [0, 1, 0])).toBeCloseTo(1)
+    expect(permutationP([1, 1], [0, 0])).toBeCloseTo(1 / 3)
+    expect(permutationP([], [1])).toBeNull()
+  })
+
+  it('읽기에 방향을 붙이고, 두 쪽 모든 줄이 같은 값이면 판정 없음(천장·바닥)', () => {
+    const c = (diff, lo, hi) => ({ diff, lo, hi })
+    expect(m3Verdict(c(0, 0, 0), metric('S1'), [1, 1, 1], [1, 1, 1])).toBe('판정 없음(천장)')
+    expect(m3Verdict(c(0, 0, 0), metric('PM1'), [0, 0, 0], [0, 0, 0])).toBe('판정 없음(바닥)')
+    expect(m3Verdict(c(0, 0, 0), metric('T1'), [599, 599], [599, 599])).toBe(
+      '판정 없음(모두 같은 값)',
+    )
+    expect(m3Verdict(c(0.5, 0.3, 0.7), metric('S1'), [1, 1], [0.5, 0.5])).toBe('좋음')
+    expect(m3Verdict(c(-2, -3, -1.5), metric('PM1'), [0, 0], [2, 2])).toBe('좋음')
+    expect(m3Verdict(c(2, 1.5, 3), metric('PM1'), [2, 2], [0, 0])).toBe('나쁨')
+    expect(m3Verdict(c(-5, -8, -1), metric('S2'), [1, 2], [6, 8])).toBe('좋음')
+    expect(m3Verdict(c(0.02, -0.05, 0.08), metric('C1'), [0.9, 0.95], [0.9, 0.92])).toBe('같음')
+    // T1~T4에도 δ가 있다(V40·V41의 끄는 조건)
+    expect(['T1', 'T2', 'T3', 'T4'].map((k) => metric(k).delta)).toEqual([50, 1, 0.01, 1])
+    // 판정 규칙에 드는 지표는 S1, C1, C2, PM1뿐이다(S2·S3는 보고만)
+    expect(M3_METRICS.filter((m) => m.decides).map((m) => m.key)).toEqual(['S1', 'C1', 'C2', 'PM1'])
+  })
+
+  it('규칙에 드는 좋음·나쁨은 구간과 순열 p가 함께 맞을 때만이다(쪽마다 n 2면 들지 못한다)', () => {
+    const line = (arm, index, sealed) => fakeRun(arm, index, { cum: [1], sealed, retell: 0 })
+    const three = [
+      line('relay3', 1, [true, true, true]),
+      line('relay3', 2, [true, true, true]),
+      line('relay3', 3, [true, true, false]),
+      line('relay3-m2', 1, [false, false, false]),
+      line('relay3-m2', 2, [true, false, false]),
+      line('relay3-m2', 3, [false, false, false]),
+    ]
+    const c = m3Compare(three, 'relay3', 'relay3-m2', metric('S1'))
+    expect(c).toMatchObject({ verdict: '좋음', n: [3, 3], counts: true })
+    expect(c.p).toBeCloseTo(0.1)
+    const two = m3Compare(
+      three.filter((r) => r.index < 3),
+      'relay3',
+      'relay3-m2',
+      metric('S1'),
+    )
+    expect(two).toMatchObject({ verdict: '좋음', counts: false })
+    // 보고만인 지표는 좋아도 들지 않는다
+    expect(m3Compare(three, 'relay3', 'relay3-m2', metric('S2')).counts).toBe(false)
+    const { text } = m3Report(three)
+    expect(text).toMatch(
+      /\| relay3 − relay3-m2 \| \*\*S1\*\* \| 3, 3 \| .* \| 좋음 \| 0\.10 \| 듦 \|/,
+    )
+    expect(text).toMatch(/\| relay3 − relay3-m2 \| \*\*S2\*\* \| .* \| 보고만 \|/)
+  })
+
+  it('Work 하나의 셈 더함: 말로만·허용 목록, 어느 묶음의 형식 오류, 계약 tidy의 갚음, 멀쩡한 항목', () => {
+    const m = m3WorkMetrics({
+      rec: { m3: { knowledge: true, debt: true, tidy: true, promote: true } },
+      final: {
+        knowledge: {
+          changed: [],
+          issues: [
+            { kind: 'spoken', path: 'docs/knowledge/a.md', detail: '검사(`check:`)가 없음' },
+            {
+              kind: 'allow',
+              path: 'docs/knowledge/b.md',
+              detail:
+                '검사 `no-float`의 허용 목록(`## 아직 규칙을 따르지 않는 곳`)에 `src/x.js`가 더해짐: 줄어들기만 한다',
+            },
+          ],
+        },
+        tidy: {
+          taken: ['d1', 'd2'],
+          items: [
+            { id: 'd1', status: 'paid', detail: '항목 파일을 지움' },
+            { id: 'd2', status: 'open', detail: '항목 파일이 남음' },
+            { id: 'd3', status: 'open', detail: '612줄 > 600 (항목 파일을 지움)' },
+            { id: 'd4', status: 'paid', detail: '항목 파일을 지움' },
+          ],
+          lines: 40,
+          max: 30,
+        },
+      },
+      all: [{ knowledge: { issues: [{ kind: 'format' }] } }, { knowledge: { issues: [] } }],
+    })
+    expect(m.knowledge).toMatchObject({ spoken: 1, allow: 1, allowChecks: ['no-float'], format: 0 })
+    expect(m.issuesAny).toEqual({ format: true, allow: false })
+    expect(m.tidy).toMatchObject({
+      taken: 2,
+      takenStatus: { paid: 1, open: 1 },
+      intactDeleted: ['d3'],
+    })
+  })
+
+  it('레포의 규칙 승격: kind: rule 항목의 check가 quality.json rules에 이름 그대로 있으면 승격', () => {
+    const root = tmp('rules')
+    write(root, {
+      'docs/knowledge/a.md': '---\nkind: rule\nsource: human\ncheck: no-float\n---\n# a\n',
+      'docs/knowledge/b.md': '---\nkind: rule\nsource: human\ncheck: "other"\n---\n# b\n',
+      'docs/knowledge/c.md': '---\nkind: rule\nsource: human\n---\n# c\n',
+      'docs/knowledge/d.md': '---\nkind: fact\ncheck: no-float\n---\n# d\n',
+      '.relay/quality.json': JSON.stringify({ rules: ['no-float', 'unused'] }),
+    })
+    expect(repoRules(root)).toEqual({
+      items: 3,
+      withCheck: 2,
+      promotedItems: 1,
+      promoted: ['no-float'],
+      rules: ['no-float', 'unused'],
+    })
+  })
+
+  it('쪽의 장치 셈: 분모를 함께 내고, 승격된 검사가 뒤에 빠지거나 허용 목록이 늚을 머지하면 쓸모없음', () => {
+    const aw = (m3, merged = true) => ({ merged, m3 })
+    const run = withFlags(
+      {
+        scenario: 't',
+        kind: 'relay3',
+        index: 1,
+        sequence: true,
+        works: [
+          {
+            work: 1,
+            cumulative: { own: { total: 1, pass: 1 }, regressed: [] },
+            rules: { promoted: ['a', 'b'] },
+            appWorks: [
+              aw({
+                issuesAny: { format: true, allow: false },
+                knowledge: { format: 1, spoken: 2 },
+                request: { debt: 1 },
+                tidy: {
+                  taken: 2,
+                  takenStatus: { paid: 1, open: 1 },
+                  lines: 50,
+                  max: 30,
+                  intactDeleted: [],
+                },
+              }),
+            ],
+          },
+          {
+            work: 2,
+            cumulative: { own: { total: 1, pass: 0 }, regressed: [] },
+            rules: { promoted: ['a', 'b', 'c'] },
+            appWorks: [
+              aw({
+                issuesAny: { format: true, allow: true },
+                knowledge: { format: 0, allow: 1, allowChecks: ['c'], spoken: 0 },
+                request: { debt: 2 },
+                tidy: { taken: 0, intactDeleted: ['d9'] },
+                debt: { recorded: 1 },
+              }),
+            ],
+          },
+        ],
+        structure: { repo: { rules: { items: 4, promotedItems: 2, promoted: ['a', 'c'] } } },
+      },
+      { works: 2, sealed: 0 },
+    )
+    const d = deviceCounts([run])
+    expect(d).toMatchObject({
+      appWorks: 2,
+      debtRecorded: 1,
+      format: { works: 2, merged: 1 },
+      tidy: {
+        listWorks: 2,
+        listTaken: 1,
+        tidyWorks: 1,
+        takenIds: 2,
+        paid: 1,
+        overCap: 1,
+        intact: 1,
+        intactFailed: 1,
+      },
+      // a 남음, b 뒤에 빠짐, c 허용 목록이 늚을 머지: 셋 가운데 둘
+      promote: {
+        ruleItems: 4,
+        promotedItems: 2,
+        promotedEver: 3,
+        useless: 2,
+        allowWorks: 1,
+        allowMerged: 1,
+      },
+    })
+    expect(d.promote.spoken[0]).toBe(1)
+    // Work를 다 하지 않은 줄은 세지 않는다
+    expect(deviceCounts([withFlags(run, { works: 15, sealed: 0 })]).appWorks).toBe(0)
+  })
+
+  it('V35: 끝 방식마다 앱 Work 수와 자기 시험 통과, relay-v3 두 쪽을 합친 칸', () => {
+    const line = (arm, how, own) =>
+      withFlags(
+        {
+          scenario: 't',
+          kind: arm,
+          index: 1,
+          sequence: true,
+          works: [
+            {
+              work: 1,
+              cumulative: { own: { total: 2, pass: own } },
+              appWorks: [{ devices: { endReasons: { how } } }],
+            },
+          ],
+        },
+        { works: 1, sealed: 0 },
+      )
+    const rows = v35Rows(
+      [line('relay3', 'handed', 1), line('relay3-m2', 'handed', 2), line('relay3', null, 2)],
+      ['relay3', 'relay3-m2', 'cli'],
+    )
+    expect(rows).toEqual([
+      ['-', '1 (자기 시험 통과 1)', '0 (자기 시험 통과 0)', '1 (자기 시험 통과 1)'],
+      ['handed', '1 (자기 시험 통과 0)', '1 (자기 시험 통과 1)', '2 (자기 시험 통과 1)'],
+    ])
+  })
+
+  it('격리 감사: 닿아도 되는 곳을 지운 뒤 세고, 도구 결과에 평가 자리가 보인 것(seen)과 github도 센다', () => {
+    const cfg = tmp('audit')
+    const own = '/tmp/relay-eval/m3-seq/48-long-shop-cli-1/shop'
+    transcript(cfg, [
+      use('t1', `cat ${own}/src/a.js`),
+      use('t2', 'ls ..'),
+      result('t2', 'cfg-agent\ncfg-human-3\nshop\nshop.git'),
+      use('t3', 'cat ../cfg-human-3/projects/x/y.jsonl'),
+      use('t4', 'cd /tmp/relay-eval/m3-seq/48-long-shop-relay3-2 && ls'),
+      use('t5', 'curl https://api.github.com/user'),
+    ])
+    const marks = ['/tmp/relay-eval', 'cfg-human']
+    expect(outsideReach(cfg, marks, { allow: [own], results: true })).toEqual({
+      calls: 5,
+      reach: 2,
+      seen: 1,
+    })
+    expect(outsideReach(cfg, ['github.com']).reach).toBe(1)
+    // 배치 전에 옮긴 평가 자료는 RELAY_EVAL_MARKS로 더한다
+    expect(envMarks({ RELAY_EVAL_MARKS: '/home/user/m3-archive: /x/y:' })).toEqual([
+      '/home/user/m3-archive',
+      '/x/y',
+    ])
+    expect(evalMarks('/s')).toContain('eval/results')
+  })
+
+  it('Work 에이전트의 격리 감사는 Work마다 그 Work의 몫을 적는다(사람 역할 설정 폴더, 다른 줄)', async () => {
+    const { dir, scenario } = tinyScenario()
+    const o = job(dir, scenario)
+    const p = jobPaths(o)
+    const first = await runJob({ ...o, until: 1 })
+    expect(first.works[0].outside).toEqual({ calls: 0, reach: 0, seen: 0, github: 0 })
+    // Work 2의 에이전트: 자기 레포 안 하나, 사람 역할의 설정 폴더를 읽음 하나, 다른 줄의 작업 폴더 하나
+    transcript(path.join(p.workDir, 'cfg-agent'), [
+      use('a1', `cat ${path.join(p.repo, 'src/calc.js')}`),
+      use('a2', `cat ${path.join(p.workDir, 'cfg-human-2', 'x.jsonl')}`),
+      use('a3', `ls ${path.join(o.workRoot, 't-tiny-relay3-1')}`),
+      use('a4', 'ls ..'),
+      result('a4', 'cfg-agent\ncfg-human-2\ncalc'),
+    ])
+    const r = await runJob({ ...o, until: 2 })
+    expect(r.works[1].outside).toEqual({ calls: 4, reach: 2, seen: 1, github: 0 })
+    expect(r.works[0].outside.calls).toBe(0)
+    const a = workAudit(p, o)
+    expect(a.allow).toContain(p.repo)
+    expect(a.marks).toContain(path.resolve(o.outDir))
+    // 규칙 승격은 Work마다 main에서 센다(이 레포에는 규칙 항목이 없다)
+    expect(r.works[1].rules).toMatchObject({ items: 0, promoted: [] })
+  })
+
+  it('걸음 하나의 시도는 이어 돌기를 넘어 상한까지만 하고, 시도마다 까닭(도구 문제, 끊김)을 남긴다', async () => {
+    const { dir, scenario } = tinyScenario()
+    const seen = []
+    const o = job(dir, scenario, { maxAttempts: 2 })
+    const p = jobPaths(o)
+    // Work 2에서 끊긴 것처럼: Work 1까지 하고 state에 끊긴 걸음을 적는다
+    await runJob({ ...o, until: 1 })
+    const stateFile = path.join(p.resultDir, 'state.json')
+    const st = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+    st.inProgress = { kind: 'work', n: 1 }
+    st.attempts['work-02'] = 1
+    fs.writeFileSync(stateFile, JSON.stringify(st))
+    await runJob({ ...o, until: 2 })
+    // 봉인 과제: 두 번 도구 문제로 멈추면 상한(2)을 다 써서 세 번째는 돌지 않는다
+    const bad = fakeBaseline(dir, seen, 'error')
+    await expect(runJob({ ...o, sealedAgent: bad })).rejects.toThrow(/봉인 과제/)
+    await expect(runJob({ ...o, sealedAgent: bad })).rejects.toThrow(/봉인 과제/)
+    const third = runJob({ ...o, sealedAgent: fakeBaseline(dir, seen) })
+    await expect(third).rejects.toMatchObject({ exhausted: true })
+    expect(seen).toHaveLength(2)
+    const done = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+    expect(done.attempts).toMatchObject({ 'work-02': 2, 'sealed-s1': 2 })
+    expect(done.failures['work-02']).toEqual([{ attempt: 1, cause: 'restart', error: null }])
+    expect(done.failures['sealed-s1'].map((x) => [x.attempt, x.cause])).toEqual([
+      [1, 'tool_error'],
+      [2, 'tool_error'],
+    ])
+    const flags = withFlags(composeRun(p.resultDir, done, 3, [{ id: 's1' }]))
+    expect(flags.retryCauses).toEqual({ restart: 1, tool_error: 2 })
+  })
+
+  it('봉인 과제의 시간 초과는 레포가 시험을 통과해도 실패다', async () => {
+    const { dir, scenario } = tinyScenario()
+    const slow = async ({ cwd }) => {
+      execFileSync('git', ['apply', path.join(dir, 'sealed/reference-s1.patch')], { cwd })
+      return { ending: 'timeout', ms: 60_000, costUsd: null, result: null, error: null }
+    }
+    const r = await runJob(job(dir, scenario, { sealedAgent: slow }))
+    expect(r.sealed[0]).toMatchObject({ ending: 'timeout', pass: false, own: { pass: 1 } })
+    expect(r.sealed[0].uncommitted).toBeGreaterThan(0)
+  })
+
+  it('끝내지 못한 줄을 새 회차로: 첫 회차 번호를 준다', () => {
+    expect(sequenceJobs(['relay3', 'cli'], 2)).toEqual([
+      { arm: 'relay3', index: 1 },
+      { arm: 'cli', index: 1 },
+      { arm: 'relay3', index: 2 },
+      { arm: 'cli', index: 2 },
+    ])
+    expect(sequenceJobs(['relay3'], 1, 4)).toEqual([{ arm: 'relay3', index: 4 }])
+  })
+
+  it('에이전트 프로젝트 메모리: 작업 폴더 키마다 memory 아래 파일', () => {
+    const cfg = tmp('memory')
+    write(cfg, {
+      'projects/-tmp-a-shop/memory/MEMORY.md': 'x',
+      'projects/-tmp-a-shop/s.jsonl': '',
+      'projects/-tmp-wt-1/s.jsonl': '',
+      'projects/-tmp-wt-2/memory/.keep/n.md': 'y',
+    })
+    expect(agentMemory(cfg)).toEqual({ projects: 3, withMemory: 2, files: 2 })
+    expect(agentMemory(tmp('none'))).toEqual({ projects: 0, withMemory: 0, files: 0 })
   })
 })

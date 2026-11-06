@@ -33,18 +33,33 @@ function runBaseline({ prompt, cwd, configDir, model, effort, timeoutMs }) {
   const env = cleanEnv({ CLAUDE_CONFIG_DIR: configDir, CLAUDE_CODE_EFFORT_LEVEL: effort })
   const started = Date.now()
   return new Promise((resolve) => {
-    const p = spawn(findClaude(), args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
+    // 프로세스 묶음을 따로 두어(detached) 끝낼 때 claude가 띄운 자식(셸, 서버, 시험)까지 함께 죽인다: 남은 자식이 판정 중에
+    // 레포를 바꾸지 못하게
+    const p = spawn(findClaude(), args, {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,
+    })
+    const killGroup = () => {
+      try {
+        process.kill(-p.pid, 'SIGKILL')
+      } catch {
+        // 이미 없음
+      }
+    }
     let out = ''
     let err = ''
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
-      p.kill('SIGKILL')
+      killGroup()
     }, timeoutMs)
     p.stdout.on('data', (d) => (out += d))
     p.stderr.on('data', (d) => (err += d))
     p.on('close', (code) => {
       clearTimeout(timer)
+      killGroup()
       let result = null
       try {
         result = JSON.parse(out)
@@ -64,25 +79,44 @@ function runBaseline({ prompt, cwd, configDir, model, effort, timeoutMs }) {
 }
 
 /**
- * 기준 에이전트가 자기 폴더 밖의 평가 자료에 손댔나(격리 감사): 대화 기록의 도구 호출 가운데 입력이 평가의 자리(시나리오 폴더와
- * 숨긴 시험, 줄의 작업 폴더, 판정·마지막 트리 임시 폴더)를 가리키는 수. 격리는 폴더를 떼어 둘 뿐 같은 사용자의 파일 읽기를
- * 막지 못하므로(평가 도구의 시나리오 폴더는 디스크에 평문으로 있다) 닿았는지를 센다. 0이 아니면 그 과제는 봉인이 깨졌을 수 있다
- * @param {string} configDir 기준 에이전트의 설정 폴더(대화 기록)
+ * 에이전트가 자기 폴더 밖의 평가 자료에 손댔나(격리 감사): 대화 기록의 도구 호출 가운데 입력이 평가의 자리(시나리오 폴더와
+ * 숨긴 시험, 줄의 작업 폴더, 판정·마지막 트리 임시 폴더, 사람 역할의 설정 폴더 등)를 가리키는 수(reach). results면 도구 결과의
+ * 글에 평가의 자리가 보인 수(seen: `ls ..`나 `find`가 평가 자리의 이름을 보여 준 것. 읽었다는 뜻은 아니다)도 센다. 격리는 폴더를
+ * 떼어 둘 뿐 같은 사용자의 파일 읽기를 막지 못하므로(시나리오 폴더는 디스크에 평문으로 있다) 닿았는지를 센다. 상대 경로나
+ * 와일드카드로 닿으면 입력에 표시가 없어 reach가 놓친다(seen이 일부를 잡는다)
+ * @param {string} configDir 에이전트의 설정 폴더(대화 기록)
  * @param {string[]} marks 가리키면 센다(경로 또는 경로 조각)
- * @returns {{ calls: number, reach: number }} 도구 호출 수와 그 가운데 평가 자리를 가리킨 수
+ * @param {{ allow?: string[], results?: boolean }} [o] allow: 셈 전에 글에서 지우는 경로(에이전트 자기 레포 등. 평가의 자리
+ *   아래에 있어도 닿아도 되는 곳), results: 도구 결과도 본다
+ * @returns {{ calls: number, reach: number, seen?: number }}
  */
-export function outsideReach(configDir, marks) {
-  const out = { calls: 0, reach: 0 }
+export function outsideReach(configDir, marks, o = {}) {
+  const allow = [...(o.allow ?? [])].filter(Boolean).sort((a, b) => b.length - a.length)
+  const out = o.results ? { calls: 0, reach: 0, seen: 0 } : { calls: 0, reach: 0 }
   const seen = new Set()
+  const seenResults = new Set()
   const dir = path.join(configDir, 'projects')
   if (!fs.existsSync(dir)) return out
+  const hit = (text) => {
+    let t = text
+    for (const a of allow) t = t.split(a).join('')
+    return marks.some((m) => m && t.includes(m))
+  }
+  const resultText = (c) =>
+    typeof c.content === 'string'
+      ? c.content
+      : Array.isArray(c.content)
+        ? c.content.map((x) => (typeof x?.text === 'string' ? x.text : '')).join('\n')
+        : ''
   const walk = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       const p = path.join(d, e.name)
       if (e.isDirectory()) walk(p)
       else if (e.name.endsWith('.jsonl'))
         for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
-          if (!line.includes('"tool_use"')) continue
+          const use = line.includes('"tool_use"')
+          const res = o.results && line.includes('"tool_result"')
+          if (!use && !res) continue
           let content
           try {
             content = JSON.parse(line).message?.content
@@ -90,11 +124,14 @@ export function outsideReach(configDir, marks) {
             continue
           }
           for (const c of Array.isArray(content) ? content : []) {
-            if (c?.type !== 'tool_use' || seen.has(c.id)) continue
-            seen.add(c.id)
-            out.calls++
-            const text = JSON.stringify(c.input ?? {})
-            if (marks.some((m) => m && text.includes(m))) out.reach++
+            if (c?.type === 'tool_use' && !seen.has(c.id)) {
+              seen.add(c.id)
+              out.calls++
+              if (hit(JSON.stringify(c.input ?? {}))) out.reach++
+            } else if (res && c?.type === 'tool_result' && !seenResults.has(c.tool_use_id)) {
+              seenResults.add(c.tool_use_id)
+              if (hit(resultText(c))) out.seen++
+            }
           }
         }
     }
@@ -103,17 +140,35 @@ export function outsideReach(configDir, marks) {
   return out
 }
 
-/** 평가의 자리(outsideReach): 시나리오 폴더, 평가 도구가 쓰는 임시 폴더들의 이름. 봉인 과제의 폴더(task-)는 넣지 않는다 */
-export const evalMarks = (scenarioDir) => [
+/** 환경 변수 RELAY_EVAL_MARKS(':'로 나눈 경로): 배치 전에 옮겨 둔 평가 자료(시범 결과의 보관본 등)를 감사의 자리에 더한다 */
+export const envMarks = (env = process.env) =>
+  String(env.RELAY_EVAL_MARKS ?? '')
+    .split(':')
+    .map((x) => x.trim())
+    .filter(Boolean)
+
+/**
+ * 평가의 자리(outsideReach): 시나리오 폴더, 평가 결과 폴더(eval/results), 평가 도구가 쓰는 임시 폴더들의 이름, 사람 역할·감사의
+ * 설정 폴더 이름, RELAY_EVAL_MARKS. extra는 결과 폴더와 체크포인트 폴더 등. 봉인 과제의 폴더(task-)는 넣지 않는다
+ */
+export const evalMarks = (scenarioDir, extra = []) => [
   path.resolve(scenarioDir),
   'eval/scenarios',
+  'eval/results',
+  ...envMarks(),
   'sealed/hidden',
   'reference-',
   path.join(os.tmpdir(), 'relay-eval'),
   'relay-judge-',
   'relay-final-',
   'eval-hidden',
+  'cfg-human',
+  'cfg-told',
+  ...extra.filter(Boolean).map((x) => path.resolve(x)),
 ]
+
+/** 실제 GitHub에 닿은 도구 호출(평가의 gh는 가짜나 로그인되지 않은 것이지만 에이전트 프록시는 api.github.com을 통과시킨다) */
+export const GITHUB_MARKS = ['github.com']
 
 /** 시험 결과에서 봉인할 것을 뺀다: 과제의 시험은 차례 번호와 통과만, 누적 시험은 이름과 통과만 */
 const sealedView = (checks) => checks.map((c, k) => ({ k: k + 1, pass: c.pass }))
@@ -129,6 +184,7 @@ const keptView = (checks) => checks.map((c) => ({ name: c.name, pass: c.pass }))
  * @param {string} o.finalTree 마지막 main의 트리(판정 diff의 기준)
  * @param {object[]} o.lastActive 마지막 Work의 누적 시험(activeChecks)
  * @param {{ model: string, effort: string, minutes: number, dry?: boolean }} o.opts
+ * @param {string[]} [o.marks] 격리 감사의 평가 자리에 더할 경로(결과 폴더, 체크포인트 폴더)
  * @param {typeof runBaseline} [o.runAgent] 시험용: 기준 에이전트 대신 부를 것(runBaseline과 같은 인자와 결과)
  */
 export function runSealedTask(o) {
@@ -185,7 +241,10 @@ async function sealedIn(o, dir) {
   const before = judge(o.finalTree, cumulativeHidden, kept).checks
   const passedBefore = new Set(before.filter((c) => c.pass).map((c) => c.name))
   const agent = agentUsage(configDir)
-  const outside = outsideReach(configDir, evalMarks(o.scenarioDir))
+  const outside = {
+    ...outsideReach(configDir, evalMarks(o.scenarioDir, o.marks ?? []), { results: true }),
+    github: outsideReach(configDir, GITHUB_MARKS).reach,
+  }
   let commits = null
   try {
     commits = Number(git(repo, 'rev-list', '--count', `${head}..HEAD`))
@@ -201,7 +260,8 @@ async function sealedIn(o, dir) {
     costUsd: ran.costUsd,
     agent,
     outside,
-    pass: sealedPass(own.checks, cumulative.checks, before),
+    // 시간 초과는 과제의 실패다(레포에 남은 것이 시험을 통과해도). 판정은 그래도 해서 수는 남긴다
+    pass: ran.ending === 'timeout' ? false : sealedPass(own.checks, cumulative.checks, before),
     own: {
       total: own.checks.length,
       pass: own.checks.filter((c) => c.pass).length,

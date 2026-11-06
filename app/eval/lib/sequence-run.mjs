@@ -11,7 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { outcomeSuccess, runEpisode } from './episode.mjs'
 import { fakeGhSetup } from './fake-gh.mjs'
-import { ledgerMetrics, m3WorkMetrics, parseLedger, repoM3 } from './m3-metrics.mjs'
+import { ledgerMetrics, m3WorkMetrics, parseLedger, repoM3, repoRules } from './m3-metrics.mjs'
 import {
   exportsOf,
   parseEvents,
@@ -21,7 +21,7 @@ import {
   workLabel,
 } from './relay3-arm.mjs'
 import { judgeTree, makeRepo } from './repo.mjs'
-import { runSealedTask } from './sealed-run.mjs'
+import { evalMarks, GITHUB_MARKS, outsideReach, runSealedTask } from './sealed-run.mjs'
 import {
   cumulativeSummary,
   doneWorks,
@@ -48,6 +48,44 @@ import { activeChecks, workParts } from './works.mjs'
 
 const TOOL_ERRORS = new Set(['harness_error', 'human_error'])
 const pad = (n) => String(n + 1).padStart(2, '0')
+
+/** 걸음 하나를 시도하는 수의 상한(이어 돌기를 넘어 센다). 다 쓰면 그 줄은 멈추고 다시 하지 않는다(규약 9절) */
+export const MAX_ATTEMPTS = 3
+
+/** 시도를 다 써서 멈춘 것(run-sequence.mjs는 다시 하지 않는다) */
+export class AttemptsExhausted extends Error {
+  exhausted = true
+}
+
+/**
+ * Work 에이전트의 격리 감사(outsideReach)에 쓰는 평가의 자리와 닿아도 되는 곳. 사람 역할의 설정 폴더(cfg-human-N: 그 Work의
+ * 물으면 답함 규칙이 든 사람 역할 프롬프트), 감사 폴더(told), 사람 역할의 화면(human), 판정 임시 폴더, 시나리오 폴더, 결과·
+ * 체크포인트 폴더, 다른 줄의 작업 폴더가 평가의 자리다. 자기 레포, 원격, 앱 저장소(relay-v3 worktree), 가짜 gh, claude 심은
+ * 닿아도 된다(줄의 작업 폴더 안이지만 지운 뒤 센다)
+ */
+export function workAudit(p, o) {
+  return {
+    marks: [
+      ...evalMarks(o.scenarioDir, [o.outDir, o.checkpoints, o.workRoot]),
+      path.join(p.workDir, 'told'),
+      path.join(p.workDir, 'human'),
+      path.join(p.workDir, 'judge'),
+    ],
+    allow: [
+      p.repo,
+      p.remote,
+      p.home,
+      path.join(p.workDir, 'gh-bin'),
+      path.join(p.workDir, 'bin'),
+      path.join(p.workDir, 'cfg-agent'),
+      path.join(p.workDir, 'electron-user-data'),
+    ],
+  }
+}
+
+/** 앞 값을 뺀 것(감사의 누적 수에서 이 Work의 몫) */
+const minus = (now, before) =>
+  Object.fromEntries(Object.entries(now).map(([k, v]) => [k, v - (before?.[k] ?? 0)]))
 
 /** 봉인 과제 목록(sealed/tasks.json). 없으면 빈 것 */
 export function sealedTasks(scenarioDir, scenario) {
@@ -223,6 +261,7 @@ const checkView = (defs, checks) =>
  * @param {{ path: string, text: string, sha256: string } | null} [o.overlay] 품질 기준 덧씌우기
  * @param {number} [o.until] 이번에 돌릴 마지막 Work(1부터). 봉인 과제와 구조 지표는 모든 Work가 끝나야 돈다
  * @param {(m: string) => void} [o.log]
+ * @param {number} [o.maxAttempts] 걸음 하나의 시도 상한(기본 MAX_ATTEMPTS, 이어 돌기를 넘어 센다)
  * @param {Function} [o.sealedAgent] 시험용: 봉인 과제의 기준 에이전트 대신 부를 것(runSealedTask의 runAgent)
  */
 export async function runJob(o) {
@@ -255,13 +294,27 @@ export async function runJob(o) {
     say(
       `체크포인트에서 이어 감 (${state?.inProgress ? `끊긴 걸음 ${JSON.stringify(state.inProgress)}` : '결과 폴더 없음'})`,
     )
-    // 걸음마다 시도한 수는 체크포인트 뒤의 것(끊긴 시도)도 남긴다. 컨테이너가 다시 떠 결과 폴더가 없으면 체크포인트의 수다
+    // 걸음마다 시도한 수와 그 까닭은 체크포인트 뒤의 것(끊긴 시도)도 남긴다. 컨테이너가 다시 떠 결과 폴더가 없으면 체크포인트의
+    // 것이다. 끊긴 걸음의 마지막 시도에 까닭이 없으면 도구 문제로 멈춘 것이 아니라 끊긴 것(restart: kill, 컨테이너가 다시 뜸)이다
     const tried = state?.attempts ?? {}
+    const causes = state?.failures ?? {}
+    if (state?.inProgress) {
+      const key = stepKey(state.inProgress)
+      const n = tried[key] ?? 0
+      if (n > 0 && !(causes[key] ?? []).some((c) => c.attempt === n))
+        causes[key] = [...(causes[key] ?? []), { attempt: n, cause: 'restart', error: null }]
+    }
     restoreCheckpoint(p.checkpoint, [p.workDir, p.resultDir])
     state = readJson(stateFile, null)
-    if (state)
+    if (state) {
       for (const [k, v] of Object.entries(tried))
         state.attempts[k] = Math.max(state.attempts[k] ?? 0, v)
+      state.failures = { ...(state.failures ?? {}) }
+      for (const [k, v] of Object.entries(causes))
+        if (v.length > (state.failures[k]?.length ?? 0)) state.failures[k] = v
+      // 합친 수를 바로 적는다(시도를 다 써서 바로 멈춰도 다음 실행이 같은 수를 본다)
+      writeJson(stateFile, state)
+    }
   }
   if (state?.inProgress) state = null // 첫 체크포인트 전에 끊김: 처음부터
   if (!state) {
@@ -287,6 +340,7 @@ export async function runJob(o) {
       structure: null,
       memory: emptyMemory(),
       attempts: {},
+      failures: {},
       options: { qualityOverlay: overlayRecord(o.overlay ?? null), dry: !!opts.dry },
     }
     writeJson(stateFile, state)
@@ -303,18 +357,33 @@ export async function runJob(o) {
       runSealed: opts.sealed !== false,
     })
     if (!step) break
-    const key =
-      step.kind === 'work'
-        ? `work-${pad(step.n)}`
-        : step.kind === 'sealed'
-          ? `sealed-${step.id}`
-          : 'structure'
+    const key = stepKey(step)
+    const max = o.maxAttempts ?? MAX_ATTEMPTS
+    if ((state.attempts[key] ?? 0) >= max)
+      throw new AttemptsExhausted(
+        `${key}: 시도 ${state.attempts[key]}번을 다 씀(상한 ${max}). 이 줄은 멈춘다(규약 9절: 처음부터 새 회차로)`,
+      )
     state.inProgress = step
     state.attempts[key] = (state.attempts[key] ?? 0) + 1
     save()
-    if (step.kind === 'work') await doWork(step.n)
-    else if (step.kind === 'sealed') await doSealed(step.id)
-    else doStructure()
+    try {
+      if (step.kind === 'work') await doWork(step.n)
+      else if (step.kind === 'sealed') await doSealed(step.id)
+      else doStructure()
+    } catch (e) {
+      // 도구 문제로 멈춘 시도의 까닭(다시 돌리면 체크포인트로 돌아가도 남는다). inProgress는 그대로 둔다
+      state.failures ??= {}
+      state.failures[key] = [
+        ...(state.failures[key] ?? []),
+        {
+          attempt: state.attempts[key],
+          cause: 'tool_error',
+          error: String(e instanceof Error ? e.message : e).slice(0, 300),
+        },
+      ]
+      save()
+      throw e
+    }
     state.inProgress = null
     state.step++
     save()
@@ -402,15 +471,28 @@ export async function runJob(o) {
     // main에서 누적 숨긴 시험. 판정 폴더(숨긴 시험을 겹친 사본)는 줄의 작업 폴더 밖에 두고 바로 지운다: 작업 폴더에 남으면
     // 다음 Work의 에이전트가 레포 위(cli는 한 층, relay-v3 worktree는 두 층)에서 앞으로 올 Work의 숨긴 시험까지 읽을 수 있다
     const defs = activeChecks(scenario, n)
-    const j = withTempDir('relay-judge-', (d) =>
-      judgeTree({
-        tree: exportTree(p.repo, 'main', path.join(d, 'main')),
+    let rules = null
+    const j = withTempDir('relay-judge-', (d) => {
+      const tree = exportTree(p.repo, 'main', path.join(d, 'main'))
+      // 이 Work를 넣은 main의 규칙 승격(V42 '쓸모없음': 앞 Work에서 승격된 검사가 뒤에 rules에서 빠졌나)
+      rules = repoRules(tree)
+      return judgeTree({
+        tree,
         baseDir,
         hiddenDir: path.join(o.scenarioDir, 'hidden'),
         scenario: { ...ws, checks: defs },
         work: path.join(d, 'work'),
-      }),
-    )
+      })
+    })
+    // Work 에이전트의 격리 감사: 에이전트 설정 폴더는 줄 내내 하나라 누적 수를 state에 두고 이 Work의 몫만 적는다
+    const audit = workAudit(p, o)
+    const agentCfg = path.join(p.workDir, 'cfg-agent')
+    const totals = {
+      ...outsideReach(agentCfg, audit.marks, { allow: audit.allow, results: true }),
+      github: outsideReach(agentCfg, GITHUB_MARKS).reach,
+    }
+    const outside = minus(totals, state.outsideTotals)
+    state.outsideTotals = totals
     // 바로 앞 Work를 끝낸 main에서 통과했던 시험이 이번에 실패하면 이 Work가 깨뜨린 것이다
     const prev =
       n > 0
@@ -471,6 +553,8 @@ export async function runJob(o) {
       survey: wr?.survey ?? null,
       appWorks,
       ledger,
+      outside,
+      rules,
     }
     writeJson(path.join(workOut, 'sequence.json'), record)
     state.works[n] = { done: true, mainHead: landing.head, ending, via: landing.via }
@@ -499,6 +583,7 @@ export async function runJob(o) {
         finalTree,
         lastActive: activeChecks(scenario, parts.length - 1),
         opts: { ...opts.baseline, dry: !!opts.dry },
+        marks: [o.outDir, o.checkpoints],
         runAgent: o.sealedAgent,
       }),
     )
@@ -524,10 +609,41 @@ export async function runJob(o) {
         relay3 && fs.existsSync(ledgerFile)
           ? ledgerMetrics(parseLedger(fs.readFileSync(ledgerFile, 'utf8')))
           : null,
+      agentMemory: agentMemory(path.join(p.workDir, 'cfg-agent')),
     }
     writeJson(path.join(p.resultDir, 'structure.json'), s)
     state.structure = { done: true }
   }
+}
+
+/** 걸음의 이름(state.attempts의 키) */
+export const stepKey = (step) =>
+  step.kind === 'work'
+    ? `work-${pad(step.n)}`
+    : step.kind === 'sealed'
+      ? `sealed-${step.id}`
+      : 'structure'
+
+/**
+ * 에이전트 설정 폴더의 Claude Code 프로젝트 메모리(projects/<작업 폴더 키>/memory 아래 파일). 맨 CLI는 한 레포 경로라 키가 하나로
+ * 이어지고, relay-v3 세션은 Work마다 새 worktree라 키가 Work마다 다르다(규약 12절). 프로젝트 키 수, 메모리가 있는 키 수, 파일 수
+ */
+export function agentMemory(configDir) {
+  const dir = path.join(configDir, 'projects')
+  const out = { projects: 0, withMemory: 0, files: 0 }
+  if (!fs.existsSync(dir)) return out
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isDirectory()) continue
+    out.projects++
+    const mem = path.join(dir, e.name, 'memory')
+    if (!fs.existsSync(mem)) continue
+    const files = fs
+      .readdirSync(mem, { recursive: true, withFileTypes: true })
+      .filter((f) => f.isFile())
+    if (files.length) out.withMemory++
+    out.files += files.length
+  }
+  return out
 }
 
 /** 한 줄의 결과를 모은다(run.json). complete는 모든 Work와 봉인 과제, 구조 지표가 끝났는가다 */
@@ -551,6 +667,7 @@ export function composeRun(resultDir, state, workCount, tasks) {
     structure: readJson(path.join(resultDir, 'structure.json'), null),
     retold: state.memory?.retold ?? [],
     attempts: state.attempts,
+    failures: state.failures ?? {},
     options: state.options,
   }
 }

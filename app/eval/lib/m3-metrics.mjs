@@ -55,6 +55,15 @@ export function knowledgeGroundings(bundle) {
 export function m3WorkMetrics({ rec, events = [], request = '', final = null, all = [] }) {
   const recorded = events.filter((e) => e?.type === 'debt_recorded')
   const issues = final?.knowledge?.issues ?? []
+  const anyIssue = (kind) =>
+    all.some((b) => (b?.knowledge?.issues ?? []).some((i) => i?.kind === kind))
+  const taken = Array.isArray(final?.tidy?.taken) ? final.tidy.taken : []
+  const items = Array.isArray(final?.tidy?.items) ? final.tidy.items : []
+  const status = (id) => items.find((x) => x?.id === id)?.status ?? 'missing'
+  // 멀쩡한 항목(V41): 계약 tidy가 아닌데 갚지 않았고(open) 항목 파일을 지운 것
+  const intact = items.filter(
+    (x) => !taken.includes(x?.id) && x?.status === 'open' && deletedItemFile(x?.detail),
+  )
   return {
     switches: rec?.m3 ?? null,
     unrecorded: Array.isArray(rec?.unrecorded) ? rec.unrecorded.length : null,
@@ -65,8 +74,13 @@ export function m3WorkMetrics({ rec, events = [], request = '', final = null, al
           format: count(issues, (i) => i?.kind === 'format'),
           anchor: count(issues, (i) => i?.kind === 'anchor'),
           notYet: count(issues, (i) => i?.kind === 'not_yet'),
+          spoken: count(issues, (i) => i?.kind === 'spoken'),
+          allow: count(issues, (i) => i?.kind === 'allow'),
+          allowChecks: allowChecks(issues),
         }
       : null,
+    // 이 Work에서 잰 묶음 가운데 어느 것에든 그 문제가 있었나(마지막 묶음에서 고쳐졌어도). V38 형식 확인, V42 허용 목록
+    issuesAny: { format: anyIssue('format'), allow: anyIssue('allow') },
     groundings: knowledgeGroundings(final),
     debt: {
       recorded: recorded.length,
@@ -84,10 +98,34 @@ export function m3WorkMetrics({ rec, events = [], request = '', final = null, al
           items: len(final.tidy.items),
           lines: final.tidy.lines ?? null,
           max: final.tidy.max ?? null,
+          // 계약 tidy의 id마다 마지막 묶음 items의 갚음(paid, open, unknown, items에 없으면 missing)
+          takenStatus: taken.reduce(
+            (a, id) => ({ ...a, [status(id)]: (a[status(id)] ?? 0) + 1 }),
+            {},
+          ),
+          intactDeleted: intact.map((x) => x.id),
         }
       : null,
     memos: len(rec?.end_memos),
   }
+}
+
+/**
+ * 갚음의 detail이 항목 파일을 지웠다고 말하나. relay-v3 engine/tidy.ts payoff(a0b39e9)의 글을 그대로 찾는다: tidy·test_gap은
+ * detail이 그 글이고, accepted_regression·rule_violation은 괄호 안에 그 글이 든다
+ */
+export const DELETED_ITEM_FILE = '항목 파일을 지움'
+export const deletedItemFile = (detail) => String(detail ?? '').includes(DELETED_ITEM_FILE)
+
+/** 허용 목록이 늚(allow) 문제가 가리키는 검사 이름(relay-v3 engine/promote.ts promoteIssues의 detail '검사 `X`의 허용 목록') */
+export function allowChecks(issues) {
+  const out = new Set()
+  for (const i of issues ?? []) {
+    if (i?.kind !== 'allow') continue
+    const m = /검사 `([^`]+)`의 허용 목록/.exec(String(i.detail ?? ''))
+    if (m) out.add(m[1])
+  }
+  return [...out].sort()
 }
 
 /** ledger.jsonl의 글을 줄로. 깨진 줄은 건너뛴다 */
@@ -132,6 +170,47 @@ export function ledgerMetrics(entries, works = null) {
   }
 }
 
+/** 지식 파일 머리글(첫 줄 '---'부터 다음 '---'까지)의 'key: value'. 머리글이 없으면 빈 Map */
+export function frontMatter(text) {
+  const lines = String(text ?? '').split('\n')
+  const out = new Map()
+  if (lines[0]?.trim() !== '---') return out
+  for (let i = 1; i < lines.length && lines[i].trim() !== '---'; i++) {
+    const m = /^([A-Za-z_][\w.-]*):\s*(.*)$/.exec(lines[i])
+    if (m) out.set(m[1], m[2].trim().replace(/^(["'])(.*)\1$/, '$2'))
+  }
+  return out
+}
+
+/**
+ * 레포의 규칙 승격(V42): docs/knowledge의 `kind: rule` 항목과 그 `check:`, .relay/quality.json의 rules, 승격된 검사(규칙 항목의
+ * check가 rules에 이름 그대로 있음. relay-v3 engine/promote.ts와 같은 셈). quality.json을 읽지 못하면 rules는 null
+ */
+export function repoRules(root, files = listFiles(root)) {
+  const items = files
+    .filter((f) => /^docs\/knowledge\/.+\.md$/.test(f))
+    .map((f) => ({ path: f, fm: frontMatter(fs.readFileSync(path.join(root, f), 'utf8')) }))
+    .filter((x) => x.fm.get('kind') === 'rule')
+    .map((x) => ({ path: x.path, check: x.fm.get('check') || null }))
+  let rules = null
+  try {
+    const q = JSON.parse(fs.readFileSync(path.join(root, '.relay/quality.json'), 'utf8'))
+    rules = Array.isArray(q?.rules) ? q.rules.filter((r) => typeof r === 'string') : []
+  } catch {
+    // 없거나 깨짐
+  }
+  const promoted = [
+    ...new Set(items.map((i) => i.check).filter((c) => c && (rules ?? []).includes(c))),
+  ].sort()
+  return {
+    items: items.length,
+    withCheck: items.filter((i) => i.check).length,
+    promotedItems: items.filter((i) => i.check && (rules ?? []).includes(i.check)).length,
+    promoted,
+    rules,
+  }
+}
+
 /** 레포 폴더의 빚 장부와 지식 파일 수. 빚은 머리글의 kind마다 */
 export function repoM3(root) {
   const files = listFiles(root)
@@ -146,5 +225,6 @@ export function repoM3(root) {
     debt: { items: debt.length, kinds },
     knowledge: files.filter((f) => /^docs\/knowledge\/.+\.md$/.test(f)).length,
     quality: files.includes('.relay/quality.json'),
+    rules: repoRules(root, files),
   }
 }

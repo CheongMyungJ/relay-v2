@@ -17,7 +17,7 @@ import { qualityOverlay, overlayRecord, relay3Cli } from './lib/overlay.mjs'
 import { RELAY3_APP } from './lib/relay3-arm.mjs'
 import { DEBT_RULE } from './lib/sequence.mjs'
 import { archiveCommit } from './lib/sequence-git.mjs'
-import { runJob } from './lib/sequence-run.mjs'
+import { MAX_ATTEMPTS, runJob } from './lib/sequence-run.mjs'
 import { isMain, readJson, sleep, writeJson } from './lib/util.mjs'
 import { isSequence } from './lib/works.mjs'
 
@@ -34,11 +34,15 @@ const HELP = `쓰는 법: node eval/run-sequence.mjs [옵션]
 
   --scenario <id>          장기 평가 시나리오 (기본 48-long-shop)
   --runs <n>               쪽마다 회차 (기본 1. 규약은 3)
+  --first-run <n>          첫 회차 번호 (기본 1). 끝내지 못한 줄을 새 회차로 처음부터 다시 돌릴 때(예: --arms relay3
+                           --first-run 4 --runs 1이면 relay3-4 하나)
   --arms <목록>            relay3(M3 장치 켬), relay3-m2(RELAY_M3=off), cli 가운데 (기본 셋 모두)
   --until <n>              Work n까지만 돈다(작은 시범). 봉인 과제와 구조 지표는 모든 Work가 끝나야 돈다
   --no-sealed              봉인 과제를 돌리지 않는다
   --parallel <n>           동시에 도는 줄(쪽 × 회차) 수 (기본 1)
-  --retries <n>            도구 문제로 멈춘 걸음을 체크포인트에서 다시 하는 횟수 (기본 1)
+  --retries <n>            도구 문제로 멈춘 줄을 이번 실행 안에서 체크포인트부터 다시 하는 횟수 (기본 1)
+  --max-attempts <n>       걸음 하나의 시도 상한. 이어 돌기를 넘어 state.json의 attempts로 센다 (기본 ${MAX_ATTEMPTS}). 다 쓰면
+                           그 줄은 멈추고 다시 하지 않는다
   --agent-model, --effort, --human-model, --human-effort, --judge-model, --cli-permission, --no-vision,
   --max-minutes, --max-turns   run.mjs와 같다
   --baseline-model <모델>  봉인 과제의 기준 에이전트 모델 (기본 sonnet. 모든 쪽에 같다)
@@ -51,6 +55,13 @@ const HELP = `쓰는 법: node eval/run-sequence.mjs [옵션]
   --checkpoints <폴더>     체크포인트 폴더 (기본 <out>/checkpoints)
   --archive-push           체크포인트 폴더가 git 체크아웃이면 걸음마다 커밋하고 push한다(RELAY_BATCH_TRAILER를 끝에 붙임)
 `
+
+/** 줄의 차례: 회차를 바깥에 두어 쪽이 시간대에 고르게 섞이게 한다(run.mjs와 같음). first는 첫 회차 번호 */
+export function sequenceJobs(arms, runs, first = 1) {
+  const jobs = []
+  for (let i = first; i < first + runs; i++) for (const arm of arms) jobs.push({ arm, index: i })
+  return jobs
+}
 
 /** config.json에서 이어 돌 때 같아야 하는 값(바뀌면 줄마다 조건이 섞인다) */
 export const FIXED_KEYS = [
@@ -193,6 +204,8 @@ async function main() {
       help: { type: 'boolean' },
       scenario: { type: 'string', default: '48-long-shop' },
       runs: { type: 'string', default: '1' },
+      'first-run': { type: 'string', default: '1' },
+      'max-attempts': { type: 'string', default: String(MAX_ATTEMPTS) },
       arms: { type: 'string' },
       until: { type: 'string' },
       'no-sealed': { type: 'boolean' },
@@ -271,6 +284,8 @@ async function main() {
     scenario: scenario.id,
     arms,
     runs: Number(v.runs),
+    firstRun: Number(v['first-run']),
+    maxAttempts: Number(v['max-attempts']),
     debtRule: DEBT_RULE,
   }
   const prev = previousConfig(outDir, checkpoints, scenario.id)
@@ -317,9 +332,7 @@ async function main() {
   console.log(`결과 폴더: ${outDir}\n작업 폴더: ${workRoot}\n체크포인트: ${checkpoints}`)
 
   const xvfb = !dry && arms.some((a) => a !== 'cli') ? await ensureDisplay() : null
-  // 회차를 바깥에 두어 쪽이 시간대에 고르게 섞이게 한다(run.mjs와 같음)
-  const jobs = []
-  for (let i = 1; i <= Number(v.runs); i++) for (const arm of arms) jobs.push({ arm, index: i })
+  const jobs = sequenceJobs(arms, Number(v.runs), Number(v['first-run']))
   const retries = Math.max(0, Number(v.retries))
   let failed = 0
   const worker = async () => {
@@ -340,11 +353,12 @@ async function main() {
             archivePush: !!v['archive-push'],
             overlay,
             until: v.until ? Number(v.until) : undefined,
+            maxAttempts: Number(v['max-attempts']),
           })
           break
         } catch (e) {
           console.log(`[${job.arm}-${job.index}] 멈춤: ${e instanceof Error ? e.stack : e}`)
-          if (attempt >= retries) {
+          if (e?.exhausted || attempt >= retries) {
             failed++
             break
           }
