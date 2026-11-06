@@ -214,6 +214,11 @@ export class RelayArm {
     this.snapped = new Map()
     /** 꺼낸 브랜치: label → 커밋 (finalTrees) */
     this.exported = new Map()
+    /**
+     * 장기 평가(run-sequence.mjs): 이 Work를 시작하기 전부터 있던 앱 Work의 label. 그 worktree·브랜치·스냅숏은 앞 Work의 것이라
+     * 이 Work의 판정 폴더와 사람 역할의 '바뀐 코드'에 넣지 않는다(squash로 넣은 앞 브랜치는 지금 main과 다르다)
+     */
+    this.earlier = new Set()
     this.guard = new DialogGuard()
     /** 찍은 스크린샷과 그 가운데 번호 표시가 끝내 없던 수 (observe) */
     this.shots = { taken: 0, unmarked: 0 }
@@ -535,7 +540,7 @@ export class RelayArm {
           repo: this.o.repo,
           base: this.o.base,
           heads: live.map((t) => git(t.path, 'rev-parse', 'HEAD')),
-          skipBranches: ['main', ...checkedOut],
+          skipBranches: ['main', ...checkedOut, ...this.earlierBranches()],
           dir: path.join(this.o.dir, 'branches'),
           exported: this.exported,
         }),
@@ -544,7 +549,7 @@ export class RelayArm {
     const snaps = path.join(this.o.dir, 'snapshots')
     if (fs.existsSync(snaps)) {
       for (const label of fs.readdirSync(snaps)) {
-        if (live.some((t) => t.label === label)) continue
+        if (live.some((t) => t.label === label) || this.earlier.has(label)) continue
         trees.push({
           path: path.join(snaps, label),
           label,
@@ -554,6 +559,11 @@ export class RelayArm {
       }
     }
     return trees
+  }
+
+  /** 앞 Work(earlier)의 브랜치: 판정 폴더로 꺼내지 않는다 */
+  earlierBranches() {
+    return []
   }
 
   /** 다음 Work로 넘어갈 때(works 시나리오). 사람이 같은 앱과 프로젝트에서 [새 Work]를 누르므로 할 일이 없다 */

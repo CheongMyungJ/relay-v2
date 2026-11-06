@@ -7,7 +7,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildHistory, changedBuild, changedFixed } from '../run-sequence.mjs'
+import {
+  buildHistory,
+  changedBuild,
+  changedFixed,
+  configCopy,
+  previousConfig,
+} from '../run-sequence.mjs'
 import {
   m3Compare,
   m3Report,
@@ -21,12 +27,13 @@ import {
   ledgerMetrics,
   m3WorkMetrics,
   parseLedger,
+  REQUEST_SECTIONS,
   repoM3,
   requestSections,
 } from '../lib/m3-metrics.mjs'
 import { endReasons } from '../lib/relay3-devices.mjs'
 import { prepareMerge, relay3FakeGh } from '../lib/fake-gh.mjs'
-import { RELAY3_APP, relay3AppOf } from '../lib/relay3-arm.mjs'
+import { RELAY3_APP, Relay3Arm, relay3AppOf, workLabel } from '../lib/relay3-arm.mjs'
 import { relay3Env } from '../lib/kind.mjs'
 import {
   cumulativeSummary,
@@ -123,6 +130,24 @@ describe('걸음의 차례와 이어 돌기', () => {
       'baseline',
     ])
   })
+
+  it('결과 폴더가 없어지면(컨테이너가 다시 뜸) 체크포인트 폴더의 설정 사본으로 고정 값과 빌드를 확인한다', () => {
+    const out = tmp('cfg-out')
+    const cps = tmp('cfg-cps')
+    expect(previousConfig(out, cps, 's')).toBeNull()
+    const old = { agentModel: 'sonnet', builds: [{ appCommits: { relay3: 'a0b39e9' } }] }
+    fs.mkdirSync(path.dirname(configCopy(cps, 's')), { recursive: true })
+    fs.writeFileSync(configCopy(cps, 's'), JSON.stringify(old))
+    const prev = previousConfig(out, cps, 's')
+    expect(prev).toEqual(old)
+    expect(changedBuild(prev, { appCommits: { relay3: 'b3ff42a' } }, ['relay3'])).toEqual([
+      'relay3',
+    ])
+    expect(changedFixed(prev, { agentModel: 'opus' })).toEqual(['agentModel'])
+    // 결과 폴더의 것이 있으면 그것이 먼저다
+    fs.writeFileSync(path.join(out, 'config.json'), JSON.stringify({ agentModel: 'opus' }))
+    expect(previousConfig(out, cps, 's')).toEqual({ agentModel: 'opus' })
+  })
 })
 
 describe('사람 역할의 기억 (PM1)', () => {
@@ -179,6 +204,13 @@ describe('사람 역할의 기억 (PM1)', () => {
     expect(g).not.toContain('이 평가에서는 PR을 만들 수 없다')
     expect(g).toContain('[증거]의 [머지]를 누른다')
     expect(g).toContain('늘 [빚으로 남기고 머지]')
+    // 일반 설명서의 [끝내기] 상자 설명(V35 전의 [세션에 넘기기]: 상자를 닫음)은 장기 평가 설명서에 들지 않는다. [증거]의
+    // [세션에 넘기기](끝을 걸지 않음, V35)는 남는다
+    expect(guide).toContain('그 올림을 세션에 보내고 상자를 닫는다')
+    expect(g).not.toContain('그 올림을 세션에 보내고 상자를 닫는다')
+    expect(g).not.toContain('[그래도 끝내기](이 커밋 그대로 끝냄)')
+    expect(g).toContain('그 지적 옆의 [세션에 넘기기]를 누르거나')
+    expect(g).toContain('[취소]나 [더 고치기]로 풀고')
     // 끝 항목 뒤의 항목은 남는다
     expect(g).toContain('- 세션이 멈추면')
     expect(() => sequenceGuide('- 화면: 없음')).toThrow()
@@ -464,6 +496,55 @@ describe('이어 돌기 (건식, 실제 git과 체크포인트)', () => {
 
 const RELAY3_GH = relay3FakeGh(RELAY3_APP)
 
+describe('relay-v3 쪽의 뒤 Work: 앞 Work의 worktree와 브랜치', () => {
+  it("앞 Work(earlier)의 worktree·브랜치·스냅숏은 이 Work의 판정 폴더와 '바뀐 코드'에 들지 않는다", () => {
+    const root = tmp('earlier')
+    const repo = path.join(root, 'shop')
+    fs.mkdirSync(repo)
+    initRepo(repo)
+    fs.writeFileSync(path.join(repo, 'a.js'), 'a\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-qm', 'base')
+    const home = path.join(root, 'relay3-home')
+    const work = (id, branch, file) => {
+      const wt = path.join(home, 'worktrees', id)
+      git(repo, 'worktree', 'add', '-q', '-b', branch, wt, 'main')
+      fs.writeFileSync(path.join(wt, file), `${file}\n`)
+      git(wt, 'add', '.')
+      git(wt, 'commit', '-qm', file)
+      fs.mkdirSync(path.join(home, 'works', id), { recursive: true })
+      fs.writeFileSync(
+        path.join(home, 'works', id, 'work.json'),
+        JSON.stringify({ id, state: 'done', branch, worktree: wt }),
+      )
+    }
+    // 앞 Work: 브랜치를 squash로 main에 넣었다(브랜치의 커밋은 main의 조상이 아니다)
+    const old = '11111111-0000-4000-8000-000000000000'
+    work(old, 'relay/old-1111', 'b.js')
+    git(repo, 'merge', '-q', '--squash', 'relay/old-1111')
+    git(repo, 'commit', '-qm', 'squash old')
+    const base = git(repo, 'rev-parse', 'main')
+    const now = '22222222-0000-4000-8000-000000000000'
+    work(now, 'relay/now-2222', 'c.js')
+    const arm = new Relay3Arm({ dir: root, repo, base, agentEnv: {}, agentConfigDir: root })
+    // 고치기 전의 모습: 앞 Work의 worktree도 판정 폴더다(지금 main과 달라 '바뀐 코드'에 거꾸로 보인다)
+    expect(
+      arm
+        .finalTrees()
+        .map((t) => t.label)
+        .sort(),
+    ).toEqual([workLabel(0, old), workLabel(0, now)].sort())
+    arm.snapshot()
+    arm.earlier = new Set([workLabel(0, old)])
+    const trees = arm.finalTrees()
+    expect(trees.map((t) => t.label)).toEqual([workLabel(0, now)])
+    // 앞 Work의 worktree를 지워도 그 브랜치와 스냅숏은 들지 않는다
+    git(repo, 'worktree', 'remove', '--force', path.join(home, 'worktrees', old))
+    expect(arm.finalTrees().map((t) => t.label)).toEqual([workLabel(0, now)])
+    expect(arm.unmeasuredBranches()).toEqual([])
+  })
+})
+
 describe('relay-v3 쪽의 넣기 (건식, 가짜 gh)', () => {
   // relay-v3 체크아웃(RELAY3_APP)의 가짜 gh가 있어야 돈다(relay-v2만 받은 CI에는 없다)
   it.skipIf(!fs.existsSync(RELAY3_GH))(
@@ -591,6 +672,36 @@ describe('평가의 공정성 (숨긴 시험의 격리, 봉인 과제, 넣기, �
     expect(reach).toEqual([])
     expect(findNamed(p.workDir, 'eval-hidden')).toEqual([])
     expect(fs.existsSync(path.dirname(cwd))).toBe(false)
+  })
+
+  it('기준 에이전트가 평가의 자리(시나리오 폴더, 판정 임시 폴더)를 가리킨 도구 호출을 센다(격리 감사)', async () => {
+    const { dir, scenario } = tinyScenario()
+    const base = fakeBaseline(dir, [])
+    // 대화 기록: 레포 안의 호출 하나, 시나리오의 봉인 폴더를 읽는 호출 하나(같은 id의 줄이 둘), 판정 임시 폴더를 찾는 호출 하나
+    const peek = async (a) => {
+      const use = (id, command) =>
+        JSON.stringify({
+          message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] },
+        })
+      const p = path.join(a.configDir, 'projects', 'x')
+      fs.mkdirSync(p, { recursive: true })
+      fs.writeFileSync(
+        path.join(p, 's.jsonl'),
+        [
+          use('t1', 'npm test'),
+          use('t2', `cat ${path.join(dir, 'sealed/hidden')}/*`),
+          use('t2', `cat ${path.join(dir, 'sealed/hidden')}/*`),
+          use('t3', 'ls /tmp/relay-judge-*'),
+        ].join('\n'),
+      )
+      return base(a)
+    }
+    const r = await runJob(job(dir, scenario, { sealedAgent: peek }))
+    expect(r.sealed[0].outside).toEqual({ calls: 3, reach: 2 })
+    const clean = await runJob(job(dir, scenario, { sealedAgent: base }))
+    expect(clean.sealed[0].outside).toEqual({ calls: 0, reach: 0 })
+    const { text } = m3Report([withFlags({ ...r, kind: 'cli' }, { works: 3, sealed: 1 })])
+    expect(text).toMatch(/\| cli#1 \|.*\| s1 \|/)
   })
 
   it('기준 에이전트의 도구 오류는 과제의 실패가 아니라 도구 문제로 멈추고, 다시 돌리면 그 과제부터 한다', async () => {
@@ -765,6 +876,21 @@ describe('구조 지표', () => {
 })
 
 describe('M3 장치 지표', () => {
+  // 절 제목이 앱과 어긋나면 relay3 쪽도 모든 절이 null로 읽혀 꺼진 쪽(relay3-m2)과 같아 보인다. 앱 체크아웃이 없으면 건너뛴다
+  it.skipIf(!fs.existsSync(path.join(RELAY3_APP, 'src/engine/judge.ts')))(
+    'request.md 절 제목이 relay-v3(RELAY3_APP)의 것과 같다',
+    () => {
+      const src = (f) => fs.readFileSync(path.join(RELAY3_APP, 'src/engine', f), 'utf8')
+      const title = (f, name) =>
+        new RegExp(`export const ${name} = '([^']+)'`).exec(src(f))?.[1] ?? null
+      expect({
+        knowledge: title('knowledge-format.ts', 'LIST_HEADING'),
+        unrecorded: title('debt-record.ts', 'UNRECORDED_TITLE'),
+        debt: title('tidy.ts', 'TIDY_TITLE'),
+      }).toEqual(REQUEST_SECTIONS)
+    },
+  )
+
   it('request.md의 relay 절마다 항목 수. 절이 없으면 null', () => {
     const text = [
       '요청 글',

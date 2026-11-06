@@ -7,6 +7,8 @@
 // 격리: 기준 에이전트는 쪽의 작업 폴더 밖, 쪽 이름도 회차도 없는 새 임시 폴더(task-XXXXXX)에서 돌고(Claude Code는 cwd를 시스템
 // 프롬프트에 넣는다), 판정은 또 다른 임시 폴더에서 한다. 둘 다 과제가 끝나면 지운다(앞 과제의 판정이 뒤 과제에 닿지 않게).
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { cleanEnv, findClaude, makeClaudeConfig } from './env.mjs'
 import { judgeTree } from './repo.mjs'
@@ -60,6 +62,58 @@ function runBaseline({ prompt, cwd, configDir, model, effort, timeoutMs }) {
     p.stdin.end(prompt)
   })
 }
+
+/**
+ * 기준 에이전트가 자기 폴더 밖의 평가 자료에 손댔나(격리 감사): 대화 기록의 도구 호출 가운데 입력이 평가의 자리(시나리오 폴더와
+ * 숨긴 시험, 줄의 작업 폴더, 판정·마지막 트리 임시 폴더)를 가리키는 수. 격리는 폴더를 떼어 둘 뿐 같은 사용자의 파일 읽기를
+ * 막지 못하므로(평가 도구의 시나리오 폴더는 디스크에 평문으로 있다) 닿았는지를 센다. 0이 아니면 그 과제는 봉인이 깨졌을 수 있다
+ * @param {string} configDir 기준 에이전트의 설정 폴더(대화 기록)
+ * @param {string[]} marks 가리키면 센다(경로 또는 경로 조각)
+ * @returns {{ calls: number, reach: number }} 도구 호출 수와 그 가운데 평가 자리를 가리킨 수
+ */
+export function outsideReach(configDir, marks) {
+  const out = { calls: 0, reach: 0 }
+  const seen = new Set()
+  const dir = path.join(configDir, 'projects')
+  if (!fs.existsSync(dir)) return out
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.jsonl'))
+        for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+          if (!line.includes('"tool_use"')) continue
+          let content
+          try {
+            content = JSON.parse(line).message?.content
+          } catch {
+            continue
+          }
+          for (const c of Array.isArray(content) ? content : []) {
+            if (c?.type !== 'tool_use' || seen.has(c.id)) continue
+            seen.add(c.id)
+            out.calls++
+            const text = JSON.stringify(c.input ?? {})
+            if (marks.some((m) => m && text.includes(m))) out.reach++
+          }
+        }
+    }
+  }
+  walk(dir)
+  return out
+}
+
+/** 평가의 자리(outsideReach): 시나리오 폴더, 평가 도구가 쓰는 임시 폴더들의 이름. 봉인 과제의 폴더(task-)는 넣지 않는다 */
+export const evalMarks = (scenarioDir) => [
+  path.resolve(scenarioDir),
+  'eval/scenarios',
+  'sealed/hidden',
+  'reference-',
+  path.join(os.tmpdir(), 'relay-eval'),
+  'relay-judge-',
+  'relay-final-',
+  'eval-hidden',
+]
 
 /** 시험 결과에서 봉인할 것을 뺀다: 과제의 시험은 차례 번호와 통과만, 누적 시험은 이름과 통과만 */
 const sealedView = (checks) => checks.map((c, k) => ({ k: k + 1, pass: c.pass }))
@@ -131,6 +185,7 @@ async function sealedIn(o, dir) {
   const before = judge(o.finalTree, cumulativeHidden, kept).checks
   const passedBefore = new Set(before.filter((c) => c.pass).map((c) => c.name))
   const agent = agentUsage(configDir)
+  const outside = outsideReach(configDir, evalMarks(o.scenarioDir))
   let commits = null
   try {
     commits = Number(git(repo, 'rev-list', '--count', `${head}..HEAD`))
@@ -145,6 +200,7 @@ async function sealedIn(o, dir) {
     wallMs: ran.ms,
     costUsd: ran.costUsd,
     agent,
+    outside,
     pass: sealedPass(own.checks, cumulative.checks, before),
     own: {
       total: own.checks.length,

@@ -16,6 +16,7 @@ import { relay3FakeGh } from './lib/fake-gh.mjs'
 import { qualityOverlay, overlayRecord, relay3Cli } from './lib/overlay.mjs'
 import { RELAY3_APP } from './lib/relay3-arm.mjs'
 import { DEBT_RULE } from './lib/sequence.mjs'
+import { archiveCommit } from './lib/sequence-git.mjs'
 import { runJob } from './lib/sequence-run.mjs'
 import { isMain, readJson, sleep, writeJson } from './lib/util.mjs'
 import { isSequence } from './lib/works.mjs'
@@ -72,6 +73,21 @@ export function changedFixed(prev, now) {
   if (!prev) return []
   return FIXED_KEYS.filter(
     (k) => JSON.stringify(prev[k] ?? null) !== JSON.stringify(now[k] ?? null),
+  )
+}
+
+/** 체크포인트 폴더에 두는 config.json 사본(결과 폴더가 없어져도 이어 돌기의 고정 값·빌드 확인이 남게) */
+export const configCopy = (checkpoints, scenarioId) =>
+  path.join(checkpoints, scenarioId, 'config.json')
+
+/**
+ * 앞 config: 결과 폴더의 것, 없으면(컨테이너가 다시 떠 결과 폴더가 없어짐) 체크포인트 폴더의 사본. 사본이 없으면 고정 값과
+ * 빌드가 바뀐 이어 돌기를 막지 못한다(줄마다 체크포인트를 풀어 조건이 섞인 채로 돈다)
+ */
+export function previousConfig(outDir, checkpoints, scenarioId) {
+  return (
+    readJson(path.join(outDir, 'config.json'), null) ??
+    readJson(configCopy(checkpoints, scenarioId), null)
   )
 }
 
@@ -257,11 +273,11 @@ async function main() {
     runs: Number(v.runs),
     debtRule: DEBT_RULE,
   }
-  const prev = readJson(path.join(outDir, 'config.json'), null)
+  const prev = previousConfig(outDir, checkpoints, scenario.id)
   const changed = changedFixed(prev, config)
   if (changed.length)
     throw new Error(
-      `같은 결과 폴더의 앞 설정과 다릅니다(${changed.join(', ')}). 새 --out으로 돌리세요`,
+      `같은 결과 폴더의 앞 설정과 다릅니다(${changed.join(', ')}). 새 --out(과 --checkpoints)으로 돌리세요`,
     )
   let claudeVersion = null
   try {
@@ -280,17 +296,24 @@ async function main() {
   const rebuilt = changedBuild(prev, build, arms)
   if (rebuilt.length)
     throw new Error(
-      `같은 결과 폴더의 앞 빌드와 다릅니다(${rebuilt.join(', ')}: ${buildsOf(prev).at(-1)?.appCommits?.relay3} → ${build.appCommits.relay3}). 같은 빌드로 이어 돌거나 새 --out으로 돌리세요`,
+      `같은 결과 폴더의 앞 빌드와 다릅니다(${rebuilt.join(', ')}: ${buildsOf(prev).at(-1)?.appCommits?.relay3} → ${build.appCommits.relay3}). 같은 빌드로 이어 돌거나 새 --out(과 --checkpoints)으로 돌리세요`,
     )
   const now = new Date().toISOString()
-  writeJson(path.join(outDir, 'config.json'), {
+  const configNow = {
     ...config,
     startedAt: prev?.startedAt ?? now,
     resumedAt: prev ? now : undefined,
     // 지금 빌드(아래 셋)와, 시작과 이어 돌 때마다의 빌드 기록(덮어쓰지 않는다)
     ...build,
     builds: buildHistory(prev, build, now),
-  })
+  }
+  writeJson(path.join(outDir, 'config.json'), configNow)
+  // 사본은 체크포인트와 함께 남는다(--archive-push면 커밋하고 push한다)
+  const copy = configCopy(checkpoints, scenario.id)
+  fs.mkdirSync(path.dirname(copy), { recursive: true })
+  writeJson(copy, configNow)
+  if (v['archive-push'] && !archiveCommit(checkpoints, [copy], `장기 평가 설정: ${scenario.id}`))
+    console.log('설정 사본 push 실패(커밋은 남음)')
   console.log(`결과 폴더: ${outDir}\n작업 폴더: ${workRoot}\n체크포인트: ${checkpoints}`)
 
   const xvfb = !dry && arms.some((a) => a !== 'cli') ? await ensureDisplay() : null

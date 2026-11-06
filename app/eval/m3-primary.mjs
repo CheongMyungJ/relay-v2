@@ -394,7 +394,15 @@ export function m3Report(runs, o = {}) {
     '## 줄마다',
     '',
     table(
-      ['줄', 'Work', '봉인 과제 통과', '누적 시험(마지막)', '다시 말함', '다시 한 걸음'],
+      [
+        '줄',
+        'Work',
+        '봉인 과제 통과',
+        '누적 시험(마지막)',
+        '다시 말함',
+        '다시 한 걸음',
+        '평가 자리에 닿은 과제',
+      ],
       runs
         .slice()
         .sort((a, b) => a.arm.localeCompare(b.arm) || a.index - b.index)
@@ -409,6 +417,13 @@ export function m3Report(runs, o = {}) {
             last ? `${last.pass}/${last.total}` : '-',
             String(r.works.reduce((a, w) => a + retellsOf(w), 0)),
             r.retried.join(', ') || '-',
+            // 기준 에이전트가 평가의 자리(시나리오 폴더, 판정 임시 폴더 등)를 가리킨 과제(lib/sealed-run.mjs outsideReach)
+            r.sealed.some((s) => s.outside?.reach)
+              ? r.sealed
+                  .filter((s) => s.outside?.reach)
+                  .map((s) => s.id)
+                  .join(', ')
+              : '-',
           ]
         }),
     ),

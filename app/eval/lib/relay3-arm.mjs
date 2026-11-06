@@ -446,10 +446,23 @@ export class Relay3Arm extends RelayArm {
   worktrees() {
     const trees = []
     for (const { k, id, home, rec } of this.records()) {
+      const label = workLabel(k, id)
+      if (this.earlier.has(label)) continue
       const dir = rec.worktree || path.join(home, 'worktrees', id)
-      if (fs.existsSync(path.join(dir, '.git'))) trees.push({ path: dir, label: workLabel(k, id) })
+      if (fs.existsSync(path.join(dir, '.git'))) trees.push({ path: dir, label })
     }
     return trees
+  }
+
+  /** 앞 Work(earlier)의 Work 브랜치와 내보내기의 단위 브랜치 */
+  earlierBranches() {
+    const out = []
+    for (const { k, id, rec } of this.records()) {
+      if (!this.earlier.has(workLabel(k, id))) continue
+      if (rec.branch) out.push(rec.branch)
+      for (const x of exportsOf(rec).exports) if (x.branch) out.push(x.branch)
+    }
+    return out
   }
 
   /**

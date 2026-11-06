@@ -408,6 +408,8 @@ export async function runEpisode(o) {
     await timed(() => (seq && !seq.fresh ? arm.resume() : arm.prepare()))
     // 장기 평가: 앞 Work들의 앱 Work 기록은 그 Work의 결과 폴더에 이미 남겼다
     if (seq) earlier = new Set(arm.works().map((x) => x.id))
+    // 앞 Work의 worktree·브랜치는 이 Work의 판정 폴더와 '바뀐 코드'에 넣지 않는다(맨 CLI는 도구가 main에 머지해 이미 빠진다)
+    if (seq && arm.earlier) arm.earlier = earlier
     const first = seq ? seq.n : 0
     const last = seq ? seq.n + 1 : parts.length
     for (let w = first; w < last; w++) {
