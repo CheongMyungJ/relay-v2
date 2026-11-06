@@ -1,0 +1,92 @@
+diff --git a/src/billing/invoices.js b/src/billing/invoices.js
+index 54347a3..3c400c2 100644
+--- a/src/billing/invoices.js
++++ b/src/billing/invoices.js
+@@ -1,6 +1,7 @@
+ // 청구: 송장, 반품 전표, 입금, 명세서, 연체, 독촉, 내보내기.
+ // 카드로 결제한 주문은 결제와 함께 송장을 내고 바로 입금 처리한다. 기업 고객의 후불 송장은 issueManualInvoice로 낸다.
+ // 이벤트: order.paid, order.cancelled를 듣는다. invoice.issued, invoice.paid, invoice.reminder, credit.issued를 낸다.
++import { maskPhone } from '../customers/customers.js'
+ import { fail } from '../shared/errors.js'
+ import { addDays, daysBetween, kstDate } from '../shared/time.js'
+ 
+@@ -445,6 +446,19 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+     return `${rows.join('\n')}\n`
+   }
+ 
++  /**
++   * 고객센터에 넘기는 연체 송장 CSV. 연체 일수가 긴 차례. 전화번호는 가린다(maskPhone)
++   * 열: invoice, name, phone, amount(미납 금액), days_overdue
++   */
++  function overdueCsv(asOf = clock.now()) {
++    const rows = [csvRow(['invoice', 'name', 'phone', 'amount', 'days_overdue'])]
++    for (const x of overdueInvoices(asOf)) {
++      const customer = customers.get(x.invoice.customerId)
++      rows.push(csvRow([x.invoice.number, customer.name, maskPhone(customer.phone), x.balance, x.daysOverdue]))
++    }
++    return `${rows.join('\n')}\n`
++  }
++
+   /** 고객이 지금까지 낸 금액(입금 − 전표) */
+   function customerTotals(customerId) {
+     const invoices = store.invoices.filter((i) => i.customerId === customerId)
+@@ -582,6 +596,7 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+     remindersFor,
+     invoicesCsv,
+     receiptsCsv,
++    overdueCsv,
+     customerTotals,
+     taxInvoiceData,
+     adjustInvoice,
+diff --git a/src/customers/customers.js b/src/customers/customers.js
+index 10f8d95..3599b33 100644
+--- a/src/customers/customers.js
++++ b/src/customers/customers.js
+@@ -15,6 +15,14 @@ export function normalizePhone(raw) {
+     : `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+ }
+ 
++/** 사람이 보는 곳(내보낸 파일, 상담 화면, 알림 본문)의 전화번호: 010-****-5678 */
++export function maskPhone(phone) {
++  const normalized = normalizePhone(phone)
++  if (!normalized) return ''
++  const [head, , tail] = normalized.split('-')
++  return `${head}-****-${tail}`
++}
++
+ export function isEmail(text) {
+   return typeof text === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)
+ }
+diff --git a/test/billing.test.js b/test/billing.test.js
+index afef195..b44d5c9 100644
+--- a/test/billing.test.js
++++ b/test/billing.test.js
+@@ -205,3 +205,13 @@ test('무효로 한 송장 번호는 다시 쓰지 않고, 해마다 다시 센
+   shop.clock.set('2027-01-04T01:00:00Z')
+   assert.equal(manual(shop).number, 'INV-2027-00001')
+ })
++
++test('연체 송장 CSV는 전화번호를 가린다', () => {
++  const shop = setup()
++  manual(shop, 'u-1', 50000)
++  manual(shop, 'u-3', 20000)
++  assert.equal(
++    shop.billing.overdueCsv('2026-03-20T01:00:00Z'),
++    'invoice,name,phone,amount,days_overdue\nINV-2026-00001,최유나,010-****-3333,50000,4\nINV-2026-00002,고한라,,20000,4\n',
++  )
++})
+diff --git a/test/customers.test.js b/test/customers.test.js
+index 8479fc5..b2a0dc2 100644
+--- a/test/customers.test.js
++++ b/test/customers.test.js
+@@ -27,3 +27,10 @@ test('고객 등록과 고치기', () => {
+   assert.equal(c.tier, 'vip')
+   assert.throws(() => shop.customers.update('u-3', { locale: 'fr' }), errorCode('BAD_CUSTOMER'))
+ })
++
++test('전화번호 가리기', async () => {
++  const { maskPhone } = await import('../src/customers/customers.js')
++  assert.equal(maskPhone('010-2222-3333'), '010-****-3333')
++  assert.equal(maskPhone('011-123-4567'), '011-****-4567')
++  assert.equal(maskPhone(null), '')
++})

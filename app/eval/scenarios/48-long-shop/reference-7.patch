@@ -1,0 +1,135 @@
+diff --git a/src/billing/invoices.js b/src/billing/invoices.js
+index 3c400c2..7389b35 100644
+--- a/src/billing/invoices.js
++++ b/src/billing/invoices.js
+@@ -3,6 +3,7 @@
+ // 이벤트: order.paid, order.cancelled를 듣는다. invoice.issued, invoice.paid, invoice.reminder, credit.issued를 낸다.
+ import { maskPhone } from '../customers/customers.js'
+ import { fail } from '../shared/errors.js'
++import { lineVat } from '../shared/tax.js'
+ import { addDays, daysBetween, kstDate } from '../shared/time.js'
+ 
+ export const DUE_DAYS = 14
+@@ -20,12 +21,6 @@ export function formatWon(amount) {
+   return `${n < 0 ? '-' : ''}${Math.abs(n).toLocaleString('ko-KR')}원`
+ }
+ 
+-/** 부가세 포함 금액의 부가세. 면세 0, 원 미만 버림 */
+-function lineVatOf(amount, taxClass = 'standard') {
+-  if (taxClass === 'exempt') return 0
+-  return Math.floor(amount / 11)
+-}
+-
+ function csvCell(value) {
+   const text = value === null || value === undefined ? '' : String(value)
+   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+@@ -109,7 +104,7 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+         qty: l.qty ?? 1,
+         amount: l.amount,
+         taxClass: l.taxClass ?? 'standard',
+-        vat: lineVatOf(l.amount, l.taxClass ?? 'standard'),
++        vat: lineVat(l.amount, l.taxClass ?? 'standard'),
+       })),
+       total: 0,
+       vat: 0,
+@@ -254,7 +249,7 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+       orderId: invoice.orderId,
+       customerId: invoice.customerId,
+       amount,
+-      vat: lineVatOf(amount),
++      vat: lineVat(amount),
+       reason,
+       issuedAt: clock.now().toISOString(),
+     }
+@@ -534,7 +529,7 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+       qty: l.qty ?? 1,
+       amount: l.amount,
+       taxClass: l.taxClass ?? 'standard',
+-      vat: lineVatOf(l.amount, l.taxClass ?? 'standard'),
++      vat: lineVat(l.amount, l.taxClass ?? 'standard'),
+     }))
+     invoice.total = invoice.lines.reduce((sum, l) => sum + l.amount, 0)
+     invoice.vat = invoice.lines.reduce((sum, l) => sum + l.vat, 0)
+diff --git a/src/catalog/products.js b/src/catalog/products.js
+index cdea5e7..0e164c4 100644
+--- a/src/catalog/products.js
++++ b/src/catalog/products.js
+@@ -1,7 +1,6 @@
+ // 상품과 재고.
+ import { fail } from '../shared/errors.js'
+-
+-const TAX_CLASSES = ['standard', 'exempt']
++import { TAX_CLASSES } from '../shared/tax.js'
+ 
+ export function createCatalog(store) {
+   function validate(p) {
+diff --git a/src/orders/pricing.js b/src/orders/pricing.js
+index 4ae6a1f..6625644 100644
+--- a/src/orders/pricing.js
++++ b/src/orders/pricing.js
+@@ -1,4 +1,5 @@
+ // 주문 금액: 줄 금액, 쿠폰 할인, 배송비, 부가세. 가격은 부가세 포함이다.
++import { lineVat } from '../shared/tax.js'
+ 
+ export const SHIPPING = {
+   baseFee: 3000,
+@@ -16,12 +17,6 @@ export function formatWon(n) {
+   return `${sign}${digits}원`
+ }
+ 
+-/** 부가세 포함 금액의 부가세(10%). 면세는 0, 원 미만 버림 */
+-function vatOf(amount, taxClass) {
+-  if (taxClass === 'exempt') return 0
+-  return Math.floor(amount / 11)
+-}
+-
+ export function lineAmount(line) {
+   return line.price * line.qty
+ }
+@@ -65,14 +60,14 @@ export function quote(lines, { coupon = null, region = 'seoul' } = {}) {
+       taxClass: l.taxClass ?? 'standard',
+       weightG: l.weightG ?? 0,
+       amount,
+-      vat: vatOf(amount, l.taxClass ?? 'standard'),
++      vat: lineVat(amount, l.taxClass ?? 'standard'),
+     }
+   })
+   const itemsTotal = priced.reduce((sum, l) => sum + l.amount, 0)
+   const discount = coupon ? Math.min(coupon.discount, itemsTotal) : 0
+   const shipping = shippingFee({ itemsTotal, region, lines: priced })
+   const total = itemsTotal - discount + shipping
+-  const vat = priced.reduce((sum, l) => sum + l.vat, 0) + vatOf(shipping, 'standard')
++  const vat = priced.reduce((sum, l) => sum + l.vat, 0) + lineVat(shipping)
+   return { lines: priced, itemsTotal, discount, couponCode: coupon?.code ?? null, shipping, total, vat }
+ }
+ 
+diff --git a/src/shared/tax.js b/src/shared/tax.js
+new file mode 100644
+index 0000000..75fb63e
+--- /dev/null
++++ b/src/shared/tax.js
+@@ -0,0 +1,9 @@
++// 부가세. 가격은 부가세 포함이므로 금액의 1/11이 부가세다. 면세는 0, 원 미만은 버린다.
++// 주문(orders/pricing.js)과 청구(billing/invoices.js)가 같이 쓴다.
++
++export const TAX_CLASSES = ['standard', 'exempt']
++
++export function lineVat(amount, taxClass = 'standard') {
++  if (taxClass === 'exempt') return 0
++  return Math.floor(amount / 11)
++}
+diff --git a/test/tax.test.js b/test/tax.test.js
+new file mode 100644
+index 0000000..a609234
+--- /dev/null
++++ b/test/tax.test.js
+@@ -0,0 +1,9 @@
++import assert from 'node:assert/strict'
++import { test } from 'node:test'
++import { lineVat } from '../src/shared/tax.js'
++
++test('부가세 포함 금액의 부가세', () => {
++  assert.equal(lineVat(12000), 1090)
++  assert.equal(lineVat(3000), 272)
++  assert.equal(lineVat(33000, 'exempt'), 0)
++})

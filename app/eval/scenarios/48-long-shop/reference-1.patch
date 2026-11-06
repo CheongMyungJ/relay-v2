@@ -1,0 +1,115 @@
+diff --git a/src/orders/orders.js b/src/orders/orders.js
+index b69878d..279d12d 100644
+--- a/src/orders/orders.js
++++ b/src/orders/orders.js
+@@ -1,8 +1,8 @@
+ // 주문의 생애: 접수(placed) → 결제(paid) → 배송(shipped) → 배송 완료(delivered). 접수나 결제 뒤에는 취소(cancelled)할 수 있다.
+-// 이벤트: order.placed, order.paid, payment.failed, order.shipped, order.delivered, order.cancelled
++// 이벤트: order.placed, order.paid, payment.failed, order.shipped, order.delivered, order.cancelled, order.lines_cancelled
+ import { fail } from '../shared/errors.js'
+ import { estimateDelivery } from './delivery.js'
+-import { quote } from './pricing.js'
++import { discountShare, quote } from './pricing.js'
+ 
+ export function createOrders({ store, catalog, coupons, customers, payments, bus, clock, ids }) {
+   let number = 1000
+@@ -129,6 +129,51 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+     return { order: snapshot(order), refund }
+   }
+ 
++  /**
++   * 주문의 일부 상품을 취소한다. 결제한 주문이면 취소한 상품 금액에서 쿠폰 할인의 그 몫을 뺀 만큼 환불한다(배송비는
++   * 돌려주지 않는다). 남은 상품이 없게 되면 주문 전체 취소(cancelOrder)와 같다.
++   * @param {{ sku: string, qty: number }[]} items
++   * @returns {{ order: object, refund: number }}
++   */
++  function cancelLines(orderId, items, { reason = 'customer' } = {}) {
++    const order = load(orderId)
++    if (order.status !== 'placed' && order.status !== 'paid') {
++      fail('CANNOT_CANCEL', `취소할 수 없는 주문: ${order.number} (${order.status})`)
++    }
++    if (!Array.isArray(items) || items.length === 0) fail('BAD_QTY', '취소할 상품이 없습니다')
++    const wanted = new Map()
++    for (const it of items) {
++      if (!Number.isInteger(it.qty) || it.qty <= 0) fail('BAD_QTY', `수량: ${it.qty}`)
++      wanted.set(it.sku, (wanted.get(it.sku) ?? 0) + it.qty)
++    }
++    for (const [sku, qty] of wanted) {
++      const line = order.lines.find((l) => l.sku === sku)
++      if (!line) fail('BAD_QTY', `주문에 없는 상품: ${sku}`)
++      if (qty > line.qty - line.cancelledQty) fail('BAD_QTY', `남은 수량보다 많습니다: ${sku}`)
++    }
++    const left = order.lines.reduce((sum, l) => sum + l.qty - l.cancelledQty, 0)
++    const cancelling = [...wanted.values()].reduce((sum, q) => sum + q, 0)
++    if (cancelling === left) return cancelOrder(orderId, { reason })
++
++    const lines = []
++    for (const [sku, qty] of wanted) {
++      const line = order.lines.find((l) => l.sku === sku)
++      line.cancelledQty += qty
++      catalog.release(sku, qty)
++      lines.push({ sku, qty, amount: line.price * qty })
++    }
++    const amount = lines.reduce((sum, l) => sum + l.amount, 0)
++    let refund = 0
++    if (order.status === 'paid') {
++      refund = amount - discountShare(order, amount)
++      if (refund > 0) payments.refund(order.paymentRef, refund)
++      order.refunded += refund
++    }
++    order.history.push({ status: order.status, at: clock.now().toISOString(), reason, cancelled: lines })
++    bus.emit('order.lines_cancelled', { order: snapshot(order), lines, refund, reason })
++    return { order: snapshot(order), refund }
++  }
++
+   function getOrder(orderId) {
+     return snapshot(load(orderId))
+   }
+@@ -145,5 +190,5 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+       .map(snapshot)
+   }
+ 
+-  return { placeOrder, pay, ship, deliver, cancelOrder, getOrder, findByNumber, listOrders }
++  return { placeOrder, pay, ship, deliver, cancelOrder, cancelLines, getOrder, findByNumber, listOrders }
+ }
+diff --git a/src/orders/pricing.js b/src/orders/pricing.js
+index 0d23832..bd70618 100644
+--- a/src/orders/pricing.js
++++ b/src/orders/pricing.js
+@@ -26,6 +26,15 @@ export function lineAmount(line) {
+   return line.price * line.qty
+ }
+ 
++/**
++ * 일부 취소한 상품 금액(amount)에 돌아갈 쿠폰 할인의 몫. 할인을 상품 금액 비율로 나누고 원 미만은 버린다.
++ * 환불은 amount − 이 몫이다.
++ */
++export function discountShare({ discount, itemsTotal }, amount) {
++  if (!discount || itemsTotal <= 0) return 0
++  return Math.floor((discount * amount) / itemsTotal)
++}
++
+ /**
+  * 배송비. 무료 배송 기준 이상이면 기본 배송비가 없다. 제주·도서산간 추가 배송비와 무거운 짐 추가는 무료 배송이어도 붙는다.
+  * @param {{ itemsTotal: number, discount: number, region: string, lines: object[] }} o
+diff --git a/test/orders.test.js b/test/orders.test.js
+index c3b4ccd..2a03d1f 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -102,3 +102,16 @@ test('고객별, 상태별 주문 목록', () => {
+   assert.equal(shop.orders.listOrders({ customerId: 'u-1' }).length, 2)
+   assert.deepEqual(shop.orders.listOrders({ status: 'paid' }).map((o) => o.number), ['A-1001', 'A-1003'])
+ })
++
++test('일부 취소: 쿠폰 몫을 빼고 환불, 배송비는 그대로', () => {
++  const shop = setup()
++  const paid = placePaid(shop, 'u-1', [['MUG', 1], ['TEA', 1]], { coupon: 'WELCOME' })
++  const { refund, order } = shop.orders.cancelLines(paid.id, [{ sku: 'MUG', qty: 1 }])
++  // 3,000 × 12,000 / 42,000 = 857.1 → 857
++  assert.equal(refund, 11143)
++  assert.equal(order.status, 'paid')
++  assert.equal(shop.catalog.get('MUG').stock, 20)
++  assert.throws(() => shop.orders.cancelLines(paid.id, [{ sku: 'MUG', qty: 1 }]), errorCode('BAD_QTY'))
++  assert.equal(shop.orders.cancelLines(paid.id, [{ sku: 'TEA', qty: 1 }]).order.status, 'cancelled')
++  assert.equal(shop.orders.getOrder(paid.id).refunded, paid.total)
++})

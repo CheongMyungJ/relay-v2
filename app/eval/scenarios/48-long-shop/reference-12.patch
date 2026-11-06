@@ -1,0 +1,69 @@
+diff --git a/src/notifications/notifier.js b/src/notifications/notifier.js
+index 3609608..e6b7255 100644
+--- a/src/notifications/notifier.js
++++ b/src/notifications/notifier.js
+@@ -1,5 +1,5 @@
+ // 알림 보내기. 이벤트를 듣고 고객의 언어로 문구를 만들어 메일과 문자로 보낸다.
+-// 방해 금지 시간에는 문자를 보내지 않는다. 돈 알림(환불, 송장)은 메일만 보내고 문자는 건너뛴다. 그 밖의 문자는 미뤄
++// 방해 금지 시간에는 문자를 보내지 않는다. 돈 알림(환불, 결제 실패, 송장)은 메일만 보내고 문자는 건너뛴다. 그 밖의 문자는 미뤄
+ // 두었다가 flush()에서 보낸다. 받지 않기로 한 채널은 건너뛴다.
+ import { render } from './templates.js'
+ import { isQuiet, quietEnds } from './quiet-hours.js'
+@@ -27,6 +27,9 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+     const names = lines.map((l) => order.lines.find((x) => x.sku === l.sku)?.name ?? l.sku).join(', ')
+     notify(order.customerId, 'order.partially_cancelled', { number: order.number, names, refund }, { money: true })
+   })
++  bus.on('payment.failed', ({ order }) =>
++    notify(order.customerId, 'payment.failed', { number: order.number, total: order.total }, { money: true }),
++  )
+   bus.on('invoice.issued', ({ invoice }) => {
+     // 카드 결제 주문의 송장은 결제 완료 메일로 갈음한다. 후불 송장만 보낸다
+     if (invoice.orderId) return
+@@ -47,7 +50,7 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+   )
+ 
+   /**
+-   * 고객 하나에게 알림을 보낸다. money는 돈 알림(환불, 송장)이라 방해 금지 시간에는 문자를 건너뛴다(미루지 않는다).
++   * 고객 하나에게 알림을 보낸다. money는 돈 알림(환불, 결제 실패, 송장)이라 방해 금지 시간에는 문자를 건너뛴다(미루지 않는다).
+    * @returns {{ channel: string, status: 'sent' | 'deferred' | 'skipped', reason?: string }[]}
+    */
+   function notify(customerId, type, data, { marketing = false, money = false } = {}) {
+diff --git a/src/notifications/templates.js b/src/notifications/templates.js
+index 8eb4773..cbed79d 100644
+--- a/src/notifications/templates.js
++++ b/src/notifications/templates.js
+@@ -56,6 +56,18 @@ const TEMPLATES = {
+       sms: (d) => `[Shop] Order ${d.number} partly cancelled, refund ${krw(d.refund)}`,
+     },
+   },
++  'payment.failed': {
++    ko: {
++      subject: (d) => `주문 ${d.number} 결제가 되지 않았어요`,
++      body: (d) => `주문 ${d.number}의 결제(${won(d.total)})가 되지 않았어요.\n결제 수단을 확인해 주세요.`,
++      sms: (d) => `[샵] 주문 ${d.number} 결제 실패(${won(d.total)}). 결제 수단을 확인해 주세요`,
++    },
++    en: {
++      subject: (d) => `Payment for order ${d.number} failed`,
++      body: (d) => `We could not charge ${krw(d.total)} for your order ${d.number}.\nPlease check your payment method.`,
++      sms: (d) => `[Shop] Payment failed for order ${d.number} (${krw(d.total)}). Please check your card`,
++    },
++  },
+   'invoice.issued': {
+     ko: {
+       subject: (d) => `송장 ${d.invoiceNumber}`,
+diff --git a/test/notifier.test.js b/test/notifier.test.js
+index 8848761..31bdf3e 100644
+--- a/test/notifier.test.js
++++ b/test/notifier.test.js
+@@ -127,3 +127,11 @@ test('영어 알림의 금액은 KRW', () => {
+   assert.match(shop.channels.email.sent[0].body, /Amount due: KRW 15,000/)
+   assert.equal(shop.channels.sms.sent[0].body, '[Shop] Order A-1001 received, KRW 15,000')
+ })
++
++test('결제 실패 알림', () => {
++  const shop = setup('2026-03-02T05:00:00Z')
++  const order = shop.orders.placeOrder({ customerId: 'u-1', cart: cartOf(shop, [['MUG', 1]]) })
++  assert.throws(() => shop.orders.pay(order.id, { cardToken: 'tok-declined' }))
++  assert.equal(shop.channels.sms.sent.at(-1).body, '[샵] 주문 A-1001 결제 실패(15,000원). 결제 수단을 확인해 주세요')
++  assert.equal(shop.channels.email.sent.at(-1).subject, '주문 A-1001 결제가 되지 않았어요')
++})

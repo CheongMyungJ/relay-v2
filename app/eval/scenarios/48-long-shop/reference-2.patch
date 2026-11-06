@@ -1,0 +1,45 @@
+diff --git a/src/billing/invoices.js b/src/billing/invoices.js
+index 87b1faf..54347a3 100644
+--- a/src/billing/invoices.js
++++ b/src/billing/invoices.js
+@@ -68,10 +68,19 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+ 
+   // ── 번호 ────────────────────────────────────────────────────────────────
+ 
+-  function nextInvoiceNumber() {
++  // 번호는 해마다 00001부터 센다. 무효로 한 송장의 번호도 다시 쓰지 않는다(지금까지 낸 수를 따로 둔다)
++  if (!store.sequences) store.sequences = new Map()
++
++  function nextNumber(prefix) {
+     const year = clock.now().getUTCFullYear()
+-    const n = store.invoices.length + 1
+-    return `INV-${year}-${String(n).padStart(5, '0')}`
++    const key = `${prefix}-${year}`
++    const n = (store.sequences.get(key) ?? 0) + 1
++    store.sequences.set(key, n)
++    return `${key}-${String(n).padStart(5, '0')}`
++  }
++
++  function nextInvoiceNumber() {
++    return nextNumber('INV')
+   }
+ 
+   function nextCreditNumber() {
+diff --git a/test/billing.test.js b/test/billing.test.js
+index 6696267..afef195 100644
+--- a/test/billing.test.js
++++ b/test/billing.test.js
+@@ -195,3 +195,13 @@ test('주문 송장은 고칠 수 없고, 전표는 송장 금액을 넘지 못
+   assert.throws(() => shop.billing.adjustInvoice(invoice.id, { lines: [{ name: 'x', amount: 1 }] }), errorCode('ORDER_INVOICE'))
+   assert.throws(() => shop.billing.issueCreditNote({ invoiceId: invoice.id, amount: 15001, reason: 'x' }), errorCode('BAD_AMOUNT'))
+ })
++
++test('무효로 한 송장 번호는 다시 쓰지 않고, 해마다 다시 센다', () => {
++  const shop = setup()
++  const a = manual(shop)
++  manual(shop)
++  shop.billing.voidInvoice(a.id, '중복')
++  assert.equal(manual(shop).number, 'INV-2026-00003')
++  shop.clock.set('2027-01-04T01:00:00Z')
++  assert.equal(manual(shop).number, 'INV-2027-00001')
++})

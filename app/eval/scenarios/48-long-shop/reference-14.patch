@@ -1,0 +1,201 @@
+diff --git a/src/orders/orders.js b/src/orders/orders.js
+index 2634c6e..9607bf9 100644
+--- a/src/orders/orders.js
++++ b/src/orders/orders.js
+@@ -1,10 +1,12 @@
+ // 주문의 생애: 접수(placed) → 결제(paid) → 배송(shipped) → 배송 완료(delivered). 접수나 결제 뒤에는 취소(cancelled)할 수 있다.
++// 허용하는 상태 바꾸기는 status.js의 표다. 그 밖은 BAD_STATUS.
+ // 이벤트: order.placed, order.paid, payment.failed, order.shipped, order.delivered, order.cancelled, order.lines_cancelled
+ import { maskPhone } from '../customers/customers.js'
+ import { fail } from '../shared/errors.js'
+ import { createCart } from './cart.js'
+ import { estimateDelivery } from './delivery.js'
+ import { discountShare, formatWon, quote } from './pricing.js'
++import { assertTransition } from './status.js'
+ 
+ const STATUS_LABEL = { placed: '접수', paid: '결제 완료', shipped: '배송 중', delivered: '배송 완료', cancelled: '취소' }
+ 
+@@ -19,6 +21,13 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+     return order
+   }
+ 
++  /** 상태를 바꾸고 이력에 남긴다. 허용하지 않는 바꾸기는 BAD_STATUS(status.js) */
++  function moveTo(order, to, extra = {}) {
++    assertTransition(order, to)
++    order.status = to
++    order.history.push({ status: to, at: clock.now().toISOString(), ...extra })
++  }
++
+   /**
+    * 장바구니로 주문을 받는다. 재고를 잡고 금액을 정한다(결제는 pay로 따로).
+    * @param {{ customerId: string, cart: ReturnType<import('./cart.js').createCart>, couponCode?: string }} o
+@@ -74,6 +83,7 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+   /** 카드로 결제한다. 실패하면 payment.failed를 내고 PAYMENT_FAILED 오류 */
+   function pay(orderId, { cardToken } = {}) {
+     const order = load(orderId)
++    assertTransition(order, 'paid')
+     const r = payments.charge({ amount: order.total, cardToken, reference: order.number })
+     if (!r.ok) {
+       bus.emit('payment.failed', { order: snapshot(order), reason: r.reason })
+@@ -82,27 +92,22 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+     order.paymentRef = r.ref
+     order.paidAmount = order.total
+     order.eta = estimateDelivery(customers.get(order.customerId).region, clock.now())
+-    order.status = 'paid'
+-    order.history.push({ status: 'paid', at: clock.now().toISOString() })
++    moveTo(order, 'paid')
+     bus.emit('order.paid', { order: snapshot(order) })
+     return snapshot(order)
+   }
+ 
+   function ship(orderId, { carrier = 'cj', trackingNo = null } = {}) {
+     const order = load(orderId)
+-    if (order.status !== 'paid') fail('NOT_PAID', `결제되지 않은 주문은 보낼 수 없습니다: ${order.number}`)
+-    order.status = 'shipped'
++    moveTo(order, 'shipped')
+     order.shipment = { carrier, trackingNo, shippedAt: clock.now().toISOString() }
+-    order.history.push({ status: 'shipped', at: order.shipment.shippedAt })
+     bus.emit('order.shipped', { order: snapshot(order) })
+     return snapshot(order)
+   }
+ 
+   function deliver(orderId) {
+     const order = load(orderId)
+-    if (order.status !== 'shipped') fail('NOT_SHIPPED', `배송 중이 아닌 주문: ${order.number}`)
+-    order.status = 'delivered'
+-    order.history.push({ status: 'delivered', at: clock.now().toISOString() })
++    moveTo(order, 'delivered')
+     bus.emit('order.delivered', { order: snapshot(order) })
+     return snapshot(order)
+   }
+@@ -113,9 +118,7 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+    */
+   function cancelOrder(orderId, { reason = 'customer' } = {}) {
+     const order = load(orderId)
+-    if (order.status !== 'placed' && order.status !== 'paid') {
+-      fail('CANNOT_CANCEL', `취소할 수 없는 주문: ${order.number} (${order.status})`)
+-    }
++    assertTransition(order, 'cancelled')
+     for (const line of order.lines) {
+       const left = line.qty - line.cancelledQty
+       if (left > 0) catalog.release(line.sku, left)
+@@ -127,8 +130,7 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+       if (refund > 0) payments.refund(order.paymentRef, refund)
+       order.refunded += refund
+     }
+-    order.status = 'cancelled'
+-    order.history.push({ status: 'cancelled', at: clock.now().toISOString(), reason })
++    moveTo(order, 'cancelled', { reason })
+     bus.emit('order.cancelled', { order: snapshot(order), refund, reason })
+     return { order: snapshot(order), refund }
+   }
+@@ -141,9 +143,8 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+    */
+   function cancelLines(orderId, items, { reason = 'customer' } = {}) {
+     const order = load(orderId)
+-    if (order.status !== 'placed' && order.status !== 'paid') {
+-      fail('CANNOT_CANCEL', `취소할 수 없는 주문: ${order.number} (${order.status})`)
+-    }
++    // 일부 취소는 주문을 취소할 수 있을 때만(상태는 그대로 둔다)
++    assertTransition(order, 'cancelled')
+     if (!Array.isArray(items) || items.length === 0) fail('BAD_QTY', '취소할 상품이 없습니다')
+     const wanted = new Map()
+     for (const it of items) {
+diff --git a/src/orders/status.js b/src/orders/status.js
+new file mode 100644
+index 0000000..3bcb179
+--- /dev/null
++++ b/src/orders/status.js
+@@ -0,0 +1,26 @@
++// 주문 상태와 허용하는 바꾸기. 주문의 상태는 이 표를 거쳐서만 바뀐다(orders.js의 moveTo).
++import { fail } from '../shared/errors.js'
++
++export const STATUSES = ['placed', 'paid', 'shipped', 'delivered', 'cancelled']
++
++const NEXT = {
++  placed: ['paid', 'cancelled'],
++  paid: ['shipped', 'cancelled'],
++  shipped: ['delivered'],
++  delivered: [],
++  cancelled: [],
++}
++
++export function canTransition(from, to) {
++  return (NEXT[from] ?? []).includes(to)
++}
++
++/** 바꿀 수 없으면 BAD_STATUS */
++export function assertTransition(order, to) {
++  if (!canTransition(order.status, to)) {
++    fail('BAD_STATUS', `주문 ${order.number}: ${order.status}에서 ${to}(으)로 바꿀 수 없습니다`, {
++      from: order.status,
++      to,
++    })
++  }
++}
+diff --git a/test/flow.test.js b/test/flow.test.js
+index f9583f6..c446eff 100644
+--- a/test/flow.test.js
++++ b/test/flow.test.js
+@@ -20,7 +20,7 @@ test('주문에서 배송 완료까지', () => {
+   assert.equal(shop.points.balance('u-1'), 510)
+ 
+   shop.orders.ship(paid.id, { carrier: 'hanjin', trackingNo: '77' })
+-  assert.throws(() => shop.orders.cancelOrder(paid.id), errorCode('CANNOT_CANCEL'))
++  assert.throws(() => shop.orders.cancelOrder(paid.id), errorCode('BAD_STATUS'))
+   shop.orders.deliver(paid.id)
+ 
+   const types = shop.notifier.log({ customerId: 'u-1' }).map((n) => n.type)
+diff --git a/test/orders.test.js b/test/orders.test.js
+index e6e90cd..806cfea 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -64,8 +64,8 @@ test('결제 실패', () => {
+ test('결제하지 않은 주문은 보낼 수 없다', () => {
+   const shop = setup()
+   const order = shop.orders.placeOrder({ customerId: 'u-1', cart: cartOf(shop, [['MUG', 1]]) })
+-  assert.throws(() => shop.orders.ship(order.id), errorCode('NOT_PAID'))
+-  assert.throws(() => shop.orders.deliver(order.id), errorCode('NOT_SHIPPED'))
++  assert.throws(() => shop.orders.ship(order.id), errorCode('BAD_STATUS'))
++  assert.throws(() => shop.orders.deliver(order.id), errorCode('BAD_STATUS'))
+ })
+ 
+ test('결제한 주문을 취소하면 모두 환불하고 재고를 푼다', () => {
+@@ -89,7 +89,7 @@ test('보낸 주문은 취소할 수 없다', () => {
+   const shop = setup()
+   const paid = placePaid(shop, 'u-1', [['MUG', 1]])
+   shop.orders.ship(paid.id)
+-  assert.throws(() => shop.orders.cancelOrder(paid.id), errorCode('CANNOT_CANCEL'))
++  assert.throws(() => shop.orders.cancelOrder(paid.id), errorCode('BAD_STATUS'))
+ })
+ 
+ test('고객별, 상태별 주문 목록', () => {
+@@ -137,3 +137,11 @@ test('상담 요약', () => {
+   const other = shop.orders.placeOrder({ customerId: 'u-3', cart: cartOf(shop, [['BAG', 1]]) })
+   assert.equal(shop.orders.supportSummary(other.id).split('\n')[1], '고객 고한라 · 연락처 없음')
+ })
++
++test('취소한 주문은 결제할 수 없다', () => {
++  const shop = setup()
++  const order = shop.orders.placeOrder({ customerId: 'u-1', cart: cartOf(shop, [['MUG', 1]]) })
++  shop.orders.cancelOrder(order.id)
++  assert.throws(() => shop.orders.pay(order.id, { cardToken: 'tok-visa' }), errorCode('BAD_STATUS'))
++  assert.equal(shop.payments.listFor(order.number).length, 0)
++})
+diff --git a/test/status.test.js b/test/status.test.js
+new file mode 100644
+index 0000000..5fc3a21
+--- /dev/null
++++ b/test/status.test.js
+@@ -0,0 +1,11 @@
++import assert from 'node:assert/strict'
++import { test } from 'node:test'
++import { canTransition } from '../src/orders/status.js'
++
++test('주문 상태 바꾸기 표', () => {
++  assert.equal(canTransition('placed', 'paid'), true)
++  assert.equal(canTransition('paid', 'cancelled'), true)
++  assert.equal(canTransition('shipped', 'cancelled'), false)
++  assert.equal(canTransition('cancelled', 'paid'), false)
++  assert.equal(canTransition('delivered', 'shipped'), false)
++})

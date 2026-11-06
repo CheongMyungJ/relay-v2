@@ -1,0 +1,61 @@
+diff --git a/src/orders/pricing.js b/src/orders/pricing.js
+index bd70618..4ae6a1f 100644
+--- a/src/orders/pricing.js
++++ b/src/orders/pricing.js
+@@ -36,19 +36,15 @@ export function discountShare({ discount, itemsTotal }, amount) {
+ }
+ 
+ /**
+- * 배송비. 무료 배송 기준 이상이면 기본 배송비가 없다. 제주·도서산간 추가 배송비와 무거운 짐 추가는 무료 배송이어도 붙는다.
+- * @param {{ itemsTotal: number, discount: number, region: string, lines: object[] }} o
++ * 배송비. 무료 배송 기준은 쿠폰을 빼기 전 상품 금액(itemsTotal)으로 본다. 제주·도서산간 추가 배송비(주문에 한 번)와
++ * 무거운 짐 추가는 무료 배송이어도 붙는다.
++ * @param {{ itemsTotal: number, region: string, lines: object[] }} o
+  */
+-export function shippingFee({ itemsTotal, discount = 0, region, lines }) {
++export function shippingFee({ itemsTotal, region, lines }) {
+   if (lines.length === 0) return 0
+-  const basis = itemsTotal - discount
+-  let fee = basis >= SHIPPING.freeOver ? 0 : SHIPPING.baseFee
+-  let weight = 0
+-  for (const line of lines) {
+-    weight += (line.weightG ?? 0) * line.qty
+-    const extra = SHIPPING.surcharge[region]
+-    if (extra) fee += extra
+-  }
++  let fee = itemsTotal >= SHIPPING.freeOver ? 0 : SHIPPING.baseFee
++  fee += SHIPPING.surcharge[region] ?? 0
++  const weight = lines.reduce((sum, line) => sum + (line.weightG ?? 0) * line.qty, 0)
+   if (weight > SHIPPING.heavyOverG) fee += SHIPPING.heavyFee
+   return fee
+ }
+@@ -74,7 +70,7 @@ export function quote(lines, { coupon = null, region = 'seoul' } = {}) {
+   })
+   const itemsTotal = priced.reduce((sum, l) => sum + l.amount, 0)
+   const discount = coupon ? Math.min(coupon.discount, itemsTotal) : 0
+-  const shipping = shippingFee({ itemsTotal, discount, region, lines: priced })
++  const shipping = shippingFee({ itemsTotal, region, lines: priced })
+   const total = itemsTotal - discount + shipping
+   const vat = priced.reduce((sum, l) => sum + l.vat, 0) + vatOf(shipping, 'standard')
+   return { lines: priced, itemsTotal, discount, couponCode: coupon?.code ?? null, shipping, total, vat }
+diff --git a/test/pricing.test.js b/test/pricing.test.js
+index 7737b89..21b9d91 100644
+--- a/test/pricing.test.js
++++ b/test/pricing.test.js
+@@ -61,3 +61,16 @@ test('금액 요약 글', () => {
+     ].join('\n'),
+   )
+ })
++
++test('무료 배송 기준은 쿠폰 전 금액, 추가 배송비는 주문에 한 번', () => {
++  const lines = [
++    { sku: 'A', price: 30000, qty: 1, weightG: 100 },
++    { sku: 'B', price: 22000, qty: 1, weightG: 100 },
++  ]
++  assert.equal(shippingFee({ itemsTotal: 52000, region: 'seoul', lines }), 0)
++  assert.equal(shippingFee({ itemsTotal: 52000, region: 'jeju', lines }), 3000)
++  assert.equal(shippingFee({ itemsTotal: 40000, region: 'jeju', lines }), 6000)
++  const q = quote(lines.map((l) => ({ ...l, name: l.sku })), { coupon: { code: 'C', discount: 5000 } })
++  assert.equal(q.shipping, 0)
++  assert.equal(q.total, 47000)
++})

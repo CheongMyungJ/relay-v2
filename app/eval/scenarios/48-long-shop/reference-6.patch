@@ -1,0 +1,83 @@
+diff --git a/src/notifications/templates.js b/src/notifications/templates.js
+index 413d6ab..8eb4773 100644
+--- a/src/notifications/templates.js
++++ b/src/notifications/templates.js
+@@ -2,6 +2,8 @@
+ import { kstDate } from '../shared/time.js'
+ 
+ const won = (n) => `${n.toLocaleString('ko-KR')}원`
++// 영어 알림의 금액: KRW 12,300
++const krw = (n) => `KRW ${n.toLocaleString('en-US')}`
+ 
+ const STATUS_KO = { placed: '접수', paid: '결제 완료', shipped: '배송 중', delivered: '배송 완료', cancelled: '취소' }
+ 
+@@ -14,8 +16,8 @@ const TEMPLATES = {
+     },
+     en: {
+       subject: (d) => `Order ${d.number} received`,
+-      body: (d) => `We received your order ${d.number}.\nAmount due: ${won(d.total)}\nItems: ${d.itemCount}`,
+-      sms: (d) => `[Shop] Order ${d.number} received, ${won(d.total)}`,
++      body: (d) => `We received your order ${d.number}.\nAmount due: ${krw(d.total)}\nItems: ${d.itemCount}`,
++      sms: (d) => `[Shop] Order ${d.number} received, ${krw(d.total)}`,
+     },
+   },
+   'order.shipped': {
+@@ -38,8 +40,8 @@ const TEMPLATES = {
+     },
+     en: {
+       subject: (d) => `Order ${d.number} cancelled`,
+-      body: (d) => `Your order ${d.number} has been cancelled.${d.refund > 0 ? `\nRefund: ${won(d.refund)}` : ''}`,
+-      sms: (d) => `[Shop] Order ${d.number} cancelled${d.refund > 0 ? `, refund ${won(d.refund)}` : ''}`,
++      body: (d) => `Your order ${d.number} has been cancelled.${d.refund > 0 ? `\nRefund: ${krw(d.refund)}` : ''}`,
++      sms: (d) => `[Shop] Order ${d.number} cancelled${d.refund > 0 ? `, refund ${krw(d.refund)}` : ''}`,
+     },
+   },
+   'order.partially_cancelled': {
+@@ -50,8 +52,8 @@ const TEMPLATES = {
+     },
+     en: {
+       subject: (d) => `Part of order ${d.number} cancelled`,
+-      body: (d) => `${d.names} in your order ${d.number} has been cancelled.\nRefund: ${won(d.refund)}`,
+-      sms: (d) => `[Shop] Order ${d.number} partly cancelled, refund ${won(d.refund)}`,
++      body: (d) => `${d.names} in your order ${d.number} has been cancelled.\nRefund: ${krw(d.refund)}`,
++      sms: (d) => `[Shop] Order ${d.number} partly cancelled, refund ${krw(d.refund)}`,
+     },
+   },
+   'invoice.issued': {
+@@ -62,8 +64,8 @@ const TEMPLATES = {
+     },
+     en: {
+       subject: (d) => `Invoice ${d.invoiceNumber}`,
+-      body: (d) => `Here is your invoice ${d.invoiceNumber}.\nAmount: ${won(d.total)}\nDue: ${kstDate(d.dueAt)}`,
+-      sms: (d) => `[Shop] Invoice ${d.invoiceNumber} ${won(d.total)}, due ${kstDate(d.dueAt)}`,
++      body: (d) => `Here is your invoice ${d.invoiceNumber}.\nAmount: ${krw(d.total)}\nDue: ${kstDate(d.dueAt)}`,
++      sms: (d) => `[Shop] Invoice ${d.invoiceNumber} ${krw(d.total)}, due ${kstDate(d.dueAt)}`,
+     },
+   },
+   'invoice.reminder': {
+@@ -74,8 +76,8 @@ const TEMPLATES = {
+     },
+     en: {
+       subject: (d) => `Invoice ${d.invoiceNumber} is overdue`,
+-      body: (d) => `Invoice ${d.invoiceNumber} is ${d.step} days overdue.\nBalance: ${won(d.balance)}`,
+-      sms: (d) => `[Shop] Invoice ${d.invoiceNumber} overdue ${won(d.balance)}`,
++      body: (d) => `Invoice ${d.invoiceNumber} is ${d.step} days overdue.\nBalance: ${krw(d.balance)}`,
++      sms: (d) => `[Shop] Invoice ${d.invoiceNumber} overdue ${krw(d.balance)}`,
+     },
+   },
+   promo: {
+diff --git a/test/notifier.test.js b/test/notifier.test.js
+index 2705fe7..d666ff1 100644
+--- a/test/notifier.test.js
++++ b/test/notifier.test.js
+@@ -109,3 +109,10 @@ test('환불 알림은 금액을 알리고 방해 금지 시간에도 바로 간
+   assert.match(shop.channels.email.sent.at(-1).body, /환불 금액: 33,000원/)
+   assert.deepEqual(shop.notifier.pending().map((m) => m.type), ['order.placed'])
+ })
++
++test('영어 알림의 금액은 KRW', () => {
++  const shop = setup('2026-03-02T05:00:00Z')
++  shop.orders.placeOrder({ customerId: 'u-2', cart: cartOf(shop, [['MUG', 1]]) })
++  assert.match(shop.channels.email.sent[0].body, /Amount due: KRW 15,000/)
++  assert.equal(shop.channels.sms.sent[0].body, '[Shop] Order A-1001 received, KRW 15,000')
++})

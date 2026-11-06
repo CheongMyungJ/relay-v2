@@ -1,0 +1,80 @@
+diff --git a/src/orders/orders.js b/src/orders/orders.js
+index c40913d..cd37a88 100644
+--- a/src/orders/orders.js
++++ b/src/orders/orders.js
+@@ -1,9 +1,12 @@
+ // 주문의 생애: 접수(placed) → 결제(paid) → 배송(shipped) → 배송 완료(delivered). 접수나 결제 뒤에는 취소(cancelled)할 수 있다.
+ // 이벤트: order.placed, order.paid, payment.failed, order.shipped, order.delivered, order.cancelled, order.lines_cancelled
++import { maskPhone } from '../customers/customers.js'
+ import { fail } from '../shared/errors.js'
+ import { createCart } from './cart.js'
+ import { estimateDelivery } from './delivery.js'
+-import { discountShare, quote } from './pricing.js'
++import { discountShare, formatWon, quote } from './pricing.js'
++
++const STATUS_LABEL = { placed: '접수', paid: '결제 완료', shipped: '배송 중', delivered: '배송 완료', cancelled: '취소' }
+ 
+ export function createOrders({ store, catalog, coupons, customers, payments, bus, clock, ids }) {
+   let number = 1000
+@@ -199,6 +202,22 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+     return { cart, skipped }
+   }
+ 
++  /** 상담원이 보는 주문 요약. 전화번호는 가린다 */
++  function supportSummary(orderId) {
++    const order = load(orderId)
++    const customer = customers.get(order.customerId)
++    const amounts = [`상품 ${formatWon(order.itemsTotal)}`]
++    if (order.discount > 0) amounts.push(`할인 ${formatWon(-order.discount)}`)
++    amounts.push(`배송비 ${formatWon(order.shipping)}`, `합계 ${formatWon(order.total)}`)
++    const rows = [
++      `주문 ${order.number} · ${STATUS_LABEL[order.status] ?? order.status}`,
++      `고객 ${customer.name} · ${customer.phone ? maskPhone(customer.phone) : '연락처 없음'}`,
++      amounts.join(' · '),
++    ]
++    if (order.refunded > 0) rows.push(`환불 ${formatWon(order.refunded)}`)
++    return rows.join('\n')
++  }
++
+   function getOrder(orderId) {
+     return snapshot(load(orderId))
+   }
+@@ -215,5 +234,17 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+       .map(snapshot)
+   }
+ 
+-  return { placeOrder, pay, ship, deliver, cancelOrder, cancelLines, reorder, getOrder, findByNumber, listOrders }
++  return {
++    placeOrder,
++    pay,
++    ship,
++    deliver,
++    cancelOrder,
++    cancelLines,
++    reorder,
++    supportSummary,
++    getOrder,
++    findByNumber,
++    listOrders,
++  }
+ }
+diff --git a/test/orders.test.js b/test/orders.test.js
+index 3369020..e6e90cd 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -125,3 +125,15 @@ test('다시 담기: 지금 가격, 판매 중지와 재고 부족은 skipped',
+   assert.deepEqual(cart.lines().map((l) => [l.sku, l.qty, l.price]), [['MUG', 1, 11000]])
+   assert.deepEqual(skipped.map((x) => [x.sku, x.reason]), [['TEA', 'discontinued'], ['BAG', 'out_of_stock']])
+ })
++
++test('상담 요약', () => {
++  const shop = setup()
++  const paid = placePaid(shop, 'u-1', [['MUG', 1], ['TEA', 1]], { coupon: 'WELCOME' })
++  shop.orders.cancelLines(paid.id, [{ sku: 'MUG', qty: 1 }])
++  assert.equal(
++    shop.orders.supportSummary(paid.id),
++    ['주문 A-1001 · 결제 완료', '고객 최유나 · 010-****-3333', '상품 42,000원 · 할인 -3,000원 · 배송비 3,000원 · 합계 42,000원', '환불 11,143원'].join('\n'),
++  )
++  const other = shop.orders.placeOrder({ customerId: 'u-3', cart: cartOf(shop, [['BAG', 1]]) })
++  assert.equal(shop.orders.supportSummary(other.id).split('\n')[1], '고객 고한라 · 연락처 없음')
++})

@@ -1,0 +1,68 @@
+diff --git a/src/orders/orders.js b/src/orders/orders.js
+index 279d12d..c40913d 100644
+--- a/src/orders/orders.js
++++ b/src/orders/orders.js
+@@ -1,6 +1,7 @@
+ // 주문의 생애: 접수(placed) → 결제(paid) → 배송(shipped) → 배송 완료(delivered). 접수나 결제 뒤에는 취소(cancelled)할 수 있다.
+ // 이벤트: order.placed, order.paid, payment.failed, order.shipped, order.delivered, order.cancelled, order.lines_cancelled
+ import { fail } from '../shared/errors.js'
++import { createCart } from './cart.js'
+ import { estimateDelivery } from './delivery.js'
+ import { discountShare, quote } from './pricing.js'
+ 
+@@ -174,6 +175,30 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+     return { order: snapshot(order), refund }
+   }
+ 
++  /**
++   * 예전 주문을 지금 가격으로 장바구니에 다시 담는다. 취소한 수량은 빼고, 판매 중지된 상품은 빼고, 재고가 모자라면 있는
++   * 만큼만 담는다. 뺐거나 덜 담은 상품은 skipped에 까닭과 함께 둔다. 재고는 잡지 않는다(주문할 때 잡는다).
++   * @returns {{ cart: ReturnType<typeof createCart>, skipped: { sku: string, reason: string, wanted: number, added: number }[] }}
++   */
++  function reorder(orderId) {
++    const order = load(orderId)
++    const cart = createCart(catalog)
++    const skipped = []
++    for (const line of order.lines) {
++      const wanted = line.qty - line.cancelledQty
++      if (wanted <= 0) continue
++      const p = catalog.find(line.sku)
++      if (!p || !p.active) {
++        skipped.push({ sku: line.sku, reason: 'discontinued', wanted, added: 0 })
++        continue
++      }
++      const added = Math.min(wanted, p.stock)
++      if (added > 0) cart.add(line.sku, added)
++      if (added < wanted) skipped.push({ sku: line.sku, reason: added === 0 ? 'out_of_stock' : 'short', wanted, added })
++    }
++    return { cart, skipped }
++  }
++
+   function getOrder(orderId) {
+     return snapshot(load(orderId))
+   }
+@@ -190,5 +215,5 @@ export function createOrders({ store, catalog, coupons, customers, payments, bus
+       .map(snapshot)
+   }
+ 
+-  return { placeOrder, pay, ship, deliver, cancelOrder, cancelLines, getOrder, findByNumber, listOrders }
++  return { placeOrder, pay, ship, deliver, cancelOrder, cancelLines, reorder, getOrder, findByNumber, listOrders }
+ }
+diff --git a/test/orders.test.js b/test/orders.test.js
+index 2a03d1f..3369020 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -115,3 +115,13 @@ test('일부 취소: 쿠폰 몫을 빼고 환불, 배송비는 그대로', () =>
+   assert.equal(shop.orders.cancelLines(paid.id, [{ sku: 'TEA', qty: 1 }]).order.status, 'cancelled')
+   assert.equal(shop.orders.getOrder(paid.id).refunded, paid.total)
+ })
++
++test('다시 담기: 지금 가격, 판매 중지와 재고 부족은 skipped', () => {
++  const shop = setup()
++  const paid = placePaid(shop, 'u-1', [['MUG', 1], ['TEA', 1], ['BAG', 3]])
++  shop.catalog.setPrice('MUG', 11000)
++  shop.catalog.discontinue('TEA')
++  const { cart, skipped } = shop.orders.reorder(paid.id)
++  assert.deepEqual(cart.lines().map((l) => [l.sku, l.qty, l.price]), [['MUG', 1, 11000]])
++  assert.deepEqual(skipped.map((x) => [x.sku, x.reason]), [['TEA', 'discontinued'], ['BAG', 'out_of_stock']])
++})

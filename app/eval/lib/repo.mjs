@@ -114,6 +114,11 @@ export function codeOutcome(outcome) {
  */
 const RELAY3_EXAMPLES = /^\.relay\/examples\/[^/]+\.json$/
 
+/** 파일 경로가 glob 가운데 하나에 맞나(expectedFiles와 같은 문법) */
+export function matchesAny(file, globs = []) {
+  return globs.some((g) => globToRe(g).test(file))
+}
+
 /** 기대 파일(시나리오의 expectedFiles glob)에 들지 않는 바뀐 파일. relay-v3의 예시 자료는 기대 파일로 본다 */
 export function unrelatedFiles(files, expectedFiles = []) {
   const allowed = expectedFiles.map(globToRe)

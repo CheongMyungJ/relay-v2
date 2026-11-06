@@ -29,9 +29,9 @@
 | `eval/setup.sh` | 의존성(Electron 실행 파일 포함), 빌드, 가상 화면, 깨끗한 환경의 claude 호출 점검 |
 | `eval/run.mjs` | 시나리오 × 쪽 × 회차를 돌리고 판정과 보고서까지 만든다 |
 | `eval/report.mjs` | 결과 폴더에서 보고서를 다시 만든다. `--rejudge`는 짝 판정을 다시 한다 |
-| `eval/check-scenario.mjs` | 시나리오가 제대로 짜였는지 확인한다(기준 레포, 정답 패치, 함정 패치) |
+| `eval/check-scenario.mjs` | 시나리오가 제대로 짜였는지 확인한다(기준 레포, 정답 패치, 함정 패치. 장기 평가는 정답을 차례로 쌓은 누적 시험, 줄 수, 봉인 과제) |
 | `eval/lib/episode.mjs` | 실행 하나: 레포 준비, 사람 깨우기, 사건, 판정. Work 둘을 잇는 시나리오는 Work마다 사람 역할을 새로 두고 Work마다 판정한다 |
-| `eval/lib/works.mjs` | Work 여럿을 잇는 시나리오(`works`)의 Work 나누기, 팀원 교대, 재는 Work, 시나리오의 짝(relay 대 맨 CLI, relay 대 relay-off) |
+| `eval/lib/works.mjs` | Work 여럿을 잇는 시나리오(`works`)의 Work 나누기, 팀원 교대, 재는 Work, 시나리오의 짝(relay 대 맨 CLI, relay 대 relay-off). 장기 평가(`sequence`)의 규칙 펼치기(물으면 답함 → 이미 말함)와 누적 숨긴 시험 |
 | `eval/knowledge-quality.mjs` | 남은 지식의 질, kind 분포, 지식 검토 호출의 시간·비용 (`docs/knowledge-experiment/followup.md` 9절). 기준은 `eval/knowledge-truth/<시나리오>.json` |
 | `eval/tidy.mjs` | 지식 정리 실험의 지표: 후보로 채운 정리 Work, 사이드바 후보 누름, 심은 지식 문제, 버그, 멀쩡한 항목 (`docs/tidy-experiment/protocol.md` 4절) |
 | `eval/primary.mjs` | 지식 실험의 주지표와 두 쪽 차이의 bootstrap 구간 (`docs/knowledge-experiment/protocol.md` 4절) |
@@ -56,7 +56,7 @@
 | `eval/lib/dialogs.mjs` | Claude Code 첫 실행 창(폴더 신뢰, 권한 우회 경고) 수락. 두 쪽 같고 사람의 부담에 넣지 않는다 |
 | `eval/guides/*.md` | 사람 역할이 미리 읽어 둔 도구 설명서 |
 | `eval/scenarios/<id>/` | 시나리오 |
-| `eval/test/` | 평가 도구의 측정 로직 시험(맨 CLI의 흩어진 브랜치, 결과 판정과 지식 파일 빼기, 대화 기록 집계, Work 여럿, bootstrap). 모델을 부르지 않는다. `npm run test:eval`이 이 시험과 `check-scenario.mjs all`을 돌고, `app-ci`가 push마다 돈다(relay `implementation.md` 8.1) |
+| `eval/test/` | 평가 도구의 측정 로직 시험(맨 CLI의 흩어진 브랜치, 결과 판정과 지식 파일 빼기, 대화 기록 집계, Work 여럿, 장기 평가의 규칙과 누적 시험, bootstrap). 모델을 부르지 않는다. `npm run test:eval`이 이 시험과 `check-scenario.mjs all`을 돌고, `app-ci`가 push마다 돈다(relay `implementation.md` 8.1) |
 
 평가 도구는 앱의 의존성(Playwright, node-pty, xterm headless)과 빌드한 앱(`out/`)을 함께 쓰므로 `app/` 안에 둔다. 앱의 시험과는 층이 다르다: 평가는 통과·실패를 가르는 시험이 아니라 relay가 더 나은지 재는 실험이고, 결과는 보고서로 남긴다. 측정이 틀리면 결론이 뒤집히므로(eval-findings E1) 측정 로직만 시험으로 지킨다.
 
@@ -127,6 +127,7 @@
 | 38-price-sweep | (커스텀 유형 '조사 후 적용', relay D447~D463) 옛 금액 표시 함수를 레포 전체에서 새 함수로 바꾸고 지움. 함정: 테스트가 덮지 않는 운영 스크립트(`scripts/monthly-report.js`)에도 쓰임. 사람만 앎: scripts/는 운영 cron이 돈다 | relay(커스텀 유형) 대 같은 일을 일반 유형으로 한 relay(`relay@general`, D463). 사람이 쓴 조사 단계 절차가 덮지 않는 쓰임을 찾게 하는지(guard), 단계가 늘어난 수고 |
 | h-tidy-bug-library | (버그 수정, 정리 요청 없음, 지식 정리 후속 실험의 hold-out이었고 열었음) 37과 같은 모양, 다른 도메인(도서관 대출) | 37과 같음 |
 | h-tidy-route-dispatch | (일반, 대규모 기능 실험 F3의 hold-out이었고 열었음) 같은 모양, 다른 도메인(배차): 중복 두 쌍, 낡은 항목 둘, 사람만 아는 어긋난 쌍, 멀쩡한 항목 넷, 지식 형식 guard | 36과 같음 |
+| 48-long-shop | (장기 평가, relay-v3 `docs/m3-design.md` 6절) 주문·청구·알림 영역의 JS 서비스 하나(기준 3,101줄)에 요청 15개를 차례로 한다: 기능 8, 버그 4, 리팩터링 2, 규칙이 바뀌는 요청 1. 셋은 대충 쓴 요청이고 여럿이 앞 Work의 영역을 다시 건드린다. 처음부터 600줄 가까운 파일 하나와 중복 둘이 있고, 사람만 아는 규칙이 다섯이다. 열이 끝나면 봉인 과제 셋 | 뒤 Work 비용(봉인 과제 통과율·토큰·시간), 누적 숨긴 시험, 다시 말하기, 구조(가장 긴 파일, 중복). `run.mjs`로는 아직 돌지 않는다(아래) |
 
 `scenario.json`의 필드:
 
@@ -136,7 +137,7 @@
 | `type` | 업무 유형: `bugfix`(버그 수정) / `feature`(기능 추가) / `refactor`(리팩터링) / `general`(일반). 없으면 `bugfix`다(relay I62, I67, I92). 사람 역할에게 일의 종류로 알리고, relay 쪽 사람 역할은 새 Work 대화상자에서 그 유형을 고른다. 판정과 설문의 낱말도 이것을 따른다(`eval/lib/kind.mjs`) |
 | `repoName` | 레포 폴더 이름 (relay 프로젝트 이름이 된다) |
 | `report` | 사람이 받은 리포트나 본 것, 기능 추가와 리팩터링이면 요청 (문자열 또는 문자열 배열) |
-| `knowledge` | `{ share: "upfront" \| "on_ask" \| "recall", text }`. upfront는 처음부터 앎, on_ask는 물으면 답함, recall은 짚어 주면 떠오름(아래) |
+| `knowledge` | `{ share: "upfront" \| "on_ask" \| "recall", text }`. upfront는 처음부터 앎, on_ask는 물으면 답함, recall은 짚어 주면 떠오름(아래). 장기 평가는 `rules`를 펼쳐 told(이미 말함)도 만든다 |
 | `preferences` | 사람의 선호 |
 | `reveals` | `{ when, afterSeconds, text }`: 때가 되면 사람에게 새로 떠오른 요구로 알린다 |
 | `events` | `{ when, afterSeconds, do: "crash" }`: relay는 앱을 SIGKILL하고 다시 띄운다. 맨 CLI는 셸과 claude를 프로세스 그룹째 끝내고 같은 폴더에서 새 셸을 연다 |
@@ -148,10 +149,23 @@
 | `knowledge[].carry` | 앞 Work에서 사람이 이미 알려 줬던 사실. 사람 역할이 이것을 다시 알려 주면 `carriedTold`로 센다 |
 | `measure` | 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두 |
 | `dev` | `true`면 개발용 시나리오다(25~27). `--scenarios all`(기본)에 들지 않고 번호나 이름으로만 고른다 |
+| `sequence` | 장기 평가 시나리오(아래): `{ chain, persona, lines, bait, sealed }`. `--scenarios all`에 들지 않는다 |
+| `rules` | 장기 평가의 사람만 아는 규칙 `{ id, text, changes?: [{ work, text }] }`. Work의 `rules`(id 목록)가 그 Work에 드는 규칙이다 |
+| `works[].type`, `works[].retires` | 장기 평가에서 그 Work의 업무 유형(없으면 시나리오의 `type`), 그 Work부터 빼는 앞 Work의 숨긴 시험 이름(규칙이 바뀌어 옛 시험이 틀려짐) |
 
 시나리오를 더할 때: `repo/`의 `npm test`는 기준 상태에서 통과해야 한다(리포트의 버그를 잡지 않는 시험). 숨긴 시험은 `../src/...`로 불러온다(레포의 `eval-hidden/`에 복사해 돌린다). `guard`가 아닌 숨긴 시험은 기준 상태에서 실패해야 한다.
 
 **Work 둘을 잇는 시나리오(`works`):** 한 실행이 같은 레포(relay는 같은 앱과 프로젝트)에서 Work 1을 끝낸 뒤 Work 2를 한다. 사람 역할은 Work마다 새 세션이고 그 Work의 리포트와 아는 것만 받는다(같은 사람이므로 Work 1에서 알려 준 규칙은 Work 2에서도 "물으면 답함"으로 둔다). relay 쪽 사람은 앞 Work를 끝낸 뒤 같은 프로젝트에서 [새 Work]로 시작하고, 맨 CLI 쪽은 도구가 앞 터미널을 닫고 같은 레포 폴더에서 claude를 새로 띄운다. 두 번째 Work부터는 다음 Work로 넘긴 뒤 에이전트가 일한 기록(대화 기록의 메시지)이 늘지 않았으면 도구가 사람의 `done`을 받지 않고 "아직 시작하지 않았다"고 돌려준다(행동 수와 헛동작으로 세지 않고 `refusedDone`으로 세며, 보고서의 Work 표에 보인다. 맨 CLI는 새로 띄울 때 세션이 생기고 그 세션에서 일할 수 있어 새 세션이 있는지로 보지 않는다). 2026-10-02 평가에서 사람 역할이 화면에 남은 앞 Work의 완료 화면을 이번 일로 읽고 [새 Work] 없이 끝내, Work 2가 돌지 않은 채 앞 Work의 worktree로 판정된 일이 18회 중 6회 있었다. 평가는 맨 CLI의 자동 메모리를 끄지 않으므로, 그 쪽은 CLI 자체 메모리가 Work 1의 정보를 얼마나 잇는지 보는 참고다. 짝 판정은 relay 대 relay-off다(`--pairs`로 바꿀 수 있다). relay의 Work 2는 기준 브랜치(main)에서 시작하고 Work 1의 수정은 들어 있지 않으므로([완료만]은 머지하지 않음), Work 2의 숨긴 시험은 Work 2의 수정만으로 통과해야 한다.
+
+**장기 평가(`sequence`, 48):** 같은 레포에서 요청 열을 잇고, 각 쪽이 만든 마지막 레포의 구조가 뒤 일을 얼마나 쉽게 하는지 잰다(relay-v3 `docs/m3-design.md` 6절). `works`와 같은 꼴에 이것을 더한다.
+
+- `chain: true`: 앞 Work의 결과가 다음 Work의 기준이다. n번째 Work를 끝낸 레포에서는 1..n번째 Work의 숨긴 시험이 모두 돈다(누적 회귀, `workScenario`의 `checks`. 앞 Work의 것은 `regression: true`). 규칙이 바뀌어 옛 시험이 틀려지면 바꾸는 Work의 `retires`로 뺀다.
+- `persona: "continuous"`: 같은 사람이 열 전체를 잇는다. `rules`의 규칙은 처음 드는 Work에서 '물으면 답함'이고, 그 뒤 Work에서는 '이미 말함'(`share: "told"`, `carry: true`)이다. 사람 역할은 이미 말함 항목을 먼저 꺼내지 않고, 다시 물으면 다시 말한다. 다시 말한 수가 `carriedTold`(PM1)다. 규칙이 바뀌는 Work(`changes[].work`)에서는 요청이 새 규칙을 말하므로 '처음부터 앎'이고 그 뒤는 새 글로 '이미 말함'이다(`lib/works.mjs`의 `ruleKnowledge`).
+- `lines`: 줄 수를 셀 파일(glob)과 범위. `bait`: 처음부터 심은 래칫 거리(파일 줄 상한, 큰 파일, 중복된 곳). 구조 지표의 기준점이다.
+- `sealed: { dir, tasks }`: 봉인 과제. `<dir>/tasks.json`의 `tasks[]`가 `{ id, type, report, checks, retires }`이고, 숨긴 시험은 `<dir>/hidden/`, 정답은 `<dir>/reference-<id>.patch`다. 과제는 요청 열이 끝난 뒤 각 쪽의 마지막 레포에서 같은 기준 에이전트가 사람 없이 하므로 `report`가 혼자 다 말한다. 판정은 그 과제의 시험과, 마지막 Work의 누적 시험 가운데 과제의 `retires`를 뺀 것이다.
+- 정답은 Work마다 `reference-<n>.patch`이고 앞 정답을 쌓은 레포 위의 diff다. `check-scenario.mjs`가 확인한다: 기준에서 모든 숨긴 시험이 실패, n번째 Work의 시험은 `reference-1..n-1`에서 실패하고 `reference-1..n`에서 누적 시험과 `npm test`가 통과, 기준과 마지막 레포의 줄 수가 `lines` 안, 봉인 과제마다 마지막 레포에서 실패하고 정답을 얹으면 통과(누적 시험도). 봉인 과제는 이름과 출력을 찍지 않고 수만 찍는다.
+- 봉인: 숨긴 시험(`hidden/`), 정답 패치(`reference-*.patch`), 봉인 과제 폴더(`sealed/`)는 트리에 평문으로 있다. relay-v3 설계자는 결과를 고정할 때까지 이 셋을 열지 않는다(M2.1 규약의 H2와 같음). 요청 글, 규칙, 레포는 열어도 된다.
+- 아직 없는 것: `run.mjs`는 장기 평가를 돌리지 않는다(고르면 막는다). 도는 길에는 Work 사이에 앞 Work를 기준 브랜치에 넣기, 한 사람 역할 세션으로 열 잇기, 봉인 과제를 기준 에이전트로 돌리기, 구조 지표 세기가 더 필요하다.
 
 **팀원 교대(`teammate: true`):** 그 Work 전에 도구가 앞 사람 레포의 브랜치 가운데 main에 없는 커밋이 있는 것을 오래된 차례로 main에 머지하고(PR 머지 흉내, 충돌하면 뒤 브랜치 쪽으로 머지하고 `handoffs`에 적음), 팀 원격(bare)에 올린 뒤 새로 clone한다. relay는 새 앱 저장소(`RELAY_HOME`)와 새 Electron 사용자 폴더로 그 clone을 프로젝트로 등록해 두고, 맨 CLI는 그 폴더에서 claude를 새로 띄운다. 커밋하지 않은 변경과 앱 저장소에만 있는 것은 건너가지 않는다. 레포 경로가 바뀌어 Claude Code의 프로젝트 메모리도 이어지지 않는다. 사람 역할은 Work를 [완료만]으로 끝내므로 Work 브랜치에 커밋된 것만 다음 사람에게 간다. 팀원 교대 뒤의 Work는 앞 Work의 정답이 머지된 상태에서 판정하므로, `check-scenario.mjs`가 `reference-1..n`을 차례로 모두 적용해도 모든 시험이 통과하는지 확인한다.
 

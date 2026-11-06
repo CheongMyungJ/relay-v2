@@ -6,14 +6,74 @@
 // - knowledge 항목의 `carry: true`: 앞 Work에서 사람이 이미 알려 줬거나 알려 줄 수 있었던 사실이다. 사람 역할이 이것을
 //   다시 알려 준 횟수(carriedTold)가 "다시 말하게 한 부담"이다.
 // - 시나리오의 `measure`: 재는 Work의 번호(1부터). 없으면 첫 Work를 뺀 모두다.
+// 장기 평가(relay-v3 docs/m3-design.md 6절)에서 더한 것(`sequence`가 있는 시나리오, docs/eval.md 5절):
+// - `rules`: 사람만 아는 규칙 { id, text, changes?: [{ work, text }] }. Work의 `rules`가 그 Work에 드는 규칙의 id다.
+//   처음 드는 Work에서는 '물으면 답함', 그 뒤는 '이미 말함'(carry)이다. 바뀌는 Work(changes.work)에서는 요청이 새 규칙을
+//   말하므로 '처음부터 앎'이고, 그 뒤는 새 글로 '이미 말함'이다.
+// - `sequence.chain`: 앞 Work의 결과가 다음 Work의 기준이다. 앞 Work의 숨긴 시험은 뒤에서도 돈다(누적 회귀). Work의
+//   `retires`(시험 이름)는 그 Work부터 그 시험을 빼고(규칙이 바뀌어 옛 시험이 틀려짐), 뒤에서 도는 앞 Work의 시험에는
+//   `regression: true`를 붙인다.
+// - Work의 `type`: 그 Work의 업무 유형(없으면 시나리오의 type).
 import { armBase, armType, isRelay3 } from './kind.mjs'
 
-/** Work 목록. works가 없으면 시나리오 자신이 Work 하나다 */
+/** 장기 평가 시나리오(scenario.sequence) */
+export const isSequence = (scenario) => !!scenario?.sequence && Array.isArray(scenario.works)
+
+/**
+ * n번째 Work(0부터)에 드는 사람만 아는 규칙을 그 Work의 사람 지식으로 바꾼다(앞에 둔다). 항목에 rule(규칙 id)을 붙인다
+ * @returns {{ share: string, text: string, rule: string, carry?: true }[]}
+ */
+export function ruleKnowledge(scenario, n) {
+  const works = scenario.works ?? []
+  const rules = new Map((scenario.rules ?? []).map((r) => [r.id, r]))
+  const out = []
+  for (const id of works[n]?.rules ?? []) {
+    const rule = rules.get(id)
+    if (!rule) continue
+    const change = (rule.changes ?? [])
+      .filter((c) => c.work <= n + 1)
+      .sort((a, b) => a.work - b.work)
+      .at(-1)
+    const text = change?.text ?? rule.text
+    if (change && change.work === n + 1) {
+      out.push({ share: 'upfront', text, rule: id })
+      continue
+    }
+    // 지금 글이 쓰이기 시작한 Work부터 이번 Work 앞까지 이 규칙이 든 Work가 있으면 이미 말한 것이다
+    const since = (change?.work ?? 1) - 1
+    const told = works.slice(since, n).some((w) => (w.rules ?? []).includes(id))
+    out.push(
+      told ? { share: 'told', text, rule: id, carry: true } : { share: 'on_ask', text, rule: id },
+    )
+  }
+  return out
+}
+
+/** Work 목록. works가 없으면 시나리오 자신이 Work 하나다. 장기 평가는 규칙을 Work마다의 지식으로 펼친다 */
 export function workParts(scenario) {
   if (!Array.isArray(scenario.works) || scenario.works.length === 0) {
     return [{ report: scenario.report, knowledge: scenario.knowledge, checks: scenario.checks }]
   }
+  if (isSequence(scenario))
+    return scenario.works.map((w, n) => ({
+      ...w,
+      knowledge: [...ruleKnowledge(scenario, n), ...(w.knowledge ?? [])],
+    }))
   return scenario.works
+}
+
+/**
+ * n번째 Work(0부터)를 끝낸 레포에서 도는 숨긴 시험. chain이면 그 Work까지의 시험 가운데 뺀 것(retires)을 빼고, 앞 Work의
+ * 것에는 regression을 붙인다. chain이 아니면 그 Work의 시험만이다
+ */
+export function activeChecks(scenario, n) {
+  const parts = workParts(scenario)
+  if (!isSequence(scenario) || !scenario.sequence.chain) return parts[n]?.checks ?? []
+  const retired = new Set(parts.slice(0, n + 1).flatMap((w) => w.retires ?? []))
+  return parts
+    .slice(0, n + 1)
+    .flatMap((w, i) => (w.checks ?? []).map((c) => (i < n ? { ...c, regression: true } : c)))
+    .filter((c) => !retired.has(c.name))
 }
 
 export const multiWork = (scenario) => Array.isArray(scenario.works) && scenario.works.length > 0
@@ -41,9 +101,10 @@ export function workScenario(scenario, n) {
   delete rest.works
   return {
     ...rest,
+    ...(w.type ? { type: w.type } : {}),
     report: w.report,
     knowledge: w.knowledge ?? [],
-    checks: w.checks ?? [],
+    checks: activeChecks(scenario, n),
     work: { index: n, count: parts.length, teammate: !!w.teammate, mates: mateIndex(parts, n) },
   }
 }

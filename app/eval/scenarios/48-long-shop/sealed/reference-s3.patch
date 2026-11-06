@@ -1,0 +1,38 @@
+diff --git a/src/catalog/coupons.js b/src/catalog/coupons.js
+index 4222066..a94d110 100644
+--- a/src/catalog/coupons.js
++++ b/src/catalog/coupons.js
+@@ -1,4 +1,4 @@
+-// 쿠폰. 주문 하나에 한 장만 쓴다. fixed는 정액, percent는 상품 금액의 몇 %.
++// 쿠폰. 주문 하나에 한 장만 쓴다. fixed는 정액, percent는 상품 금액의 몇 %(원 미만 반올림).
+ import { fail } from '../shared/errors.js'
+ 
+ export function createCoupons(store, clock) {
+@@ -25,7 +25,7 @@ export function createCoupons(store, clock) {
+     if (subtotal < c.minSubtotal) {
+       fail('COUPON_MIN', `${c.minSubtotal}원 이상 사야 쓰는 쿠폰: ${code}`, { minSubtotal: c.minSubtotal })
+     }
+-    const discount = c.kind === 'fixed' ? Math.min(c.value, subtotal) : Math.floor((subtotal * c.value) / 100)
++    const discount = c.kind === 'fixed' ? Math.min(c.value, subtotal) : Math.round((subtotal * c.value) / 100)
+     return { code, discount }
+   }
+ 
+diff --git a/src/orders/pricing.js b/src/orders/pricing.js
+index dbb2c04..fdfbc9d 100644
+--- a/src/orders/pricing.js
++++ b/src/orders/pricing.js
+@@ -24,12 +24,12 @@ export function lineAmount(line) {
+ }
+ 
+ /**
+- * 일부 취소한 상품 금액(amount)에 돌아갈 쿠폰 할인의 몫. 할인을 상품 금액 비율로 나누고 원 미만은 버린다.
++ * 일부 취소한 상품 금액(amount)에 돌아갈 쿠폰 할인의 몫. 할인을 상품 금액 비율로 나누고 원 미만은 반올림한다.
+  * 환불은 amount − 이 몫이다.
+  */
+ export function discountShare({ discount, itemsTotal }, amount) {
+   if (!discount || itemsTotal <= 0) return 0
+-  return Math.floor((discount * amount) / itemsTotal)
++  return Math.round((discount * amount) / itemsTotal)
+ }
+ 
+ /**

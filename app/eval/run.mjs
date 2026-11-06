@@ -78,7 +78,8 @@ export function listScenarios() {
 }
 
 function pickScenarios(spec, all) {
-  if (!spec || spec === 'all') return all.filter((s) => !s.dev)
+  // 장기 평가(sequence, 48)는 도는 방식이 달라 all에 넣지 않는다(아래 main에서 막는다)
+  if (!spec || spec === 'all') return all.filter((s) => !s.dev && !s.sequence)
   return spec
     .split(/[\s,]+/)
     .filter(Boolean)
@@ -188,11 +189,18 @@ async function main() {
   if (v.list) {
     for (const s of all)
       console.log(
-        `${s.id}  [${words(s).label}${s.dev ? ', 개발용' : ''}] ${s.title}\n    ${s.purpose}`,
+        `${s.id}  [${words(s).label}${s.dev ? ', 개발용' : ''}${s.sequence ? ', 장기 평가' : ''}] ${s.title}\n    ${s.purpose}`,
       )
     return
   }
   const scenarios = pickScenarios(v.scenarios, all)
+  // 장기 평가는 Work 사이에 앞 Work를 기준 브랜치에 넣고(chain), 사람 역할 하나가 열을 잇고, 끝에 봉인 과제를 기준
+  // 에이전트로 돌려야 한다. 이 도는 길은 아직 없다(docs/eval.md 5절). 지금 길로 돌리면 누적 시험이 앞 Work 없이 판정된다
+  const seq = scenarios.filter((s) => s.sequence)
+  if (seq.length)
+    throw new Error(
+      `장기 평가 시나리오는 아직 run.mjs로 돌리지 않습니다: ${seq.map((s) => s.id).join(', ')} (확인은 node eval/check-scenario.mjs)`,
+    )
   const given = v.arms
     ?.split(',')
     .map((x) => x.trim())

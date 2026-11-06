@@ -1,0 +1,133 @@
+diff --git a/src/index.js b/src/index.js
+index b1b8af2..27b4781 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -16,7 +16,7 @@ import { createWishlist } from './orders/wishlist.js'
+ import { createSalesReports } from './reports/sales.js'
+ import { createPayments } from './billing/payments.js'
+ import { createBilling } from './billing/invoices.js'
+-import { createEmailChannel, createSmsChannel } from './notifications/channels.js'
++import { createEmailChannel, createKakaoChannel, createSmsChannel } from './notifications/channels.js'
+ import { createPreferences } from './notifications/preferences.js'
+ import { createNotifier } from './notifications/notifier.js'
+ import { createCampaigns } from './notifications/campaigns.js'
+@@ -33,7 +33,7 @@ export function createShop({ now = '2026-03-02T01:00:00Z' } = {}) {
+   const coupons = createCoupons(store, clock)
+   const customers = createCustomers(store)
+   const payments = createPayments(store, ids, clock)
+-  const channels = { email: createEmailChannel(clock), sms: createSmsChannel(clock) }
++  const channels = { email: createEmailChannel(clock), sms: createSmsChannel(clock), kakao: createKakaoChannel(clock) }
+   const preferences = createPreferences(store)
+   // 구독 차례: 청구가 알림보다 먼저 듣는다(송장 번호가 알림에 들어간다)
+   const billing = createBilling({ store, bus, clock, ids, customers })
+diff --git a/src/notifications/channels.js b/src/notifications/channels.js
+index 2cb187b..ebf34da 100644
+--- a/src/notifications/channels.js
++++ b/src/notifications/channels.js
+@@ -31,3 +31,19 @@ export function createSmsChannel(clock) {
+     },
+   }
+ }
++
++/** 카카오 알림톡(가짜). 전화번호로 보낸다. 길이 제한은 문자보다 넉넉하다(1,000자) */
++export function createKakaoChannel(clock) {
++  const sent = []
++  return {
++    name: 'kakao',
++    sent,
++    send({ to, body, type }) {
++      const phone = normalizePhone(to)
++      if (!phone) throw new Error(`전화번호: ${to}`)
++      if (body.length > 1000) throw new Error('알림톡 본문이 너무 깁니다')
++      sent.push({ to: phone, body, type, at: clock.now().toISOString() })
++      return { ok: true }
++    },
++  }
++}
+diff --git a/src/notifications/notifier.js b/src/notifications/notifier.js
+index e6b7255..b643f10 100644
+--- a/src/notifications/notifier.js
++++ b/src/notifications/notifier.js
+@@ -68,25 +68,27 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+       results.push({ channel: 'email', status: 'sent' })
+     }
+ 
++    // 전화로 가는 길: 문자, 또는 고객이 켰으면 알림톡. 수신 거부와 방해 금지 시간 규칙은 같다(sms 설정이 둘 다를 막는다)
++    const phoneChannel = preferences.get(customerId).kakao ? 'kakao' : 'sms'
+     if (!customer.phone) {
+-      results.push({ channel: 'sms', status: 'skipped', reason: 'no-phone' })
++      results.push({ channel: phoneChannel, status: 'skipped', reason: 'no-phone' })
+     } else if (!preferences.allows(customerId, 'sms', { marketing })) {
+-      results.push({ channel: 'sms', status: 'skipped', reason: 'opted-out' })
++      results.push({ channel: phoneChannel, status: 'skipped', reason: 'opted-out' })
+     } else if (money && isQuiet(now)) {
+-      results.push({ channel: 'sms', status: 'skipped', reason: 'quiet-hours' })
++      results.push({ channel: phoneChannel, status: 'skipped', reason: 'quiet-hours' })
+     } else if (isQuiet(now)) {
+       store.outbox.push({
+-        channel: 'sms',
++        channel: phoneChannel,
+         customerId,
+         to: customer.phone,
+         body: msg.sms,
+         type,
+         dueAt: quietEnds(now).toISOString(),
+       })
+-      results.push({ channel: 'sms', status: 'deferred' })
++      results.push({ channel: phoneChannel, status: 'deferred' })
+     } else {
+-      channels.sms.send({ to: customer.phone, body: msg.sms, type })
+-      results.push({ channel: 'sms', status: 'sent' })
++      channels[phoneChannel].send({ to: customer.phone, body: msg.sms, type })
++      results.push({ channel: phoneChannel, status: 'sent' })
+     }
+ 
+     store.notifications.push({ customerId, type, at: now.toISOString(), results })
+@@ -98,12 +100,13 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+     return customerIds.map((id) => ({ customerId: id, results: notify(id, 'promo', { title, text }, { marketing: true }) }))
+   }
+ 
+-  /** 미뤄 둔 문자 가운데 때가 된 것을 보낸다 */
++  /** 미뤄 둔 문자·알림톡 가운데 때가 된 것을 보낸다 */
+   function flush() {
+     const now = clock.now()
+     const due = store.outbox.filter((m) => new Date(m.dueAt) <= now)
+     for (const m of due) {
+-      channels.sms.send({ to: m.to, body: m.body, type: m.type })
++      // 미룰 때 고른 길(문자나 알림톡)로 보낸다
++      channels[m.channel].send({ to: m.to, body: m.body, type: m.type })
+       store.outbox.splice(store.outbox.indexOf(m), 1)
+     }
+     return due.length
+diff --git a/src/notifications/preferences.js b/src/notifications/preferences.js
+index 4f9dc18..a9317aa 100644
+--- a/src/notifications/preferences.js
++++ b/src/notifications/preferences.js
+@@ -1,9 +1,9 @@
+-// 알림 수신 설정. 기본은 모두 받음. 광고는 따로 끈다(marketing).
++// 알림 수신 설정. 기본은 모두 받음. 광고는 따로 끈다(marketing). kakao를 켜면 문자 대신 알림톡으로 받는다(기본 끔).
+ 
+ export function createPreferences(store) {
+   function load(customerId) {
+     if (!store.preferences.has(customerId)) {
+-      store.preferences.set(customerId, { email: true, sms: true, marketing: true })
++      store.preferences.set(customerId, { email: true, sms: true, marketing: true, kakao: false })
+     }
+     return store.preferences.get(customerId)
+   }
+diff --git a/test/notifier.test.js b/test/notifier.test.js
+index 31bdf3e..33c0f26 100644
+--- a/test/notifier.test.js
++++ b/test/notifier.test.js
+@@ -135,3 +135,11 @@ test('결제 실패 알림', () => {
+   assert.equal(shop.channels.sms.sent.at(-1).body, '[샵] 주문 A-1001 결제 실패(15,000원). 결제 수단을 확인해 주세요')
+   assert.equal(shop.channels.email.sent.at(-1).subject, '주문 A-1001 결제가 되지 않았어요')
+ })
++
++test('알림톡을 켜면 문자 대신 알림톡', () => {
++  const shop = setup('2026-03-02T05:00:00Z')
++  shop.preferences.set('u-1', { kakao: true })
++  shop.orders.placeOrder({ customerId: 'u-1', cart: cartOf(shop, [['MUG', 1]]) })
++  assert.equal(shop.channels.kakao.sent[0].body, '[샵] 주문 A-1001 접수, 15,000원')
++  assert.equal(shop.channels.sms.sent.length, 0)
++})

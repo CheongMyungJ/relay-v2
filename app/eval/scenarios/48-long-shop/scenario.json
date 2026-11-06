@@ -1,0 +1,274 @@
+{
+  "id": "48-long-shop",
+  "type": "general",
+  "repoName": "shop",
+  "title": "커지는 쇼핑 서비스 레포 하나에 요청 15개 (장기 평가 M0b)",
+  "purpose": "relay-v3 docs/m3-design.md 6절의 장기 평가 판. 주문·청구·알림 영역의 JS 서비스 하나에 요청 15개(기능, 버그, 리팩터링, 대충 쓴 요청, 규칙이 바뀌는 요청, 같은 영역을 다시 건드리는 요청)를 차례로 한다. 앞 Work의 결과가 다음 Work의 기준이 되고(chain), 앞 Work의 숨긴 시험은 뒤에서도 계속 돈다(누적 회귀). 같은 사람이 열 전체를 잇고, 사람만 아는 규칙 다섯은 처음 쓰이는 Work에서만 '물으면 답함'이고 그 뒤는 '이미 말함'이다(다시 말한 횟수, PM1). 레포에는 처음부터 래칫에 걸릴 거리(600줄 가까운 파일 하나, 중복 둘)가 있다. 열이 끝나면 각 쪽이 만든 레포에서 같은 기준 에이전트가 봉인 과제 셋을 한다(뒤 Work 비용).",
+  "sequence": {
+    "chain": true,
+    "persona": "continuous",
+    "lines": { "include": ["src/**/*.js", "test/**/*.js"], "min": 3000, "max": 5000 },
+    "bait": {
+      "maxLines": 600,
+      "bigFiles": ["src/billing/invoices.js"],
+      "duplicates": [
+        {
+          "what": "금액 표시(원)",
+          "files": [
+            "src/orders/pricing.js",
+            "src/billing/invoices.js",
+            "src/notifications/templates.js"
+          ]
+        },
+        { "what": "부가세 계산", "files": ["src/orders/pricing.js", "src/billing/invoices.js"] }
+      ]
+    },
+    "sealed": { "dir": "sealed", "tasks": 3 }
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "text": "일부 취소 때 쿠폰 할인은 상품 금액 비율로 나눠, 취소한 상품의 몫을 환불에서 뺀다. 몫의 원 미만은 버린다. 배송비는 일부 취소로는 돌려주지 않는다. 남은 상품을 다 취소하면 주문 취소와 같다(남은 금액을 배송비까지 돌려준다)."
+    },
+    {
+      "id": "R2",
+      "text": "방해 금지 시간은 밤 9시부터 아침 8시까지(한국 시간)다. 이 시간에 문자를 아침으로 미루는 것은 돈 알림이 아닌 것(광고, 배송 소식)뿐이다. 돈 알림(환불, 결제, 송장)은 바로 보낸다.",
+      "changes": [
+        {
+          "work": 8,
+          "text": "방해 금지 시간은 밤 10시부터 아침 7시까지(한국 시간)다. 이 시간에 돈 알림(환불, 결제, 송장)은 메일만 보내고 문자는 보내지 않는다(아침에 따로 보내지도 않는다). 그 밖의 문자(광고, 배송 소식)는 아침 7시로 미룬다."
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "text": "고객 전화번호는 사람이 보는 곳(내보내는 파일, 상담 화면, 알림 본문)에는 가운데를 가리고 뒤 4자리만 보인다: 010-****-5678."
+    },
+    {
+      "id": "R4",
+      "text": "송장과 반품 전표의 번호는 해마다 00001부터 다시 센다(INV-2026-00001, CN-2026-00001). 무효로 한 송장의 번호도 다시 쓰지 않는다."
+    },
+    {
+      "id": "R5",
+      "text": "무료 배송 기준 금액은 쿠폰을 빼기 전 상품 금액으로 본다."
+    }
+  ],
+  "works": [
+    {
+      "type": "feature",
+      "report": "주문에서 일부 상품만 취소할 수 있게 해 줘. `orders.cancelLines(orderId, [{ sku, qty }])`로 부르고 `{ order, refund }`를 돌려주면 된다. 주문에 없는 상품이나 남은 수량보다 많이 취소하려 하면 `BAD_QTY` 오류. 배송이 시작된 주문은 일부 취소도 안 된다.",
+      "rules": ["R1"],
+      "knowledge": [
+        { "share": "on_ask", "text": "결제 전 주문도 일부 취소할 수 있다. 그때는 환불이 0원이다." }
+      ],
+      "checks": [
+        { "name": "w01-1", "file": "w01-refund.test.js" },
+        { "name": "w01-2", "file": "w01-errors.test.js" }
+      ]
+    },
+    {
+      "type": "bugfix",
+      "report": "송장 번호가 겹친 게 두 건 나왔다고 회계에서 연락이 왔다. 둘 다 무효 처리한 송장이 있던 날 낸 송장이다.",
+      "rules": ["R4"],
+      "knowledge": [
+        { "share": "on_ask", "text": "겹친 번호는 INV-2026-00031과 INV-2026-00058이었다." }
+      ],
+      "checks": [
+        { "name": "w02-1", "file": "w02-reuse.test.js" },
+        { "name": "w02-2", "file": "w02-year.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": "환불되면 고객에게 환불 금액을 알려 줘. 메일과 문자 둘 다, 주문 전체 취소도 일부 취소도. 본문에 주문번호와 환불 금액(예: 10,572원)이 들어가면 된다.",
+      "rules": ["R2"],
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "돌려줄 돈이 없는 취소(결제 전 주문)는 환불 알림이 없어도 된다."
+        }
+      ],
+      "checks": [
+        { "name": "w03-1", "file": "w03-notice.test.js" },
+        { "name": "w03-2", "file": "w03-quiet.test.js" }
+      ]
+    },
+    {
+      "type": "bugfix",
+      "report": "배송비가 이상하게 붙었다는 문의가 몇 건 있다. 봐 줘.",
+      "rules": ["R5"],
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "문의 하나는 제주 고객이 상품 두 가지를 샀는데 추가 배송비가 두 번 붙었다는 것이다."
+        },
+        {
+          "share": "on_ask",
+          "text": "다른 하나는 52,000원어치를 사고 5,000원 쿠폰을 썼는데 배송비 3,000원이 붙었다는 것이다."
+        },
+        { "share": "on_ask", "text": "제주·도서산간 추가 배송비는 무료 배송이어도 붙는 게 맞다." }
+      ],
+      "checks": [
+        { "name": "w04-1", "file": "w04-surcharge.test.js" },
+        { "name": "w04-2", "file": "w04-basis.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": "연체된 송장을 고객센터에 넘길 CSV가 필요하다. `billing.overdueCsv(asOf)`로 부르고, 첫 줄은 `invoice,name,phone,amount,days_overdue`(송장번호, 고객 이름, 연락처, 미납 금액, 연체 일수)이고 연체가 긴 차례로.",
+      "rules": ["R3"],
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "미납 금액은 일부 입금을 뺀 남은 금액이고, 연체 일수는 지금 연체 현황(overdueInvoices)과 같은 셈이다."
+        }
+      ],
+      "checks": [
+        { "name": "w05-1", "file": "w05-csv.test.js" },
+        { "name": "w05-2", "file": "w05-mask.test.js" }
+      ]
+    },
+    {
+      "type": "bugfix",
+      "report": "영어로 받는 고객에게 금액이 '12,300원'처럼 나간다는 말이 들어왔다. 영어 메일과 문자에서는 'KRW 12,300'으로 보여야 한다.",
+      "rules": [],
+      "knowledge": [],
+      "checks": [{ "name": "w06-1", "file": "w06-en.test.js" }]
+    },
+    {
+      "type": "refactor",
+      "report": "부가세 계산이 주문 쪽(src/orders/pricing.js)과 청구 쪽(src/billing/invoices.js)에 따로 있다. `src/shared/tax.js`의 `lineVat(amount, taxClass)` 하나로 모아 줘. 동작은 그대로.",
+      "rules": [],
+      "knowledge": [],
+      "checks": [{ "name": "w07-1", "file": "w07-tax.test.js" }]
+    },
+    {
+      "type": "general",
+      "report": "방해 금지 시간 정책이 바뀌었다. 이제 밤 10시부터 아침 7시까지(한국 시간)이고, 이 시간에는 돈 알림(환불, 결제, 송장)도 문자는 보내지 않고 메일만 보낸다. 그 문자는 아침에 따로 보내지도 않는다. 광고 같은 다른 문자는 전처럼 아침(이제 7시)으로 미룬다.",
+      "rules": ["R2"],
+      "knowledge": [],
+      "retires": ["w03-2"],
+      "checks": [
+        { "name": "w08-1", "file": "w08-window.test.js" },
+        { "name": "w08-2", "file": "w08-money.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": "예전 주문을 그대로 다시 담는 기능 만들어 줘. `orders.reorder(orderId)`가 `{ cart, skipped }`를 돌려주면 된다.",
+      "rules": [],
+      "knowledge": [
+        { "share": "on_ask", "text": "가격은 지금 가격으로 담는다." },
+        { "share": "on_ask", "text": "판매 중지된 상품은 빼고, skipped에 sku와 까닭을 넣는다." },
+        {
+          "share": "on_ask",
+          "text": "재고가 모자라면 있는 만큼만 담고, 그 상품도 skipped에 넣는다."
+        },
+        { "share": "on_ask", "text": "예전 주문에서 취소한 수량은 다시 담지 않는다." },
+        { "share": "on_ask", "text": "다시 담기만 하고 재고는 잡지 않는다(주문할 때 잡는다)." }
+      ],
+      "checks": [
+        { "name": "w09-1", "file": "w09-price.test.js" },
+        { "name": "w09-2", "file": "w09-qty.test.js" }
+      ]
+    },
+    {
+      "type": "bugfix",
+      "report": "일부 취소한 주문에는 반품 전표가 안 생긴다. 회계에서 환불과 전표를 맞춰 보는데 맞지 않는다. 일부 취소에도 전표가 나와야 하고 금액은 환불한 금액과 같아야 한다(`billing.creditNotesFor(invoiceId)`로 본다). 그리고 전표 번호도 송장처럼 매겨야 하는데 지금은 연도가 없다.",
+      "rules": ["R1", "R4"],
+      "knowledge": [],
+      "checks": [
+        { "name": "w10-1", "file": "w10-amount.test.js" },
+        { "name": "w10-2", "file": "w10-number.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": [
+        "상담원이 주문을 한눈에 보게 `orders.supportSummary(orderId)`가 이런 글을 돌려주게 해 줘.",
+        "```",
+        "주문 A-1001 · 결제 완료",
+        "고객 김하나 · <연락처>",
+        "상품 42,000원 · 할인 -5,000원 · 배송비 3,000원 · 합계 40,000원",
+        "환불 10,572원",
+        "```",
+        "할인이 없으면 '할인' 칸을 빼고, 환불이 없으면 마지막 줄을 뺀다. 환불은 지금까지 돌려준 합이다. 상태 이름은 placed 접수, paid 결제 완료, shipped 배송 중, delivered 배송 완료, cancelled 취소."
+      ],
+      "rules": ["R3"],
+      "knowledge": [
+        { "share": "on_ask", "text": "전화번호가 없는 고객은 '연락처 없음'으로 쓴다." }
+      ],
+      "checks": [
+        { "name": "w11-1", "file": "w11-format.test.js" },
+        { "name": "w11-2", "file": "w11-phone.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": "결제가 실패하면 고객이 모른다. 실패하면 메일과 문자로 알려 줘. 주문번호와 금액, 결제 수단을 확인해 달라는 말이 들어가면 된다.",
+      "rules": ["R2"],
+      "knowledge": [],
+      "checks": [
+        { "name": "w12-1", "file": "w12-notice.test.js" },
+        { "name": "w12-2", "file": "w12-quiet.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": "VIP 고객은 무료 배송 기준을 3만원으로 해 줘.",
+      "rules": ["R5"],
+      "knowledge": [
+        { "share": "on_ask", "text": "VIP도 제주·도서산간 추가 배송비는 그대로 붙는다." }
+      ],
+      "checks": [
+        { "name": "w13-1", "file": "w13-vip.test.js" },
+        { "name": "w13-2", "file": "w13-basis.test.js" }
+      ]
+    },
+    {
+      "type": "refactor",
+      "report": "주문 상태를 바꾸는 코드가 여기저기 흩어져 있고 확인도 제각각이다. `src/orders/status.js`에 `canTransition(from, to)`를 두고 모든 상태 바꾸기가 그것을 거치게 해 줘. 허용하는 것은 placed→paid, placed→cancelled, paid→shipped, paid→cancelled, shipped→delivered뿐이고, 그 밖은 모두 `BAD_STATUS` 오류다(일부 취소는 주문을 취소할 수 있을 때만).",
+      "rules": [],
+      "knowledge": [],
+      "checks": [
+        { "name": "w14-1", "file": "w14-table.test.js" },
+        { "name": "w14-2", "file": "w14-errors.test.js" }
+      ]
+    },
+    {
+      "type": "feature",
+      "report": [
+        "회계팀이 볼 월간 매출이 필요하다. `billing.monthlyReport('2026-03')`는 `{ month, invoices, invoiced, creditNotes, credited, net, vat }`(송장 수와 합, 전표 수와 합, 순매출, 부가세)를 돌려주고, `billing.monthlyReportText('2026-03')`는 이런 글을 돌려준다. 부가세는 송장 부가세 합에서 전표 부가세 합을 뺀 것이다.",
+        "```",
+        "2026-03 매출",
+        "송장 3건 120,000원",
+        "전표 1건 -18,000원",
+        "순매출 102,000원",
+        "부가세 9,272원",
+        "```"
+      ],
+      "rules": [],
+      "knowledge": [
+        {
+          "share": "on_ask",
+          "text": "월은 한국 시간으로 가른다(3월은 3월 1일 0시부터 31일 24시까지)."
+        },
+        { "share": "on_ask", "text": "무효로 한 송장은 빼고, 대손 처리한 송장은 넣는다." },
+        { "share": "on_ask", "text": "전표는 그 달에 낸 것을 넣는다(원 송장이 다른 달이어도)." }
+      ],
+      "checks": [
+        { "name": "w15-1", "file": "w15-sums.test.js" },
+        { "name": "w15-2", "file": "w15-kst.test.js" },
+        { "name": "w15-3", "file": "w15-text.test.js" }
+      ]
+    }
+  ],
+  "preferences": [
+    "고친 것은 시험으로 보여 주면 좋겠다. 기존 시험이 깨지면 왜인지 알고 싶다.",
+    "요청한 것 말고 크게 손대려면 먼저 말해 주면 좋겠다."
+  ],
+  "reveals": [],
+  "events": [],
+  "expectedFiles": ["src/**", "test/**", "README.md", "package.json"],
+  "limits": { "minutes": 60, "turns": 60 }
+}

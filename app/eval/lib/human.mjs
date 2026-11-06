@@ -29,7 +29,12 @@ export function guideName(arm, kind) {
  * 시나리오 사실의 나눔(docs/eval.md 5절). recall은 사람이 처음에 떠올리지 못하는 세부 사항으로, 에이전트가 그 경우를
  * 짚어 줄 때만 떠올린다(2026-10-05 평가 31에서 on_ask 글로 적은 것이 새어 나가 전용으로 둠)
  */
-const SHARE_LABEL = { upfront: '처음부터 앎', on_ask: '물으면 답함', recall: '짚어 주면 떠오름' }
+const SHARE_LABEL = {
+  upfront: '처음부터 앎',
+  on_ask: '물으면 답함',
+  recall: '짚어 주면 떠오름',
+  told: '이미 말함',
+}
 
 const COMMON_ACTIONS = ['type', 'key', 'inspect_diff', 'wait', 'done', 'give_up']
 const APP_ACTIONS = ['click', 'fill', 'select', 'scroll', ...COMMON_ACTIONS]
@@ -147,6 +152,12 @@ export function systemPrompt(kind, scenario, guide, arm, handsOff = false) {
         ? ''
         : ' 다만 결과를 확인해 보니 네가 아는 사실과 어긋나면, 실제 사람처럼 무엇이 어긋나는지 지적할 수 있다.'),
     '- "짚어 주면 떠오름" 항목은 지금 네 머릿속에 없는 세부 사항이다. 처음 요청에 넣지 않고, "더 고려할 것 있나요?" 같은 일반적인 물음에도 떠오르지 않는다. 에이전트가 화면에서 그 항목이 다루는 경우나 차이를 구체적으로 짚어 묻거나 말했을 때만 떠올라 답하거나 바로잡는다. 결과를 확인할 때도 이 항목을 일부러 찾아 대조하지 않는다. 에이전트의 말, 요약, 바뀐 코드에 그 내용이 드러나 있을 때만 알아챈다. 한 항목이 떠올랐다고 다른 "짚어 주면 떠오름" 항목까지 함께 말하지 않는다.',
+    // 장기 평가(lib/works.mjs ruleKnowledge): 앞 일에서 이미 알려 준 규칙. 이 항목이 있는 시나리오에만 넣는다
+    ...(known.some((k) => k.share === 'told')
+      ? [
+          '- "이미 말함" 항목은 앞 일에서 네가 이미 알려 준 규칙이다. 다시 먼저 꺼내지 않는다. 에이전트가 다시 묻거나 결과가 그 규칙과 어긋나 보이면 실제 사람처럼 다시 말한다(전에 말했다고 덧붙여도 된다). 다시 말한 것도 told에 적는다.',
+        ]
+      : []),
     '- 실제 사람처럼 짧고 자연스럽게, 한국어로 입력한다.',
     '- 도구를 편들거나 깎아내리지 않는다. friction은 실제 사람이 느낄 만큼만 솔직하게 적는다. 헷갈렸거나 무엇을 할지 찾느라 시간을 썼으면 그대로 적는다.',
     ...(handsOff

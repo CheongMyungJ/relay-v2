@@ -1,0 +1,104 @@
+diff --git a/src/billing/invoices.js b/src/billing/invoices.js
+index d6d03fb..0568043 100644
+--- a/src/billing/invoices.js
++++ b/src/billing/invoices.js
+@@ -15,10 +15,11 @@ export const AGING_BUCKETS = [
+   { label: '90+', from: 91, to: Infinity },
+ ]
+ 
+-/** 금액 표시: 12300 → '12,300원' */
++/** 금액 표시: 12300 → '12,300원', 음수는 괄호 '(5,000원)' */
+ export function formatWon(amount) {
+   const n = Math.trunc(amount)
+-  return `${n < 0 ? '-' : ''}${Math.abs(n).toLocaleString('ko-KR')}원`
++  const text = `${Math.abs(n).toLocaleString('ko-KR')}원`
++  return n < 0 ? `(${text})` : text
+ }
+ 
+ function csvCell(value) {
+diff --git a/src/orders/pricing.js b/src/orders/pricing.js
+index dbb2c04..c468b3a 100644
+--- a/src/orders/pricing.js
++++ b/src/orders/pricing.js
+@@ -12,11 +12,10 @@ export const SHIPPING = {
+   heavyFee: 2000,
+ }
+ 
+-/** 12300 → '12,300원', -5000 → '-5,000원' */
++/** 12300 → '12,300원', -5000 → '(5,000원)'(음수는 괄호) */
+ export function formatWon(n) {
+-  const sign = n < 0 ? '-' : ''
+   const digits = String(Math.abs(Math.trunc(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+-  return `${sign}${digits}원`
++  return Math.trunc(n) < 0 ? `(${digits}원)` : `${digits}원`
+ }
+ 
+ export function lineAmount(line) {
+diff --git a/test/billing.test.js b/test/billing.test.js
+index 14669ae..62001bd 100644
+--- a/test/billing.test.js
++++ b/test/billing.test.js
+@@ -99,7 +99,7 @@ test('명세서', () => {
+   assert.equal(st.closing, 25000)
+   const text = shop.billing.renderStatement(st)
+   assert.match(text, /최유나 님 명세서 \(2026-04-01 ~ 2026-04-30\)/)
+-  assert.match(text, /전표 CN-2026-00001 {2}-5,000원/)
++  assert.match(text, /전표 CN-2026-00001 {2}\(5,000원\)/)
+ })
+ 
+ test('송장 글과 전표 글', () => {
+@@ -107,9 +107,9 @@ test('송장 글과 전표 글', () => {
+   const order = placePaid(shop, 'u-1', [['TEA', 1]])
+   shop.orders.cancelOrder(order.id)
+   const invoice = shop.billing.invoiceForOrder(order.id)
+-  assert.match(shop.billing.renderInvoice(invoice.id), /전표 {2}-33,000원/)
++  assert.match(shop.billing.renderInvoice(invoice.id), /전표 {2}\(33,000원\)/)
+   const [note] = shop.billing.creditNotesFor(invoice.id)
+-  assert.match(shop.billing.renderCreditNote(note.id), /금액 {2}-33,000원\n부가세 {2}-3,000원/)
++  assert.match(shop.billing.renderCreditNote(note.id), /금액 {2}\(33,000원\)\n부가세 {2}\(3,000원\)/)
+ })
+ 
+ test('송장 CSV', () => {
+@@ -240,6 +240,6 @@ test('월간 매출', () => {
+   })
+   assert.equal(
+     shop.billing.monthlyReportText('2026-03'),
+-    '2026-03 매출\n송장 2건 88,000원\n전표 1건 -33,000원\n순매출 55,000원\n부가세 4,999원',
++    '2026-03 매출\n송장 2건 88,000원\n전표 1건 (33,000원)\n순매출 55,000원\n부가세 4,999원',
+   )
+ })
+diff --git a/test/orders.test.js b/test/orders.test.js
+index 806cfea..b85e097 100644
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -132,7 +132,7 @@ test('상담 요약', () => {
+   shop.orders.cancelLines(paid.id, [{ sku: 'MUG', qty: 1 }])
+   assert.equal(
+     shop.orders.supportSummary(paid.id),
+-    ['주문 A-1001 · 결제 완료', '고객 최유나 · 010-****-3333', '상품 42,000원 · 할인 -3,000원 · 배송비 3,000원 · 합계 42,000원', '환불 11,143원'].join('\n'),
++    ['주문 A-1001 · 결제 완료', '고객 최유나 · 010-****-3333', '상품 42,000원 · 할인 (3,000원) · 배송비 3,000원 · 합계 42,000원', '환불 11,143원'].join('\n'),
+   )
+   const other = shop.orders.placeOrder({ customerId: 'u-3', cart: cartOf(shop, [['BAG', 1]]) })
+   assert.equal(shop.orders.supportSummary(other.id).split('\n')[1], '고객 고한라 · 연락처 없음')
+diff --git a/test/pricing.test.js b/test/pricing.test.js
+index 6904dbe..8f7920e 100644
+--- a/test/pricing.test.js
++++ b/test/pricing.test.js
+@@ -6,7 +6,7 @@ import { cartOf, setup } from './helpers.js'
+ test('금액 표시', () => {
+   assert.equal(formatWon(0), '0원')
+   assert.equal(formatWon(1234567), '1,234,567원')
+-  assert.equal(formatWon(-5000), '-5,000원')
++  assert.equal(formatWon(-5000), '(5,000원)')
+ })
+ 
+ test('기본 배송비와 무료 배송', () => {
+@@ -54,7 +54,7 @@ test('금액 요약 글', () => {
+     [
+       '머그컵 x2  24,000원',
+       '상품 합계  24,000원',
+-      '할인(WELCOME)  -3,000원',
++      '할인(WELCOME)  (3,000원)',
+       '배송비  3,000원',
+       '합계  24,000원',
+       '(부가세 2,453원 포함)',

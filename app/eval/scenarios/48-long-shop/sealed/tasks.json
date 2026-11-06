@@ -1,0 +1,35 @@
+{
+  "note": "봉인 과제. 요청 열이 끝난 뒤 각 쪽의 마지막 레포에서 같은 기준 에이전트가 사람 없이 한다. 설계자는 이 폴더를 열지 않는다(docs/eval.md 5절).",
+  "tasks": [
+    {
+      "id": "s1",
+      "type": "feature",
+      "report": "회계팀 요청: 사람이 보는 글에서 음수 금액은 '-5,000원' 대신 '(5,000원)'처럼 괄호로 쓴다. 장바구니 요약(src/orders/pricing.js의 quoteText), 상담 요약(orders.supportSummary), 송장·전표·명세서 글(billing.renderInvoice, renderCreditNote, renderStatement), 월간 매출 글(billing.monthlyReportText) 모두다. 양수와 0은 그대로 두고, 영어 알림의 'KRW 12,300' 꼴도 그대로다.",
+      "checks": [
+        { "name": "s1-1", "file": "s1-orders.test.js" },
+        { "name": "s1-2", "file": "s1-billing.test.js" }
+      ],
+      "retires": ["w11-1", "w15-3"]
+    },
+    {
+      "id": "s2",
+      "type": "feature",
+      "report": "카카오 알림톡을 더한다. 고객 설정에서 kakao를 켜면(`preferences.set(id, { kakao: true })`, 기본은 꺼짐) 문자 대신 알림톡으로 보낸다. 받는 곳은 전화번호, 본문은 문자와 같다. 보낸 것은 `shop.channels.kakao.sent`에 문자와 같은 꼴({ to, body, type, at })로 남긴다. 수신 거부(문자를 끈 고객은 알림톡도 받지 않는다, 광고 수신 거부), 방해 금지 시간, 돈 알림 규칙은 문자와 같다. 방해 금지 시간에 미룬 것은 미룰 때 고른 길(문자나 알림톡)로 보낸다.",
+      "checks": [
+        { "name": "s2-1", "file": "s2-send.test.js" },
+        { "name": "s2-2", "file": "s2-quiet.test.js" }
+      ],
+      "retires": []
+    },
+    {
+      "id": "s3",
+      "type": "feature",
+      "report": "원 단위 처리를 바꾼다. 퍼센트 쿠폰의 할인과 일부 취소 때 쿠폰 할인의 몫을 원 미만 버림에서 반올림(0.5는 올림)으로 바꾼다. 환불, 반품 전표, 상담 요약, 월간 매출이 모두 같은 금액이어야 한다. 정액 쿠폰은 그대로다.",
+      "checks": [
+        { "name": "s3-1", "file": "s3-coupon.test.js" },
+        { "name": "s3-2", "file": "s3-share.test.js" }
+      ],
+      "retires": ["w01-1", "w03-1", "w08-2", "w10-1", "w11-1", "w15-1", "w15-3"]
+    }
+  ]
+}

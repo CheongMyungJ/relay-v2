@@ -1,0 +1,116 @@
+diff --git a/src/notifications/notifier.js b/src/notifications/notifier.js
+index 9233da2..3609608 100644
+--- a/src/notifications/notifier.js
++++ b/src/notifications/notifier.js
+@@ -1,6 +1,6 @@
+ // 알림 보내기. 이벤트를 듣고 고객의 언어로 문구를 만들어 메일과 문자로 보낸다.
+-// 문자는 방해 금지 시간이면 미뤄 두었다가 flush()에서 보낸다. 다만 돈 알림(환불, 송장)은 바로 보낸다.
+-// 받지 않기로 한 채널은 건너뛴다.
++// 방해 금지 시간에는 문자를 보내지 않는다. 돈 알림(환불, 송장)은 메일만 보내고 문자는 건너뛴다. 그 밖의 문자는 미뤄
++// 두었다가 flush()에서 보낸다. 받지 않기로 한 채널은 건너뛴다.
+ import { render } from './templates.js'
+ import { isQuiet, quietEnds } from './quiet-hours.js'
+ 
+@@ -47,7 +47,7 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+   )
+ 
+   /**
+-   * 고객 하나에게 알림을 보낸다. money는 돈 알림(환불, 송장)이라 방해 금지 시간에도 문자를 바로 보낸다.
++   * 고객 하나에게 알림을 보낸다. money는 돈 알림(환불, 송장)이라 방해 금지 시간에는 문자를 건너뛴다(미루지 않는다).
+    * @returns {{ channel: string, status: 'sent' | 'deferred' | 'skipped', reason?: string }[]}
+    */
+   function notify(customerId, type, data, { marketing = false, money = false } = {}) {
+@@ -69,7 +69,9 @@ export function createNotifier({ store, bus, clock, customers, channels, prefere
+       results.push({ channel: 'sms', status: 'skipped', reason: 'no-phone' })
+     } else if (!preferences.allows(customerId, 'sms', { marketing })) {
+       results.push({ channel: 'sms', status: 'skipped', reason: 'opted-out' })
+-    } else if (!money && isQuiet(now)) {
++    } else if (money && isQuiet(now)) {
++      results.push({ channel: 'sms', status: 'skipped', reason: 'quiet-hours' })
++    } else if (isQuiet(now)) {
+       store.outbox.push({
+         channel: 'sms',
+         customerId,
+diff --git a/src/notifications/quiet-hours.js b/src/notifications/quiet-hours.js
+index 54a7a1c..c1d3731 100644
+--- a/src/notifications/quiet-hours.js
++++ b/src/notifications/quiet-hours.js
+@@ -1,14 +1,14 @@
+-// 방해 금지 시간: 밤 9시부터 아침 8시까지(한국 시간)는 문자를 보내지 않고 아침 8시로 미룬다.
++// 방해 금지 시간: 밤 10시부터 아침 7시까지(한국 시간). 이 시간에는 문자를 보내지 않는다(notifier.js가 미루거나 건너뜀).
+ import { fromKst, kstParts } from '../shared/time.js'
+ 
+-export const QUIET = { start: 21, end: 8 }
++export const QUIET = { start: 22, end: 7 }
+ 
+ export function isQuiet(date) {
+   const { hour } = kstParts(date)
+   return hour >= QUIET.start || hour < QUIET.end
+ }
+ 
+-/** 방해 금지 시간이 끝나는 때(다음 아침 8시, 한국 시간) */
++/** 방해 금지 시간이 끝나는 때(다음 아침 7시, 한국 시간) */
+ export function quietEnds(date) {
+   const p = kstParts(date)
+   const today = fromKst(p.year, p.month, p.day, QUIET.end)
+diff --git a/test/notifier.test.js b/test/notifier.test.js
+index d666ff1..8848761 100644
+--- a/test/notifier.test.js
++++ b/test/notifier.test.js
+@@ -42,20 +42,21 @@ test('방해 금지 시간에는 문자를 아침으로 미룬다', () => {
+   assert.equal(shop.channels.email.sent.length, 1)
+   assert.equal(shop.channels.sms.sent.length, 0)
+   const [pending] = shop.notifier.pending()
+-  assert.equal(pending.dueAt, '2026-03-03T23:00:00.000Z')
+-  atKst(shop, '2026-03-04 07:59')
++  assert.equal(pending.dueAt, '2026-03-03T22:00:00.000Z')
++  atKst(shop, '2026-03-04 06:59')
+   assert.equal(shop.notifier.flush(), 0)
+-  atKst(shop, '2026-03-04 08:00')
++  atKst(shop, '2026-03-04 07:00')
+   assert.equal(shop.notifier.flush(), 1)
+   assert.equal(shop.channels.sms.sent.length, 1)
+   assert.equal(shop.notifier.pending().length, 0)
+ })
+ 
+ test('방해 금지 시간의 경계', () => {
+-  assert.equal(isQuiet('2026-03-03T11:59:00Z'), false) // 20:59
+-  assert.equal(isQuiet('2026-03-03T12:00:00Z'), true) // 21:00
+-  assert.equal(isQuiet('2026-03-03T22:59:00Z'), true) // 07:59
+-  assert.equal(quietEnds('2026-03-03T17:00:00Z').toISOString(), '2026-03-03T23:00:00.000Z') // 02:00 → 08:00
++  assert.equal(isQuiet('2026-03-03T12:59:00Z'), false) // 21:59
++  assert.equal(isQuiet('2026-03-03T13:00:00Z'), true) // 22:00
++  assert.equal(isQuiet('2026-03-03T21:59:00Z'), true) // 06:59
++  assert.equal(isQuiet('2026-03-03T22:00:00Z'), false) // 07:00
++  assert.equal(quietEnds('2026-03-03T17:00:00Z').toISOString(), '2026-03-03T22:00:00.000Z') // 02:00 → 07:00
+ })
+ 
+ test('광고는 광고 수신을 끈 고객에게 가지 않는다', () => {
+@@ -99,15 +100,25 @@ test('영어 독촉 문구', () => {
+   assert.match(shop.channels.email.sent.at(-1).body, /7 days overdue/)
+ })
+ 
+-test('환불 알림은 금액을 알리고 방해 금지 시간에도 바로 간다', () => {
++test('환불 알림은 금액을 알린다', () => {
+   const shop = setup()
+-  atKst(shop, '2026-03-03 23:30')
++  atKst(shop, '2026-03-03 15:00')
+   const order = placePaid(shop, 'u-1', [['MUG', 1], ['TEA', 1]])
+   shop.orders.cancelLines(order.id, [{ sku: 'MUG', qty: 1 }])
+   assert.equal(shop.channels.sms.sent.at(-1).body, '[샵] 주문 A-1001 일부 취소, 환불 12,000원')
+   shop.orders.cancelOrder(order.id)
+   assert.match(shop.channels.email.sent.at(-1).body, /환불 금액: 33,000원/)
++})
++
++test('방해 금지 시간의 돈 알림은 메일만 보내고 문자는 건너뛴다', () => {
++  const shop = setup()
++  atKst(shop, '2026-03-03 23:30')
++  const order = placePaid(shop, 'u-1', [['MUG', 1], ['TEA', 1]])
++  shop.orders.cancelLines(order.id, [{ sku: 'MUG', qty: 1 }])
++  assert.match(shop.channels.email.sent.at(-1).body, /환불 금액: 12,000원/)
++  assert.equal(shop.channels.sms.sent.length, 0)
+   assert.deepEqual(shop.notifier.pending().map((m) => m.type), ['order.placed'])
++  assert.deepEqual(shop.notifier.log({ customerId: 'u-1' }).at(-1).results[1], { channel: 'sms', status: 'skipped', reason: 'quiet-hours' })
+ })
+ 
+ test('영어 알림의 금액은 KRW', () => {

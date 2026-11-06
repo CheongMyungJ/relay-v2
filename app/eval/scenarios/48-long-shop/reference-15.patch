@@ -1,0 +1,84 @@
+diff --git a/src/billing/invoices.js b/src/billing/invoices.js
+index afd32c6..d6d03fb 100644
+--- a/src/billing/invoices.js
++++ b/src/billing/invoices.js
+@@ -463,6 +463,42 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+     return `${rows.join('\n')}\n`
+   }
+ 
++  // ── 월간 매출 ───────────────────────────────────────────────────────────
++
++  /**
++   * 회계의 월간 매출. month는 'YYYY-MM'(한국 시간). 무효 송장은 빼고 대손 송장은 넣는다.
++   * 부가세는 송장 부가세 합 − 전표 부가세 합이다.
++   */
++  function monthlyReport(month) {
++    if (!/^\d{4}-\d{2}$/.test(month)) fail('BAD_REQUEST', `월: ${month}`)
++    const inMonth = (at) => kstDate(at).slice(0, 7) === month
++    const invoices = store.invoices.filter((i) => inMonth(i.issuedAt))
++    const credits = store.creditNotes.filter((c) => inMonth(c.issuedAt))
++    const invoiced = invoices.reduce((sum, i) => sum + i.total, 0)
++    const credited = credits.reduce((sum, c) => sum + c.amount, 0)
++    const vat = invoices.reduce((sum, i) => sum + i.vat, 0) - credits.reduce((sum, c) => sum + c.vat, 0)
++    return {
++      month,
++      invoices: invoices.length,
++      invoiced,
++      creditNotes: credits.length,
++      credited,
++      net: invoiced - credited,
++      vat,
++    }
++  }
++
++  function monthlyReportText(month) {
++    const r = monthlyReport(month)
++    return [
++      `${r.month} 매출`,
++      `송장 ${r.invoices}건 ${formatWon(r.invoiced)}`,
++      `전표 ${r.creditNotes}건 ${formatWon(-r.credited)}`,
++      `순매출 ${formatWon(r.net)}`,
++      `부가세 ${formatWon(r.vat)}`,
++    ].join('\n')
++  }
++
+   /** 고객이 지금까지 낸 금액(입금 − 전표) */
+   function customerTotals(customerId) {
+     const invoices = store.invoices.filter((i) => i.customerId === customerId)
+@@ -601,6 +637,8 @@ export function createBilling({ store, bus, clock, ids, customers }) {
+     invoicesCsv,
+     receiptsCsv,
+     overdueCsv,
++    monthlyReport,
++    monthlyReportText,
+     customerTotals,
+     taxInvoiceData,
+     adjustInvoice,
+diff --git a/test/billing.test.js b/test/billing.test.js
+index 7d2da8e..14669ae 100644
+--- a/test/billing.test.js
++++ b/test/billing.test.js
+@@ -223,3 +223,23 @@ test('일부 취소는 환불한 금액의 전표가 된다', () => {
+   const invoice = shop.billing.invoiceForOrder(order.id)
+   assert.deepEqual(shop.billing.creditNotesFor(invoice.id).map((c) => [c.number, c.amount]), [['CN-2026-00001', refund]])
+ })
++
++test('월간 매출', () => {
++  const shop = setup('2026-03-10T03:00:00Z')
++  manual(shop, 'u-1', 55000)
++  const order = placePaid(shop, 'u-1', [['TEA', 1]])
++  shop.orders.cancelOrder(order.id)
++  assert.deepEqual(shop.billing.monthlyReport('2026-03'), {
++    month: '2026-03',
++    invoices: 2,
++    invoiced: 88000,
++    creditNotes: 1,
++    credited: 33000,
++    net: 55000,
++    vat: 4999,
++  })
++  assert.equal(
++    shop.billing.monthlyReportText('2026-03'),
++    '2026-03 매출\n송장 2건 88,000원\n전표 1건 -33,000원\n순매출 55,000원\n부가세 4,999원',
++  )
++})

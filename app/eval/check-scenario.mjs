@@ -9,6 +9,11 @@
 //      npm test가 통과하고, 다른 Work의 guard가 아닌 숨긴 시험은 실패한다(Work마다 고칠 것이 갈린다)
 //   5. teammate Work가 있으면(팀원 교대에서 도구가 앞 Work를 main에 머지한다) reference-1..n을 차례로 모두 적용해도
 //      npm test와 모든 숨긴 시험이 통과한다(머지된 앞 Work가 뒤 Work의 시험을 깨지 않는다)
+//   7. 장기 평가(sequence, docs/eval.md 5절): 4·5 대신 정답을 차례로 쌓는다(chain). n번째 Work의 시험은 앞 정답까지
+//      적용한 레포에서 실패하고, reference-n까지 적용하면 그 Work까지의 누적 시험(뺀 것 retires 빼고)과 npm test가 통과한다.
+//      기준과 마지막 레포의 줄 수가 sequence.lines 안이다. 봉인 과제(sealed/tasks.json)는 마지막 레포에서 실패하고
+//      sealed/reference-<id>.patch를 얹으면 통과하며 누적 시험(그 과제가 뺀 것 빼고)도 통과한다. 봉인 과제는 시험 이름과
+//      출력을 찍지 않고 수만 찍는다(설계자가 이 출력을 본다)
 //   6. 숨긴 쟁점(설계 시나리오, relay I111): `{ name, issue }`는 시험 파일이 없고 판정 모델이 가르므로 여기서는 돌리지
 //      않는다(위 1~3의 숨긴 시험에서 뺀다). 모양만 본다: issue 글이 있고 file이 없다, Work 하나짜리다. 범위 guard
 //      `{ name, guard: true, scope: true }`는 기대 밖 파일이 없으면 통과다(위 1~3에서 guard로 돈다)
@@ -17,10 +22,10 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { judgeTree } from './lib/repo.mjs'
+import { judgeTree, matchesAny } from './lib/repo.mjs'
 import { copyTree, isMain, run } from './lib/util.mjs'
 import { isIssue } from './lib/issue-judge.mjs'
-import { allChecks, multiWork, workParts } from './lib/works.mjs'
+import { activeChecks, allChecks, isSequence, multiWork, workParts } from './lib/works.mjs'
 
 const SCENARIOS = process.env.RELAY_EVAL_SCENARIOS
   ? path.resolve(process.env.RELAY_EVAL_SCENARIOS)
@@ -56,22 +61,81 @@ function prepare(dir, work, patches) {
   return tree
 }
 
-function judge(dir, scenario, work, patch) {
+function judge(
+  dir,
+  scenario,
+  work,
+  patch,
+  checks = allChecks(scenario),
+  hiddenDir = path.join(dir, 'hidden'),
+) {
   const tree = prepare(dir, work, patch)
   return judgeTree({
     tree,
     baseDir: path.join(dir, 'repo'),
-    hiddenDir: path.join(dir, 'hidden'),
-    scenario: { ...scenario, checks: allChecks(scenario) },
+    hiddenDir,
+    scenario: { ...scenario, checks },
     work: path.join(work, 'judge'),
   })
 }
 
+/** 폴더의 파일 가운데 glob에 맞는 것의 줄 수 합과 가장 긴 파일 */
+function countLines(root, include) {
+  let total = 0
+  let max = { file: null, lines: 0 }
+  const walk = (rel) => {
+    for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
+      const file = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        if (e.name !== 'node_modules' && e.name !== '.git') walk(file)
+      } else if (matchesAny(file, include)) {
+        const text = fs.readFileSync(path.join(root, file), 'utf8')
+        const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+        total += lines
+        if (lines > max.lines) max = { file, lines }
+      }
+    }
+  }
+  walk('')
+  return { total, max }
+}
+
 const mark = (ok) => (ok ? 'O' : 'X')
+
+/** 장기 평가(sequence)의 모양: 규칙, 바뀌는 Work, 뺀 시험. 문제 목록을 돌려준다 */
+export function sequenceProblems(scenario) {
+  if (!scenario.sequence) return []
+  const problems = []
+  const works = scenario.works ?? []
+  if (!works.length) return ['sequence가 있는데 works가 없음']
+  const ids = new Set((scenario.rules ?? []).map((r) => r.id))
+  const used = new Set(works.flatMap((w) => w.rules ?? []))
+  for (const [n, w] of works.entries()) {
+    for (const id of w.rules ?? [])
+      if (!ids.has(id)) problems.push(`Work ${n + 1}의 규칙 ${id}가 rules에 없음`)
+    const earlier = new Set(works.slice(0, n).flatMap((x) => (x.checks ?? []).map((c) => c.name)))
+    for (const name of w.retires ?? [])
+      if (!earlier.has(name)) problems.push(`Work ${n + 1}이 빼는 시험 ${name}이 앞 Work에 없음`)
+  }
+  for (const r of scenario.rules ?? []) {
+    if (!r.text?.trim()) problems.push(`규칙 ${r.id}의 글이 비었음`)
+    if (!used.has(r.id)) problems.push(`규칙 ${r.id}가 어느 Work에도 들지 않음`)
+    for (const c of r.changes ?? []) {
+      if (!Number.isInteger(c.work) || c.work < 2 || c.work > works.length)
+        problems.push(`규칙 ${r.id}가 바뀌는 Work 번호가 잘못됨: ${c.work}`)
+      else if (!(works[c.work - 1].rules ?? []).includes(r.id))
+        problems.push(`규칙 ${r.id}가 바뀌는 Work ${c.work}의 rules에 ${r.id}가 없음`)
+    }
+  }
+  const lines = scenario.sequence.lines
+  if (lines && !(lines.min <= lines.max && Array.isArray(lines.include) && lines.include.length))
+    problems.push('sequence.lines는 { include, min, max }')
+  return problems
+}
 
 /** 숨긴 쟁점과 범위 guard의 모양 (relay I111). 문제 목록을 돌려준다 */
 export function shapeProblems(scenario) {
-  const problems = []
+  const problems = [...sequenceProblems(scenario)]
   for (const c of allChecks(scenario)) {
     if (isIssue(c)) {
       if (!c.issue.trim()) problems.push(`숨긴 쟁점의 issue가 비었음: ${c.name}`)
@@ -136,7 +200,9 @@ function checkOne(id) {
 
     // Work마다의 정답 (works). 그 Work의 시험만 통과하고 다른 Work의 시험은 그대로 실패해야 한다
     const parts = workParts(scenario)
-    if (parts.length > 1) {
+    if (isSequence(scenario)) {
+      checkSequence(dir, scenario, work, problems, line)
+    } else if (parts.length > 1) {
       parts.forEach((w, n) => {
         const patch = path.join(dir, `reference-${n + 1}.patch`)
         if (!fs.existsSync(patch)) {
@@ -200,6 +266,125 @@ function checkOne(id) {
   for (const p of problems) console.log(`  문제: ${p.split('\n').slice(0, 30).join('\n    ')}`)
   console.log(problems.length ? `  => 문제 ${problems.length}개` : '  => 이상 없음')
   return problems.length === 0
+}
+
+/**
+ * 장기 평가: 정답을 차례로 쌓아 Work마다 확인하고, 줄 수와 봉인 과제를 본다(머리말 7). problems에 더한다
+ */
+function checkSequence(dir, scenario, work, problems, line) {
+  const parts = workParts(scenario)
+  const refs = parts.map((_, n) => path.join(dir, `reference-${n + 1}.patch`))
+  const missing = refs.filter((f) => !fs.existsSync(f)).map((f) => path.basename(f))
+  if (missing.length) {
+    problems.push(`장기 평가인데 정답 패치가 없음: ${missing.join(', ')}`)
+    return
+  }
+  const guard = (c) => !!c.guard
+  const lines = scenario.sequence.lines
+  const lineCheck = (label, root) => {
+    if (!lines) return
+    const { total, max } = countLines(root, lines.include)
+    console.log(`  ${label.padEnd(28)} 줄 ${total} (가장 긴 파일 ${max.file} ${max.lines}줄)`)
+    if (total < lines.min || total > lines.max)
+      problems.push(`${label}의 줄 수 ${total}가 ${lines.min}~${lines.max} 밖`)
+  }
+  lineCheck('기준', path.join(dir, 'repo'))
+
+  for (let n = 0; n < parts.length; n++) {
+    const own = parts[n].checks ?? []
+    // 앞 정답까지 쌓은 레포: 이 Work의 시험이 실패해야 이 Work가 고칠 것이 있다
+    const before = judge(
+      dir,
+      scenario,
+      path.join(work, `chain-${n + 1}-before`),
+      refs.slice(0, n),
+      own,
+    )
+    for (const c of before.checks)
+      if (!guard(c) && c.pass)
+        problems.push(`Work ${n + 1}의 숨긴 시험이 앞 정답까지로 이미 통과함: ${c.name}`)
+    const active = activeChecks(scenario, n)
+    const j = judge(dir, scenario, path.join(work, `chain-${n + 1}`), refs.slice(0, n + 1), active)
+    const regression = active.filter((c) => c.regression).length
+    console.log(
+      `${line(`reference-1..${n + 1}`, j)}  (누적 ${regression}개${(parts[n].retires ?? []).length ? `, 뺌 ${parts[n].retires.join(',')}` : ''})`,
+    )
+    if (!j.files.length) problems.push(`Work ${n + 1} 정답 패치를 적용했는데 바뀐 파일이 없음`)
+    if (!j.repoTests.pass)
+      problems.push(`reference-1..${n + 1}에서 npm test 실패\n${j.repoTests.output}`)
+    for (const c of j.checks)
+      if (!c.pass) problems.push(`reference-1..${n + 1}에서 숨긴 시험 실패: ${c.name}\n${c.output}`)
+    if (j.unrelated.length)
+      problems.push(`reference-1..${n + 1}이 기대 밖 파일을 바꿈: ${j.unrelated.join(', ')}`)
+    if (n === parts.length - 1)
+      lineCheck(`reference-1..${n + 1}`, prepare(dir, path.join(work, 'lines-final'), refs))
+  }
+
+  // 봉인 과제: 이름과 출력을 찍지 않는다
+  const sealed = scenario.sequence.sealed
+  if (!sealed) return
+  const sealedDir = path.join(dir, sealed.dir ?? 'sealed')
+  const file = path.join(sealedDir, 'tasks.json')
+  if (!fs.existsSync(file)) {
+    problems.push(`봉인 과제 파일이 없음: ${path.relative(dir, file)}`)
+    return
+  }
+  const tasks = JSON.parse(fs.readFileSync(file, 'utf8')).tasks ?? []
+  if (sealed.tasks !== undefined && tasks.length !== sealed.tasks)
+    problems.push(`봉인 과제가 ${sealed.tasks}개여야 하는데 ${tasks.length}개`)
+  const last = activeChecks(scenario, parts.length - 1)
+  const names = new Set(allChecks(scenario).map((c) => c.name))
+  tasks.forEach((t, k) => {
+    const label = `봉인 과제 ${k + 1}`
+    const own = t.checks ?? []
+    if (!own.length || own.some((c) => !c.file))
+      problems.push(`${label}: 시험이 없거나 file이 없음`)
+    for (const r of t.retires ?? [])
+      if (!names.has(r)) problems.push(`${label}: 빼는 시험이 열에 없음`)
+    const patch = path.join(sealedDir, `reference-${t.id}.patch`)
+    if (!fs.existsSync(patch)) {
+      problems.push(`${label}: 정답 패치가 없음`)
+      return
+    }
+    const hidden = path.join(sealedDir, 'hidden')
+    const before = judge(
+      dir,
+      scenario,
+      path.join(work, `sealed-${k + 1}-before`),
+      refs,
+      own,
+      hidden,
+    )
+    const failing = before.checks.filter((c) => !c.pass).length
+    const retired = new Set(t.retires ?? [])
+    const keep = last.filter((c) => !retired.has(c.name))
+    const after = judge(
+      dir,
+      scenario,
+      path.join(work, `sealed-${k + 1}`),
+      [...refs, patch],
+      own,
+      hidden,
+    )
+    const kept = judge(
+      dir,
+      scenario,
+      path.join(work, `sealed-${k + 1}-kept`),
+      [...refs, patch],
+      keep,
+    )
+    const passing = after.checks.filter((c) => c.pass).length
+    const keptPass = kept.checks.filter((c) => c.pass).length
+    console.log(
+      `  ${label.padEnd(28)} 시험 ${own.length}개: 마지막 레포에서 실패 ${failing}, 정답에서 통과 ${passing}, npm test ${mark(after.repoTests.pass)}, 누적 시험 ${keptPass}/${keep.length}(뺌 ${retired.size})`,
+    )
+    if (failing !== own.length) problems.push(`${label}: 마지막 레포에서 이미 통과하는 시험이 있음`)
+    if (passing !== own.length) problems.push(`${label}: 정답 패치에서 봉인 시험이 실패함`)
+    if (!after.repoTests.pass) problems.push(`${label}: 정답 패치에서 npm test 실패`)
+    if (keptPass !== keep.length)
+      problems.push(`${label}: 정답 패치에서 누적 시험이 실패함(뺄 시험을 retires에 적는다)`)
+    if (after.unrelated.length) problems.push(`${label}: 정답 패치가 기대 밖 파일을 바꿈`)
+  })
 }
 
 // 시험(app/eval/test)이 shapeProblems만 가져다 쓸 때는 돌리지 않는다
