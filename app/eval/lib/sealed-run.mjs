@@ -2,15 +2,17 @@
 // 레포(원격 main) 사본에서 같은 기준 에이전트가 사람 없이 과제를 한다. 기준 에이전트는 맨 claude CLI 하나(claude -p, 권한 확인
 // 없음, 쪽과 상관없이 같은 모델·effort·시간 제한·프롬프트)이고, 레포에 남은 것(CLAUDE.md, docs/knowledge, .relay/)은 그대로
 // 읽을 수 있다. 판정은 그 과제의 숨긴 시험(sealed/hidden)과, 마지막 Work의 누적 시험 가운데 과제가 뺀 것을 뺀 것이다.
+// 누적 시험은 과제 전 마지막 main에서도 판정해, 거기서 이미 실패하던 것(preBroken, 쪽의 C2가 센다)은 과제의 통과에 세지 않는다.
 // 봉인: 과제의 시험 이름과 출력을 결과에 남기지 않는다(통과 여부와 차례 번호만). 누적 시험은 id(w01-1 등)와 통과만 남긴다.
+// 격리: 기준 에이전트는 쪽의 작업 폴더 밖, 쪽 이름도 회차도 없는 새 임시 폴더(task-XXXXXX)에서 돌고(Claude Code는 cwd를 시스템
+// 프롬프트에 넣는다), 판정은 또 다른 임시 폴더에서 한다. 둘 다 과제가 끝나면 지운다(앞 과제의 판정이 뒤 과제에 닿지 않게).
 import { spawn } from 'node:child_process'
-import fs from 'node:fs'
 import path from 'node:path'
 import { cleanEnv, findClaude, makeClaudeConfig } from './env.mjs'
 import { judgeTree } from './repo.mjs'
 import { cloneMain } from './sequence-git.mjs'
 import { keptChecks, sealedPass } from './sequence.mjs'
-import { agentUsage, git, run } from './util.mjs'
+import { agentUsage, git, run, withTempDir } from './util.mjs'
 
 /** 기준 에이전트에게 주는 글: 과제의 요청 뒤에 붙는 한 줄(모든 쪽에 같다) */
 export const BASELINE_NOTE =
@@ -72,17 +74,29 @@ const keptView = (checks) => checks.map((c) => ({ name: c.name, pass: c.pass }))
  * @param {string} o.remote 그 쪽의 원격(bare). main이 마지막 레포다
  * @param {string} o.finalTree 마지막 main의 트리(판정 diff의 기준)
  * @param {object[]} o.lastActive 마지막 Work의 누적 시험(activeChecks)
- * @param {string} o.workDir 이 과제의 작업 폴더
  * @param {{ model: string, effort: string, minutes: number, dry?: boolean }} o.opts
+ * @param {typeof runBaseline} [o.runAgent] 시험용: 기준 에이전트 대신 부를 것(runBaseline과 같은 인자와 결과)
  */
-export async function runSealedTask(o) {
+export function runSealedTask(o) {
+  return withTempDir('task-', (dir) => sealedIn(o, dir))
+}
+
+async function sealedIn(o, dir) {
   const { task, scenario, opts } = o
   const sealedDir = path.join(o.scenarioDir, scenario.sequence?.sealed?.dir ?? 'sealed')
-  fs.rmSync(o.workDir, { recursive: true, force: true })
-  const { repo, head } = cloneMain(o.remote, path.join(o.workDir, 'repo'))
-  const configDir = makeClaudeConfig(path.join(o.workDir, 'cfg-sealed'))
+  const { repo, head } = cloneMain(o.remote, path.join(dir, 'repo'))
+  const configDir = makeClaudeConfig(path.join(dir, 'cfg'))
   let ran
-  if (opts.dry) {
+  if (o.runAgent) {
+    ran = await o.runAgent({
+      prompt: baselinePrompt(task),
+      cwd: repo,
+      configDir,
+      model: opts.model,
+      effort: opts.effort,
+      timeoutMs: opts.minutes * 60_000,
+    })
+  } else if (opts.dry) {
     // 건식: 기준 에이전트 대신 과제의 정답 패치를 얹는다(도구의 길을 확인한다. 모델을 부르지 않는다)
     const patch = path.join(sealedDir, `reference-${task.id}.patch`)
     const r = run('git', ['apply', '--whitespace=nowarn', patch], { cwd: repo })
@@ -104,21 +118,18 @@ export async function runSealedTask(o) {
     })
   }
   const judgeScenario = (checks) => ({ ...scenario, checks })
-  const own = judgeTree({
-    tree: repo,
-    baseDir: o.finalTree,
-    hiddenDir: path.join(sealedDir, 'hidden'),
-    scenario: judgeScenario(task.checks ?? []),
-    work: path.join(o.workDir, 'judge-own'),
-  })
+  // 판정은 기준 에이전트가 끝난 뒤 다른 임시 폴더에서 하고 바로 지운다
+  const judge = (tree, hiddenDir, checks) =>
+    withTempDir('relay-judge-', (work) =>
+      judgeTree({ tree, baseDir: o.finalTree, hiddenDir, scenario: judgeScenario(checks), work }),
+    )
+  const own = judge(repo, path.join(sealedDir, 'hidden'), task.checks ?? [])
   const kept = keptChecks(o.lastActive, task)
-  const cumulative = judgeTree({
-    tree: repo,
-    baseDir: o.finalTree,
-    hiddenDir: path.join(o.scenarioDir, 'hidden'),
-    scenario: judgeScenario(kept),
-    work: path.join(o.workDir, 'judge-kept'),
-  })
+  const cumulativeHidden = path.join(o.scenarioDir, 'hidden')
+  const cumulative = judge(repo, cumulativeHidden, kept)
+  // 과제 전(마지막 main)의 남은 누적 시험: 거기서 이미 실패하던 것은 기준 에이전트의 탓이 아니다
+  const before = judge(o.finalTree, cumulativeHidden, kept).checks
+  const passedBefore = new Set(before.filter((c) => c.pass).map((c) => c.name))
   const agent = agentUsage(configDir)
   let commits = null
   try {
@@ -134,7 +145,7 @@ export async function runSealedTask(o) {
     wallMs: ran.ms,
     costUsd: ran.costUsd,
     agent,
-    pass: sealedPass(own.checks, cumulative.checks),
+    pass: sealedPass(own.checks, cumulative.checks, before),
     own: {
       total: own.checks.length,
       pass: own.checks.filter((c) => c.pass).length,
@@ -144,6 +155,8 @@ export async function runSealedTask(o) {
       total: cumulative.checks.length,
       pass: cumulative.checks.filter((c) => c.pass).length,
       retired: (task.retires ?? []).length,
+      preBroken: kept.filter((c) => !passedBefore.has(c.name)).length,
+      broke: cumulative.checks.filter((c) => !c.pass && passedBefore.has(c.name)).length,
       checks: keptView(cumulative.checks),
     },
     repoTestsPass: own.repoTests.pass,

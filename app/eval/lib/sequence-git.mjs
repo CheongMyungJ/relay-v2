@@ -4,8 +4,8 @@
 //   handoffRepo처럼 뒤 브랜치 쪽 -X theirs로 다시 머지) origin에 push한다. 다음 Work는 main에서 claude를 새로 띄운다.
 // - relay-v3 쪽(relay3, relay3-m2): 앱의 [머지]가 가짜 gh(lib/fake-gh.mjs)로 원격의 main을 움직인다. 앱은 fetch하지 않으므로
 //   Work가 끝나면 도구가 사람이 하듯 레포에서 fetch하고 로컬 main을 origin/main으로 맞춘다(syncMain). 앱으로 머지되지 않은
-//   Work 브랜치(시간 제한, [끝내기]로 끝남 등)는 도구가 cli와 같이 머지한다(mergeBranches, 'harness'로 적는다). 버린 Work는
-//   넣지 않는다.
+//   Work 브랜치(시간 제한, [끝내기]로 끝남 등)는 도구가 cli와 같이 그 worktree의 커밋하지 않은 변경을 커밋하고 머지한다
+//   (lib/sequence-run.mjs landRelay3, mergeBranches, 'harness'로 적는다). 버린 Work는 넣지 않는다.
 import fs from 'node:fs'
 import path from 'node:path'
 import { git, run } from './util.mjs'

@@ -32,6 +32,7 @@ import {
 } from './sequence.mjs'
 import {
   archiveCommit,
+  commitLeftovers,
   exportTree,
   landCli,
   mergeBranches,
@@ -42,7 +43,7 @@ import {
 } from './sequence-git.mjs'
 import { structureMetrics } from './structure.mjs'
 import { overlayFiles, overlayRecord } from './overlay.mjs'
-import { git, readJson, run, writeJson } from './util.mjs'
+import { git, readJson, run, withTempDir, writeJson } from './util.mjs'
 import { activeChecks, workParts } from './works.mjs'
 
 const TOOL_ERRORS = new Set(['harness_error', 'human_error'])
@@ -140,14 +141,19 @@ export function dryWork(o) {
 
 /**
  * relay-v3 쪽 Work의 결과를 main에 넣는다. 앱이 머지한 것(가짜 gh가 원격 main을 움직임)은 가져오고, 머지되지 않았고 버리지 않은
- * Work 브랜치는 도구가 머지한다. squash 머지는 브랜치가 main의 조상이 아니므로 앱이 머지한 Work의 브랜치는 다시 넣지 않는다
- * @param {{ branch: string | null, merged: boolean, abandoned: boolean }[]} works 이 Work에서 생긴 앱 Work
+ * Work 브랜치는 도구가 머지한다. 그 Work의 worktree에 커밋하지 않은 변경(시간 제한 등으로 세션이 커밋하지 못한 것)은 cli와 같게
+ * 먼저 그 브랜치에 커밋한다(leftovers: 커밋한 파일 수. 앞 Work가 끊긴 같은 상태가 쪽에 따라 다음 Work의 기준을 다르게 만들지
+ * 않게). squash 머지는 브랜치가 main의 조상이 아니므로 앱이 머지한 Work의 브랜치는 다시 넣지 않는다
+ * @param {{ branch: string | null, worktree?: string | null, merged: boolean, abandoned: boolean }[]} works 이 Work에서 생긴 앱 Work
  */
 export function landRelay3(repo, works, label) {
   const sync = syncMain(repo)
   const app = works.filter((w) => w.merged).map((w) => w.branch)
-  const left = works
-    .filter((w) => !w.merged && !w.abandoned && w.branch)
+  const open = works.filter((w) => !w.merged && !w.abandoned && w.branch)
+  let leftovers = 0
+  for (const w of open)
+    if (w.worktree && fs.existsSync(w.worktree)) leftovers += commitLeftovers(w.worktree, label)
+  const left = open
     .map((w) => w.branch)
     .filter(
       (b) =>
@@ -162,7 +168,7 @@ export function landRelay3(repo, works, label) {
     : m.merged.length
       ? 'harness'
       : 'none'
-  return { via, app, sync, ...m, head }
+  return { via, app, sync, leftovers, ...m, head }
 }
 
 /** 앱 Work 하나의 M3 지표와 요약(이 Work에서 생긴 것) */
@@ -183,6 +189,7 @@ function appWorkOf(home, id, summary) {
     workId: id,
     status: rec?.state ?? null,
     branch: rec?.branch ?? null,
+    worktree: rec?.worktree ?? null,
     end: summary?.end ?? null,
     merged: summary?.end === 'merged',
     abandoned: rec?.state === 'abandoned',
@@ -216,6 +223,7 @@ const checkView = (defs, checks) =>
  * @param {{ path: string, text: string, sha256: string } | null} [o.overlay] 품질 기준 덧씌우기
  * @param {number} [o.until] 이번에 돌릴 마지막 Work(1부터). 봉인 과제와 구조 지표는 모든 Work가 끝나야 돈다
  * @param {(m: string) => void} [o.log]
+ * @param {Function} [o.sealedAgent] 시험용: 봉인 과제의 기준 에이전트 대신 부를 것(runSealedTask의 runAgent)
  */
 export async function runJob(o) {
   const { scenario, arm, opts } = o
@@ -391,16 +399,18 @@ export async function runJob(o) {
       )
     else landing = landRelay3(p.repo, appWorks, label)
 
-    // main에서 누적 숨긴 시험
+    // main에서 누적 숨긴 시험. 판정 폴더(숨긴 시험을 겹친 사본)는 줄의 작업 폴더 밖에 두고 바로 지운다: 작업 폴더에 남으면
+    // 다음 Work의 에이전트가 레포 위(cli는 한 층, relay-v3 worktree는 두 층)에서 앞으로 올 Work의 숨긴 시험까지 읽을 수 있다
     const defs = activeChecks(scenario, n)
-    const tree = exportTree(p.repo, 'main', path.join(p.workDir, 'judge', `main-${pad(n)}`))
-    const j = judgeTree({
-      tree,
-      baseDir,
-      hiddenDir: path.join(o.scenarioDir, 'hidden'),
-      scenario: { ...ws, checks: defs },
-      work: path.join(p.workDir, 'judge', `work-${pad(n)}`),
-    })
+    const j = withTempDir('relay-judge-', (d) =>
+      judgeTree({
+        tree: exportTree(p.repo, 'main', path.join(d, 'main')),
+        baseDir,
+        hiddenDir: path.join(o.scenarioDir, 'hidden'),
+        scenario: { ...ws, checks: defs },
+        work: path.join(d, 'work'),
+      }),
+    )
     // 바로 앞 Work를 끝낸 main에서 통과했던 시험이 이번에 실패하면 이 Work가 깨뜨린 것이다
     const prev =
       n > 0
@@ -470,24 +480,34 @@ export async function runJob(o) {
     )
   }
 
-  function finalTree() {
+  /** 마지막 main의 트리를 임시 폴더에 꺼내 fn에 준다(끝나면 지운다) */
+  function withFinalTree(fn) {
     git(p.repo, 'checkout', '-q', 'main')
-    return exportTree(p.repo, 'main', path.join(p.workDir, 'judge', 'final-tree'))
+    return withTempDir('relay-final-', (d) => fn(exportTree(p.repo, 'main', path.join(d, 'tree'))))
   }
 
   async function doSealed(id) {
     const task = tasks.find((t) => t.id === id)
     say(`봉인 과제 ${tasks.indexOf(task) + 1}/${tasks.length} 시작`)
-    const r = await runSealedTask({
-      task,
-      scenario,
-      scenarioDir: o.scenarioDir,
-      remote: p.remote,
-      finalTree: finalTree(),
-      lastActive: activeChecks(scenario, parts.length - 1),
-      workDir: path.join(p.workDir, `sealed-${id}`),
-      opts: { ...opts.baseline, dry: !!opts.dry },
-    })
+    // 기준 에이전트는 쪽의 작업 폴더 밖, 쪽 이름이 없는 새 임시 폴더에서 돈다(runSealedTask)
+    const r = await withFinalTree((finalTree) =>
+      runSealedTask({
+        task,
+        scenario,
+        scenarioDir: o.scenarioDir,
+        remote: p.remote,
+        finalTree,
+        lastActive: activeChecks(scenario, parts.length - 1),
+        opts: { ...opts.baseline, dry: !!opts.dry },
+        runAgent: o.sealedAgent,
+      }),
+    )
+    // 기준 에이전트가 돌지 못한 것(API·CLI 오류, 건식의 패치 실패)은 과제의 실패가 아니라 도구 문제다: 멈추고 --retries로
+    // 체크포인트에서 다시 한다. 시간 초과는 과제의 실패로 센다
+    if (r.ending === 'error')
+      throw new Error(
+        `봉인 과제 ${tasks.indexOf(task) + 1}: 기준 에이전트가 돌지 못함 (도구 문제): ${String(r.error ?? '').slice(0, 300)}`,
+      )
     writeJson(path.join(p.resultDir, `sealed-${id}.json`), r)
     state.sealed[id] = { done: true, pass: r.pass }
     say(`봉인 과제 ${tasks.indexOf(task) + 1} 끝: ${r.ending}, ${r.pass ? '통과' : '실패'}`)
@@ -496,12 +516,10 @@ export async function runJob(o) {
   function doStructure() {
     const lines = scenario.sequence?.lines ?? {}
     const so = { include: lines.include, maxLines: scenario.sequence?.bait?.maxLines ?? 600 }
-    const tree = finalTree()
     const ledgerFile = path.join(p.home, 'ledger.jsonl')
     const s = {
       base: structureMetrics(path.join(o.scenarioDir, 'repo'), so),
-      final: structureMetrics(tree, so),
-      repo: repoM3(tree),
+      ...withFinalTree((tree) => ({ final: structureMetrics(tree, so), repo: repoM3(tree) })),
       ledger:
         relay3 && fs.existsSync(ledgerFile)
           ? ledgerMetrics(parseLedger(fs.readFileSync(ledgerFile, 'utf8')))

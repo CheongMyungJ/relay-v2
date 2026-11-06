@@ -60,6 +60,8 @@ export const FIXED_KEYS = [
   'judgeModel',
   'cliArgs',
   'vision',
+  'maxMinutes',
+  'maxTurns',
   'baseline',
   'dry',
   'qualityOverlay',
@@ -71,6 +73,48 @@ export function changedFixed(prev, now) {
   return FIXED_KEYS.filter(
     (k) => JSON.stringify(prev[k] ?? null) !== JSON.stringify(now[k] ?? null),
   )
+}
+
+/** 앞 config의 빌드 기록. 예전 config(builds 없음)는 그 commit·appCommits·claudeVersion을 첫 빌드로 본다 */
+const buildsOf = (prev) =>
+  prev?.builds ??
+  (prev?.commit !== undefined || prev?.appCommits
+    ? [
+        {
+          at: prev.startedAt ?? null,
+          commit: prev.commit ?? null,
+          appCommits: prev.appCommits ?? {},
+          claudeVersion: prev.claudeVersion ?? null,
+        },
+      ]
+    : [])
+
+/**
+ * 이어 돌 때 바뀌면 안 되는 빌드: relay-v3 쪽이 있으면 앱 빌드(RELAY3_APP의 commit)다. 열 중간에 앱이 바뀌면 한 줄에 두 빌드가
+ * 섞인다. 평가 도구(relay-v2)의 commit과 claude 버전은 고정하지 않고 builds에 쌓기만 한다(도구 고침 뒤 이어 돌 수 있게)
+ * @returns {string[]} 바뀐 빌드의 이름
+ */
+export function changedBuild(prev, now, arms) {
+  const last = buildsOf(prev).at(-1)
+  if (!last || !arms.some((a) => a !== 'cli')) return []
+  return (last.appCommits?.relay3 ?? null) !== (now.appCommits?.relay3 ?? null) ? ['relay3'] : []
+}
+
+/** 빌드 기록에 지금 빌드를 더한다(마지막 것과 같으면 그대로) */
+export function buildHistory(prev, now, at) {
+  const builds = buildsOf(prev)
+  const entry = {
+    at,
+    commit: now.commit ?? null,
+    appCommits: now.appCommits ?? {},
+    claudeVersion: now.claudeVersion ?? null,
+  }
+  const same = (a, b) =>
+    a.commit === b.commit &&
+    a.claudeVersion === b.claudeVersion &&
+    JSON.stringify(a.appCommits) === JSON.stringify(b.appCommits)
+  const last = builds.at(-1)
+  return last && same(last, entry) ? builds : [...builds, entry]
 }
 
 async function ensureDisplay() {
@@ -228,13 +272,24 @@ async function main() {
   } catch {
     // 적지 못해도 된다
   }
-  writeJson(path.join(outDir, 'config.json'), {
-    ...config,
-    startedAt: prev?.startedAt ?? new Date().toISOString(),
-    resumedAt: prev ? new Date().toISOString() : undefined,
+  const build = {
     commit: commitOf(APP),
     appCommits: arms.some((a) => a !== 'cli') || overlay ? { relay3: commitOf(RELAY3_APP) } : {},
     claudeVersion,
+  }
+  const rebuilt = changedBuild(prev, build, arms)
+  if (rebuilt.length)
+    throw new Error(
+      `같은 결과 폴더의 앞 빌드와 다릅니다(${rebuilt.join(', ')}: ${buildsOf(prev).at(-1)?.appCommits?.relay3} → ${build.appCommits.relay3}). 같은 빌드로 이어 돌거나 새 --out으로 돌리세요`,
+    )
+  const now = new Date().toISOString()
+  writeJson(path.join(outDir, 'config.json'), {
+    ...config,
+    startedAt: prev?.startedAt ?? now,
+    resumedAt: prev ? now : undefined,
+    // 지금 빌드(아래 셋)와, 시작과 이어 돌 때마다의 빌드 기록(덮어쓰지 않는다)
+    ...build,
+    builds: buildHistory(prev, build, now),
   })
   console.log(`결과 폴더: ${outDir}\n작업 폴더: ${workRoot}\n체크포인트: ${checkpoints}`)
 

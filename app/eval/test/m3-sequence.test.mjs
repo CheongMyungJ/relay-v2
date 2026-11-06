@@ -7,7 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { changedFixed } from '../run-sequence.mjs'
+import { buildHistory, changedBuild, changedFixed } from '../run-sequence.mjs'
 import {
   m3Compare,
   m3Report,
@@ -40,6 +40,7 @@ import {
   sealedPass,
 } from '../lib/sequence.mjs'
 import { landCli, restoreCheckpoint, saveCheckpoint } from '../lib/sequence-git.mjs'
+import { runSealedTask } from '../lib/sealed-run.mjs'
 import { composeRun, jobPaths, landRelay3, runJob } from '../lib/sequence-run.mjs'
 import { duplicateDefinitions, duplication, structureMetrics } from '../lib/structure.mjs'
 
@@ -510,6 +511,218 @@ describe('relay-v3 쪽의 넣기 (건식, 가짜 gh)', () => {
       expect(state.works[1].via).toBe('app')
     },
   )
+})
+
+/** root 아래(있으면)에서 이름이 name인 폴더나 파일의 경로들 */
+const findNamed = (root, name) => {
+  const out = []
+  const walk = (d) => {
+    if (!fs.existsSync(d)) return
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.name === '.git' || e.name === 'node_modules') continue
+      const p = path.join(d, e.name)
+      if (e.name === name) out.push(p)
+      if (e.isDirectory() && !e.isSymbolicLink()) walk(p)
+    }
+  }
+  walk(root)
+  return out
+}
+
+/** 기준 에이전트 대신: 과제의 정답 패치를 얹고 커밋한다. 부른 cwd와 그때 닿는 숨긴 시험을 적는다 */
+const fakeBaseline =
+  (dir, seen, ending = 'done') =>
+  async ({ cwd }) => {
+    seen.push({
+      cwd,
+      reach: findNamed(path.dirname(cwd), 'eval-hidden'),
+    })
+    if (ending === 'done') {
+      execFileSync('git', ['apply', path.join(dir, 'sealed/reference-s1.patch')], { cwd })
+      git(cwd, 'commit', '-qam', 'pow')
+    }
+    return {
+      ending,
+      ms: 0,
+      costUsd: 0,
+      result: null,
+      error: ending === 'error' ? 'overloaded' : null,
+    }
+  }
+
+describe('평가의 공정성 (숨긴 시험의 격리, 봉인 과제, 넣기, 이어 돌기의 고정)', () => {
+  const job = (dir, scenario, extra = {}) => {
+    const out = tmp('fair-out')
+    return {
+      scenario,
+      scenarioDir: dir,
+      arm: 'cli',
+      index: 1,
+      opts: { dry: true, baseline: { model: 'x', effort: 'low', minutes: 1 } },
+      outDir: out,
+      workRoot: tmp('fair-work'),
+      checkpoints: path.join(out, 'checkpoints'),
+      log: () => {},
+      ...extra,
+    }
+  }
+
+  it('Work를 판정한 뒤 숨긴 시험은 줄의 작업 폴더에 남지 않는다(다음 Work의 에이전트가 닿지 않게)', async () => {
+    const { dir, scenario } = tinyScenario()
+    const o = job(dir, scenario)
+    const r = await runJob({ ...o, until: 2 })
+    expect(r.works.map((w) => w.cumulative.pass)).toEqual([1, 2])
+    const p = jobPaths(o)
+    expect(findNamed(p.workDir, 'eval-hidden')).toEqual([])
+    expect(findNamed(p.workDir, 'h1.test.js')).toEqual([])
+  })
+
+  it('봉인 과제의 기준 에이전트는 쪽의 작업 폴더 밖, 쪽 이름이 없는 폴더에서 돌고 숨긴 시험에 닿지 않으며 그 폴더는 지워진다', async () => {
+    const { dir, scenario } = tinyScenario()
+    const seen = []
+    const o = job(dir, scenario, { sealedAgent: fakeBaseline(dir, seen) })
+    const p = jobPaths(o)
+    const r = await runJob(o)
+    expect(r.sealed[0]).toMatchObject({ id: 's1', ending: 'done', pass: true })
+    expect(seen).toHaveLength(1)
+    const { cwd, reach } = seen[0]
+    expect(cwd.startsWith(`${p.workDir}${path.sep}`)).toBe(false)
+    expect(cwd).not.toContain(p.name)
+    expect(reach).toEqual([])
+    expect(findNamed(p.workDir, 'eval-hidden')).toEqual([])
+    expect(fs.existsSync(path.dirname(cwd))).toBe(false)
+  })
+
+  it('기준 에이전트의 도구 오류는 과제의 실패가 아니라 도구 문제로 멈추고, 다시 돌리면 그 과제부터 한다', async () => {
+    const { dir, scenario } = tinyScenario()
+    const seen = []
+    const o = job(dir, scenario)
+    await expect(runJob({ ...o, sealedAgent: fakeBaseline(dir, seen, 'error') })).rejects.toThrow(
+      /봉인 과제/,
+    )
+    const p = jobPaths(o)
+    expect(fs.existsSync(path.join(p.resultDir, 'sealed-s1.json'))).toBe(false)
+    const r = await runJob({ ...o, sealedAgent: fakeBaseline(dir, seen) })
+    expect(r.complete).toBe(true)
+    expect(r.sealed[0]).toMatchObject({ ending: 'done', pass: true })
+    expect(r.attempts['sealed-s1']).toBe(2)
+  })
+
+  it('봉인 과제의 통과는 과제 전 마지막 main에서 이미 실패하던 누적 시험을 세지 않는다(그 수는 따로 남긴다)', async () => {
+    const { dir, scenario } = tinyScenario()
+    // Work 1의 정답만 든 원격: h2, h3은 과제 전부터 실패한다
+    const root = tmp('sealed-pre')
+    const r = path.join(root, 'r')
+    fs.cpSync(path.join(dir, 'repo'), r, { recursive: true })
+    initRepo(r)
+    git(r, 'add', '.')
+    git(r, 'commit', '-qm', 'base')
+    execFileSync('git', ['apply', path.join(dir, 'reference-1.patch')], { cwd: r })
+    git(r, 'commit', '-qam', 'w1')
+    git(root, 'clone', '-q', '--bare', r, 'r.git')
+    const finalTree = path.join(root, 'final')
+    fs.cpSync(r, finalTree, { recursive: true, filter: (s) => !s.includes(`${path.sep}.git`) })
+    const lastActive = scenario.works.map((w, i) => ({ ...w.checks[0], regression: i < 2 }))
+    const task = { id: 's1', report: 'pow', checks: [check('s1')], retires: ['h1'] }
+    // 기준 에이전트: pow를 더한다(h1을 깨뜨리지 않음)
+    const agent = async ({ cwd }) => {
+      fs.appendFileSync(path.join(cwd, 'src/calc.js'), 'export const pow = (a, b) => a ** b\n')
+      git(cwd, 'commit', '-qam', 'pow')
+      return { ending: 'done', ms: 0, costUsd: 0, result: null, error: null }
+    }
+    const s = await runSealedTask({
+      task,
+      scenario,
+      scenarioDir: dir,
+      remote: path.join(root, 'r.git'),
+      finalTree,
+      lastActive,
+      runAgent: agent,
+      opts: { model: 'x', effort: 'low', minutes: 1 },
+    })
+    expect(s.own).toMatchObject({ total: 1, pass: 1 })
+    expect(s.kept).toMatchObject({ total: 2, pass: 0, preBroken: 2 })
+    expect(s.pass).toBe(true)
+    // 과제 전에 통과하던 누적 시험을 깨뜨리면 실패다
+    expect(
+      sealedPass(
+        [{ name: 's', pass: true }],
+        [{ name: 'a', pass: false }],
+        [{ name: 'a', pass: true }],
+      ),
+    ).toBe(false)
+    expect(
+      sealedPass(
+        [{ name: 's', pass: true }],
+        [{ name: 'a', pass: false }],
+        [{ name: 'a', pass: false }],
+      ),
+    ).toBe(true)
+  })
+
+  it('relay-v3: 머지되지 않고 버리지 않은 Work의 worktree에 커밋하지 않은 변경은 cli처럼 커밋해 넣는다', () => {
+    const root = tmp('land3')
+    const r = path.join(root, 'r')
+    fs.mkdirSync(r)
+    initRepo(r)
+    write(r, { 'a.js': 'a\n' })
+    git(r, 'add', '.')
+    git(r, 'commit', '-qm', 'base')
+    git(root, 'init', '-q', '--bare', '-b', 'main', 'r.git')
+    git(r, 'remote', 'add', 'origin', path.join(root, 'r.git'))
+    git(r, 'push', '-q', '-u', 'origin', 'main')
+    const wt = (name, dirName) => {
+      const d = path.join(root, 'worktrees', dirName)
+      git(r, 'worktree', 'add', '-q', '-b', name, d, 'main')
+      write(d, { [`${dirName}.js`]: `${dirName}\n` })
+      git(d, 'add', '.')
+      git(d, 'commit', '-qm', dirName)
+      // 시간 제한으로 끝나 커밋하지 못한 것
+      write(d, { [`${dirName}-half.js`]: 'half\n' })
+      return d
+    }
+    const a = wt('relay/a-1111', 'a1')
+    const c = wt('relay/c-3333', 'c3')
+    const l = landRelay3(
+      r,
+      [
+        { branch: 'relay/a-1111', worktree: a, merged: false, abandoned: false },
+        { branch: 'relay/c-3333', worktree: c, merged: false, abandoned: true },
+      ],
+      'Work 1',
+    )
+    expect(l).toMatchObject({ via: 'harness', merged: ['relay/a-1111'], leftovers: 1 })
+    expect(git(r, 'ls-tree', '--name-only', 'main').split('\n').sort()).toEqual([
+      'a.js',
+      'a1-half.js',
+      'a1.js',
+    ])
+  })
+
+  it('이어 돌 때 시간·차례 제한이 바뀌거나 relay-v3 빌드가 바뀌면 멈추고, 빌드는 덮어쓰지 않고 쌓는다', () => {
+    const a = { agentModel: 'sonnet', maxMinutes: 40, maxTurns: undefined }
+    expect(changedFixed(a, { ...a, maxMinutes: 60 })).toEqual(['maxMinutes'])
+    expect(changedFixed(a, { ...a, maxTurns: 30 })).toEqual(['maxTurns'])
+    const b1 = { commit: 'aaa', appCommits: { relay3: 'r1' }, claudeVersion: '2.1' }
+    const prev = { builds: buildHistory(null, b1, 't1') }
+    expect(changedBuild(prev, b1, ['relay3', 'cli'])).toEqual([])
+    expect(changedBuild(prev, { ...b1, commit: 'bbb' }, ['relay3'])).toEqual([])
+    expect(changedBuild(prev, { ...b1, appCommits: { relay3: 'r2' } }, ['relay3'])).toEqual([
+      'relay3',
+    ])
+    // cli만 도는 열은 relay-v3 빌드(덧씌우기의 초안만 만든다)를 고정하지 않는다
+    expect(changedBuild(prev, { ...b1, appCommits: { relay3: 'r2' } }, ['cli'])).toEqual([])
+    // 예전 config(builds 없음)는 그 commit·appCommits를 첫 빌드로 본다
+    expect(changedBuild(b1, { ...b1, appCommits: { relay3: 'r2' } }, ['relay3-m2'])).toEqual([
+      'relay3',
+    ])
+    const h = buildHistory(prev, { ...b1, commit: 'bbb' }, 't2')
+    expect(h.map((x) => [x.commit, x.at])).toEqual([
+      ['aaa', 't1'],
+      ['bbb', 't2'],
+    ])
+    expect(buildHistory({ builds: h }, { ...b1, commit: 'bbb' }, 't3')).toHaveLength(2)
+  })
 })
 
 describe('구조 지표', () => {

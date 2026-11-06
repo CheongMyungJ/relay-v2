@@ -153,11 +153,20 @@ export function keptChecks(lastActive, task) {
 }
 
 /**
- * 봉인 과제 하나의 통과: 그 과제의 시험이 모두 통과하고 남은 누적 시험도 모두 통과. 판정이 없으면 null
+ * 봉인 과제 하나의 통과: 그 과제의 시험이 모두 통과하고, 남은 누적 시험 가운데 과제 전 마지막 main(before: 그때의 판정
+ * { name, pass })에서 통과하던 것이 모두 통과(기준 에이전트가 깨뜨리지 않음). 과제 전부터 실패하던 누적 시험은 세지 않는다
+ * (그것은 쪽의 C2가 센다. 세면 한 번 깨진 시험이 그 줄의 봉인 과제를 모두 실패로 만든다). before가 없으면 남은 누적 시험이
+ * 모두 통과해야 한다. 판정이 없으면 null
  */
-export function sealedPass(own, kept) {
+export function sealedPass(own, kept, before = null) {
   if (!Array.isArray(own) || !own.length || !Array.isArray(kept)) return null
-  return own.every((c) => c.pass === true) && kept.every((c) => c.pass === true)
+  const counted = Array.isArray(before)
+    ? new Set(before.filter((c) => c.pass === true).map((c) => c.name))
+    : null
+  return (
+    own.every((c) => c.pass === true) &&
+    kept.every((c) => c.pass === true || (counted !== null && !counted.has(c.name)))
+  )
 }
 
 /** Work의 수(장기 평가 시나리오) */

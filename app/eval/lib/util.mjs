@@ -2,6 +2,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -53,6 +54,25 @@ export function withoutClock(terminal) {
 }
 
 /** .git과 node_modules를 빼고 폴더를 복사한다 */
+/**
+ * 시스템 임시 폴더에 새 폴더를 만들어 fn(폴더)을 부르고, 끝나면(던져도) 지운다. fn이 Promise를 돌려주면 그것이 끝난 뒤 지운다.
+ * 장기 평가의 판정과 봉인 과제가 숨긴 시험을 줄의 작업 폴더(에이전트가 닿는 곳) 밖에 두고 남기지 않으려고 쓴다
+ */
+export function withTempDir(prefix, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  const done = () => fs.rmSync(dir, { recursive: true, force: true })
+  let out
+  try {
+    out = fn(dir)
+  } catch (e) {
+    done()
+    throw e
+  }
+  if (out && typeof out.then === 'function') return out.finally(done)
+  done()
+  return out
+}
+
 export function copyTree(from, to) {
   fs.rmSync(to, { recursive: true, force: true })
   fs.cpSync(from, to, {
