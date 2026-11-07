@@ -523,7 +523,8 @@ export function buildReport(dir) {
     ...(config.humanMode === 'hands-off'
       ? ['- 사람 역할: hands-off(계약 승인 뒤 결과를 보지 않음)']
       : []),
-    `- 에이전트: ${config.agentModel ?? '-'} (effort ${config.effort ?? '-'}), 사람 역할: ${config.humanModel ?? '-'}, 판정: ${config.judgeModel ?? '-'}`,
+    // 모델 이름은 적지 않는다(보고서는 커밋하는 기록이다). 이름은 도구 기록인 config.json에 남는다
+    `- 에이전트·사람 역할·판정: 설정의 모델 (에이전트 effort ${config.effort ?? '-'})`,
     `- 맨 CLI 인자: \`claude ${(config.cliArgs ?? []).join(' ')}\`, 스크린샷 보기: ${config.vision === false ? '끔' : '켬'}`,
     `- 판정 모델에 시나리오의 평가 목적: ${config.judgePurpose === false ? '주지 않음' : '줌'}`,
     // 품질 기준 덧씌우기(lib/overlay.mjs): 모든 쪽의 첫 커밋에 넣은 relay-v3 초안. 해시는 sha256 앞 8자
